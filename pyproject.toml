@@ -1,0 +1,19 @@
+[project]
+name = "project-multi-agents-benchmark"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "langgraph>=0.2.74",
+]
+
+[tool.ruff]
+line-length = 120  
+select = [         
+    "F",
+    "E",
+    "W",
+    "UP",
+]
+ignore = ["F401"]
