@@ -5,9 +5,12 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 dependencies = [
+    "langchain-openai>=0.3.7",
+    "langgraph-swarm>=0.0.2",
     "langgraph>=0.2.74",
     "pre-commit>=4.1.0",
     "ruff>=0.9.7",
+    "datasets>=3.3.2",
 ]
 
 [tool.ruff]
