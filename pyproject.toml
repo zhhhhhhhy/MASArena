@@ -21,12 +21,7 @@ target-version = "py311"
 indent-width = 4
 
 [tool.ruff.lint]
-select = [
-    "F",
-    "E",
-    "W",
-    "UP",
-]
+extend-select = ["C4", "SIM"]
 ignore = ["F401"]
 
 [tool.ruff.format]
