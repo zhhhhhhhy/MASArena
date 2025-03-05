@@ -1,22 +1,19 @@
-# This evaluation script is adapted from the official MMLU repository:
-# https://github.com/hendrycks/test
-#
-# Reference:
-# @article{hendrycks2021measuring,
-#     title={Measuring Massive Multitask Language Understanding},
-#     author={Dan Hendrycks and Collin Burns and Steven Basart and Andy Zou and Mantas Mazeika and Dawn Song and Jacob Steinhardt},  # noqa: E501
-#     journal={Proceedings of the International Conference on Learning Representations (ICLR)},
-#     year={2021}
-# }
-
+# 目标：使用 LangGraph, langgraph-swarm-py, LangSmith, Open-Evals 来实现 MMLU 评测，并追踪智能体执行流程
 
 from langchain_openai import ChatOpenAI
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import create_react_agent
 from langgraph_swarm import create_handoff_tool, create_swarm
 from datasets import load_dataset
-import numpy as np
+from langsmith.evaluation import EvaluationResult, RunEvaluator
+from langsmith import traceable
+from openevals.llm import create_llm_as_judge
+from openevals.prompts import CORRECTNESS_PROMPT
+import os
 import argparse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 def format_example(question, choices, include_answer=False, answer=None):
@@ -41,12 +38,16 @@ def gen_prompt(dev_set, subject, k=-1):
     return prompt
 
 
+@traceable
 def create_swarm_agent():
-    """create your swarm agent"""
-    # TODO: model except gpt-4 will cause error
-    model = ChatOpenAI(model="gpt-4", temperature=0)
+    """Create a LangGraph swarm agent with LangSmith tracking"""
+    model = ChatOpenAI(
+        model="gpt-4o-mini",
+        temperature=0,
+        openai_api_key=os.getenv("CUSTOM_API_KEY"),
+        openai_api_base=os.getenv("CUSTOM_API_BASE"),
+    )
 
-    # TODO: custom multi-agent debate
     math_expert = create_react_agent(
         model,
         [create_handoff_tool(agent_name="knowledge_expert")],
@@ -63,46 +64,36 @@ def create_swarm_agent():
 
     checkpointer = InMemorySaver()
     workflow = create_swarm([math_expert, knowledge_expert], default_active_agent="knowledge_expert")
+
+    # compile a swarm to remember the previous interaction and the last active agent
     return workflow.compile(checkpointer=checkpointer)
 
 
-def format_conversation(result):
-    """与 swarm_example.py 相同的格式化函数"""
-    conversation = []
-    for message in result["messages"]:
-        if message.type == "human":
-            conversation.append(f"User: {message.content}")
-        elif message.type == "ai":
-            if message.content:
-                conversation.append(f"{message.name}: {message.content}")
-        elif message.type == "tool":
-            conversation.append(f"System: {message.content}")
-    return "\n".join(conversation)
-
-
 def evaluate_subject(agent, subject, dataset, args):
-    """evaluate a single subject"""
+    """Use LangSmith & Open-Evals to evaluate the model"""
+    langsmith_client = RunEvaluator()
+
+    # 创建 OpenEvals 评估器函数
+    openevals_evaluator = create_llm_as_judge(
+        prompt=CORRECTNESS_PROMPT,
+        feedback_key="correctness",  # 添加 feedback_key
+        model="gpt-4o-mini",
+    )
+
     correct = 0
     total = len(dataset["test"])
     config = {"configurable": {"thread_id": "1"}}
+    predictions = []
+    ground_truths = []
+    run_metadata = []
 
     for i, item in enumerate(dataset["test"]):
-        # build few-shot prompt
         k = args.ntrain
         prompt_end = format_example(item["question"], item["choices"])
         train_prompt = gen_prompt(dataset["dev"], subject, k)
         prompt = train_prompt + prompt_end
 
-        # get answer
-        response = agent.invoke(
-            {"messages": [{"role": "user", "content": prompt}]},
-            config,
-        )
-
-        # TODO: save results to file
-        # print("\n=== Agent Conversation ===")
-        # print(format_conversation(response))
-        # print("========================\n")
+        response = agent.invoke({"messages": [{"role": "user", "content": prompt}]}, config)
 
         for msg in reversed(response["messages"]):
             if msg.type == "ai" and msg.content:
@@ -113,10 +104,40 @@ def evaluate_subject(agent, subject, dataset, args):
         is_correct = pred == correct_answer
         correct += is_correct
 
+        predictions.append(pred)
+        ground_truths.append(correct_answer)
+
+        # OpenEvals evaluation - 直接调用函数
+        eval_result = openevals_evaluator(
+            inputs={"question": item["question"]},
+            outputs={"model_response": pred},
+            reference_outputs={"correct_answer": correct_answer},
+        )
+
+        run_metadata.append(
+            {
+                "question": item["question"],
+                "choices": item["choices"],
+                "predicted": pred,
+                "actual": correct_answer,
+                "correct": is_correct,
+                "subject": subject,
+                "openeval_score": eval_result["score"],
+                "openeval_feedback": eval_result.get("feedback", ""),
+                "evaluation_type": "multiple_choice",
+            }
+        )
+
         print(f"Question {i + 1}/{total}: {'✓' if is_correct else '✗'} (Pred: {pred}, True: {correct_answer})")
+        print(f"Open-Evals Score: {eval_result['score']}")
+
+    langsmith_results = langsmith_client.evaluate_run(
+        dataset_name=f"mmlu_eval_{subject}", predictions=predictions, ground_truths=ground_truths, metadata=run_metadata
+    )
+    print(f"\nLangSmith Eval Results: {langsmith_results}")
 
     accuracy = correct / total
-    print(f"\nAccuracy for {subject}: {accuracy:.3f}")
+    print(f"\nFinal Accuracy for {subject}: {accuracy:.3f}")
     return accuracy
 
 

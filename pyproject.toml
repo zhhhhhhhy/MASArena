@@ -3,7 +3,7 @@ name = "project-multi-agents-benchmark"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.11,<3.13"
 dependencies = [
     "langchain-openai>=0.3.7",
     "langgraph-swarm>=0.0.2",
@@ -11,6 +11,8 @@ dependencies = [
     "pre-commit>=4.1.0",
     "ruff>=0.9.7",
     "datasets>=3.3.2",
+    "python-dotenv>=1.0.1",
+    "openevals>=0.0.3",
 ]
 
 [tool.ruff]
