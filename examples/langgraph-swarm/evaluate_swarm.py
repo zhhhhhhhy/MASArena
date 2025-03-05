@@ -48,24 +48,29 @@ def create_swarm_agent():
         openai_api_base=os.getenv("CUSTOM_API_BASE"),
     )
 
+    handoff_to_knowledge = create_handoff_tool(agent_name="knowledge_expert")
+
     math_expert = create_react_agent(
         model,
-        [create_handoff_tool(agent_name="knowledge_expert")],
-        prompt="You are a math expert. Always solve problems step by step.",
+        [handoff_to_knowledge],
+        prompt="""You are a math expert. Your job is to solve the problem and pass the result to the knowledge expert.
+Only output the answer, do not explain.""",
         name="math_expert",
     )
 
     knowledge_expert = create_react_agent(
         model,
-        [create_handoff_tool(agent_name="math_expert")],
-        prompt="You are a knowledge expert with broad understanding across various fields.",
+        [],
+        prompt="""You are a knowledge expert. You receive the answer from the math expert.
+Your task is to verify the answer and output ONLY ONE of: A, B, C, or D.
+Do not include any explanation or additional text.
+Just output a single letter representing your choice.""",
         name="knowledge_expert",
     )
 
     checkpointer = InMemorySaver()
-    workflow = create_swarm([math_expert, knowledge_expert], default_active_agent="knowledge_expert")
+    workflow = create_swarm([math_expert, knowledge_expert], default_active_agent="math_expert")
 
-    # compile a swarm to remember the previous interaction and the last active agent
     return workflow.compile(checkpointer=checkpointer)
 
 
@@ -73,16 +78,16 @@ def evaluate_subject(agent, subject, dataset, args):
     """Use LangSmith & Open-Evals to evaluate the model"""
     langsmith_client = RunEvaluator()
 
-    # 创建 OpenEvals 评估器函数
     openevals_evaluator = create_llm_as_judge(
         prompt=CORRECTNESS_PROMPT,
-        feedback_key="correctness",  # 添加 feedback_key
+        feedback_key="correctness",
         model="gpt-4o-mini",
     )
 
+    config = {"configurable": {"thread_id": "1"}}
+
     correct = 0
     total = len(dataset["test"])
-    config = {"configurable": {"thread_id": "1"}}
     predictions = []
     ground_truths = []
     run_metadata = []
@@ -93,12 +98,19 @@ def evaluate_subject(agent, subject, dataset, args):
         train_prompt = gen_prompt(dataset["dev"], subject, k)
         prompt = train_prompt + prompt_end
 
-        response = agent.invoke({"messages": [{"role": "user", "content": prompt}]}, config)
+        response = agent.invoke({"messages": [{"role": "user", "content": prompt}]}, config=config)
 
-        for msg in reversed(response["messages"]):
-            if msg.type == "ai" and msg.content:
-                pred = msg.content.strip()[0]  # take the first character as the answer
-                break
+        math_output = None
+        knowledge_output = None
+
+        for msg in response["messages"]:
+            if msg.type == "ai":
+                if msg.name == "math_expert":
+                    math_output = msg.content.strip()
+                elif msg.name == "knowledge_expert":
+                    knowledge_output = msg.content.strip()
+
+        pred = knowledge_output.split()[0] if knowledge_output else "?"
 
         correct_answer = chr(65 + item["answer"])
         is_correct = pred == correct_answer
@@ -107,7 +119,7 @@ def evaluate_subject(agent, subject, dataset, args):
         predictions.append(pred)
         ground_truths.append(correct_answer)
 
-        # OpenEvals evaluation - 直接调用函数
+        # openevals result
         eval_result = openevals_evaluator(
             inputs={"question": item["question"]},
             outputs={"model_response": pred},
@@ -118,6 +130,8 @@ def evaluate_subject(agent, subject, dataset, args):
             {
                 "question": item["question"],
                 "choices": item["choices"],
+                "math_expert_output": math_output,
+                "knowledge_expert_output": knowledge_output,
                 "predicted": pred,
                 "actual": correct_answer,
                 "correct": is_correct,
@@ -129,7 +143,9 @@ def evaluate_subject(agent, subject, dataset, args):
         )
 
         print(f"Question {i + 1}/{total}: {'✓' if is_correct else '✗'} (Pred: {pred}, True: {correct_answer})")
-        print(f"Open-Evals Score: {eval_result['score']}")
+        print(f"Math Expert Output: {math_output}")
+        print(f"Knowledge Expert Output: {knowledge_output}")
+        print(f"Open-Evals Score: {eval_result['score']}\n")
 
     langsmith_results = langsmith_client.evaluate_run(
         dataset_name=f"mmlu_eval_{subject}", predictions=predictions, ground_truths=ground_truths, metadata=run_metadata
