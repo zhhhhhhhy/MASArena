@@ -1,10 +1,5 @@
-# project_multi_agents_benchmark
+[x] **BaseWorkflow**: a base workflow using LangGraph to create a fully connected network for multiple agents (the same agent without tools or other complex components)
+[] **AdjustableWorkflow**: Extends the base workflow with runtime adjustment capabilities, allowing for dynamic modification of agent connections (edges).
+[] **Example**: A demonstration of how to use the adjustable workflow with multiple agents.
 
-## Meeting notes
 
-| No. | Date | Notes | Feishu summary |
-|:--- |:---:|:---:|:---:|
-1 | 2025.02.26 20:00 GMT+8 | [Notes](meeting-notes/Meeting-20250226.md) | [Summary](https://ocnfww8fyyv6.feishu.cn/docx/PVXfdIcvYof6R8xKon4cCyQJncb) |
-2 | 2025.03.12 20:30 GMT+8 | [Notes](meeting-notes/Meeting-20250312.md) | [Summary](https://ocnfww8fyyv6.feishu.cn/docx/AYB8dBd9JoiHK5xRwaacX7QrnLh?from=from_copylink) |
-
- Feishu Page: [project_multi_agents_benchmark](https://ocnfww8fyyv6.feishu.cn/docx/PVXfdIcvYof6R8xKon4cCyQJncb)
