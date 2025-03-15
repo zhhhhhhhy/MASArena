@@ -5,21 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "Python Debugger: Python File",
+            "name": "Python: BaseWorkflow",
             "type": "debugpy",
             "request": "launch",
-            "program": "${file}"
+            "program": "${workspaceFolder}/src/base_workflow.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
         },
         {
-            "name": "Debug BaseWorkflow",
+            "name": "Python: AdjustableWorkflow Rigorous Test",
             "type": "debugpy",
             "request": "launch",
-            "module": "src.base_workflow",
+            "module": "src.test_adjustable_workflow_rigorous",
             "console": "integratedTerminal",
-            "justMyCode": true,
-            "env": {
-                "PYTHONPATH": "${workspaceFolder}"
-            }
+            "justMyCode": true
         }
     ]
 }
