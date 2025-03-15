@@ -14,6 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.types import Command
+import networkx as nx
 
 from src.base_workflow import BaseWorkflow, logger
 from src.connection_manager import ConnectionManager
@@ -238,18 +239,20 @@ This is call #{agent_call_count + 1} to you. If you've been called more than 3 t
             if agent not in connection_manager.agent_names:
                 raise ValueError(f"Agent '{agent}' is missing from the connection manager")
     
-    def add_connection(self, source: str, target: str):
+    def add_connection(self, source: str, target: str, weight: Optional[float] = None):
         """
         Add a connection between two agents.
         
         Args:
             source: The source agent
             target: The target agent
+            weight: Optional weight for the edge
         """
-        self.connection_manager.add_connection(source, target)
-        logger.info(f"Added connection: {source} → {target}", extra={"agent_name": "System"})
+        self.connection_manager.add_connection(source, target, weight)
+        weight_str = f" with weight {weight}" if weight is not None else ""
+        logger.info(f"Added connection: {source} → {target}{weight_str}", extra={"agent_name": "System"})
         
-        # Rebuild the graph to reflect the new connection
+        # Rebuild the graph to reflect the new connections
         self._build_graph()
     
     def remove_connection(self, source: str, target: str):
@@ -263,57 +266,115 @@ This is call #{agent_call_count + 1} to you. If you've been called more than 3 t
         self.connection_manager.remove_connection(source, target)
         logger.info(f"Removed connection: {source} → {target}", extra={"agent_name": "System"})
         
-        # Rebuild the graph to reflect the removed connection
+        # Rebuild the graph to reflect the new connections
         self._build_graph()
     
-    def set_connections(self, agent_name: str, targets: List[str]):
+    def set_connections(self, agent_name: str, targets: List[str], weights: Optional[List[float]] = None):
         """
         Set the connections for an agent, replacing any existing connections.
         
         Args:
             agent_name: The agent name
             targets: List of target agent names
+            weights: Optional list of weights for each target
         """
-        self.connection_manager.set_connections(agent_name, targets)
-        logger.info(f"Set connections for {agent_name}: {', '.join(str(target) for target in targets)}", extra={"agent_name": "System"})
+        self.connection_manager.set_connections(agent_name, targets, weights)
+        
+        weight_str = ""
+        if weights:
+            weight_str = " with weights " + ", ".join([f"{t}:{w}" for t, w in zip(targets, weights)])
+        
+        logger.info(f"Set connections for {agent_name}: {', '.join(targets)}{weight_str}", extra={"agent_name": "System"})
         
         # Rebuild the graph to reflect the new connections
         self._build_graph()
     
     def reset_to_fully_connected(self):
-        """Reset the graph to a fully connected configuration."""
+        """Reset the workflow to a fully connected configuration."""
         self.connection_manager.reset_to_fully_connected()
-        logger.info("Reset to fully connected graph", extra={"agent_name": "System"})
+        logger.info("Reset to fully connected configuration", extra={"agent_name": "System"})
         
-        # Rebuild the graph to reflect the fully connected configuration
+        # Rebuild the graph to reflect the new connections
         self._build_graph()
-        
-        self._log_connection_graph()
     
     def get_connections(self, agent_name: str) -> List[str]:
         """
-        Get all outgoing connections for an agent.
+        Get the connections for an agent.
         
         Args:
-            agent_name: The agent to get connections for
+            agent_name: The agent name
             
         Returns:
-            A list of agent names that this agent can route to
+            List of target agent names
         """
         return self.connection_manager.get_allowed_next_agents(agent_name)
     
-    def visualize_connections(self, title: str = "Agent Connection Graph", output_file: str = "connection_graph.png"):
+    def get_weighted_connections(self, agent_name: str) -> Dict[str, float]:
+        """
+        Get the weighted connections for an agent.
+        
+        Args:
+            agent_name: The agent name
+            
+        Returns:
+            Dictionary mapping target agent names to edge weights
+        """
+        return self.connection_manager.get_weighted_next_agents(agent_name)
+    
+    def set_edge_weight(self, source: str, target: str, weight: float):
+        """
+        Set the weight of an edge.
+        
+        Args:
+            source: The source agent
+            target: The target agent
+            weight: The new weight
+        """
+        self.connection_manager.set_edge_weight(source, target, weight)
+        logger.info(f"Set edge weight: {source} → {target} = {weight}", extra={"agent_name": "System"})
+        
+        # Rebuild the graph to reflect the new weights
+        self._build_graph()
+    
+    def get_edge_weight(self, source: str, target: str) -> float:
+        """
+        Get the weight of an edge.
+        
+        Args:
+            source: The source agent
+            target: The target agent
+            
+        Returns:
+            The edge weight
+        """
+        return self.connection_manager.get_edge_weight(source, target)
+    
+    def update_weights_from_graph(self, other_graph: nx.DiGraph):
+        """
+        Update edge weights from another graph.
+        
+        Args:
+            other_graph: Another directed graph with edge weights
+        """
+        self.connection_manager.update_weights_from_graph(other_graph)
+        logger.info("Updated edge weights from another graph", extra={"agent_name": "System"})
+        
+        # Rebuild the graph to reflect the new weights
+        self._build_graph()
+    
+    def visualize_connections(self, title: str = "Agent Connection Graph", output_file: str = "connection_graph.png", show_weights: bool = True):
         """
         Visualize the connection graph and save it to a file.
         
         Args:
             title: The title of the plot
             output_file: The file to save the visualization to
+            show_weights: Whether to show edge weights in the visualization
             
         Returns:
             The path to the saved visualization
         """
-        return self.connection_manager.visualize(title, output_file)
+        return self.connection_manager.visualize(title, output_file, show_weights)
     
     def invoke(self, state: Dict[str, Any]) -> Dict[str, Any]:
         """

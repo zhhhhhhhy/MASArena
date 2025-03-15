@@ -1,4 +1,6 @@
 langchain>=0.1.0
 langchain-openai>=0.0.2
 langgraph>=0.0.20
-python-dotenv>=1.0.0 
+python-dotenv>=1.0.0
+networkx>=3.0.0
+matplotlib>=3.5.0 

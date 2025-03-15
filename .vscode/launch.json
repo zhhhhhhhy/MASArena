@@ -13,6 +13,14 @@
             "justMyCode": true
         },
         {
+            "name": "Python: Edge Weight Adaptation Test",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "src.test_edge_weight_adaptation",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        },
+        {
             "name": "Python: AdjustableWorkflow Rigorous Test",
             "type": "debugpy",
             "request": "launch",
