@@ -13,6 +13,10 @@ dependencies = [
     "datasets>=3.3.2",
     "python-dotenv>=1.0.1",
     "openevals>=0.0.3",
+    "langchain-community>=0.3.19",
+    "langchain-experimental>=0.3.4",
+    "aiofiles>=24.1.0",
+    "sympy>=1.13.3",
 ]
 
 [tool.ruff]

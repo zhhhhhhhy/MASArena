@@ -53,24 +53,31 @@ def create_swarm_agent():
     math_expert = create_react_agent(
         model,
         [handoff_to_knowledge],
-        prompt="""You are a math expert. Your job is to solve the problem and pass the result to the knowledge expert.
-Only output the answer, do not explain.""",
+        prompt="""You are a math expert. Your job is to solve the problem step by step.
+1. Show your work clearly
+2. Explain your reasoning
+3. Conclude with "Therefore, the answer is [your answer]"
+4. ALWAYS use the handoff tool to pass your complete solution to the knowledge expert.""",
         name="math_expert",
     )
 
     knowledge_expert = create_react_agent(
         model,
         [],
-        prompt="""You are a knowledge expert. You receive the answer from the math expert.
-Your task is to verify the answer and output ONLY ONE of: A, B, C, or D.
-Do not include any explanation or additional text.
-Just output a single letter representing your choice.""",
+        prompt="""You are a knowledge expert. You receive the solution from the math expert.
+Review the solution and the multiple choice options carefully.
+Based on the math expert's solution, select the most appropriate answer.
+Output ONLY ONE letter (A, B, C, or D) representing your final choice.""",
         name="knowledge_expert",
     )
 
-    checkpointer = InMemorySaver()
-    workflow = create_swarm([math_expert, knowledge_expert], default_active_agent="math_expert")
+    # 设置单向工作流程
+    workflow = create_swarm(
+        [math_expert, knowledge_expert],
+        default_active_agent="math_expert",
+    )
 
+    checkpointer = InMemorySaver()
     return workflow.compile(checkpointer=checkpointer)
 
 
@@ -119,9 +126,9 @@ def evaluate_subject(agent, subject, dataset, args):
         predictions.append(pred)
         ground_truths.append(correct_answer)
 
-        # openevals result
+        # 修改 openevals 评估
         eval_result = openevals_evaluator(
-            inputs={"question": item["question"]},
+            inputs={"question": item["question"], "choices": item["choices"], "context": math_output},
             outputs={"model_response": pred},
             reference_outputs={"correct_answer": correct_answer},
         )
