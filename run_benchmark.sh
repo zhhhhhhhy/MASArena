@@ -4,7 +4,7 @@
 
 # Default values
 BENCHMARK=${1:-math}
-AGENT_SYSTEM=${2:-swarm}
+AGENT_SYSTEM=${2:-swarm} # single_agent, supervisor_mas, swarm
 LIMIT=${3:-10}
 
 # Create necessary directories

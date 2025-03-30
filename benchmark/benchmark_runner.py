@@ -22,12 +22,12 @@ from benchmark.src.metrics import (
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
 
 
-class Benchmark:
+class BenchmarkRunner:
     """
     Simple interface for running benchmarks on multi-agent systems.
     
     Examples:
-        >>> benchmark = Benchmark()
+        >>> benchmark = BenchmarkRunner()
         >>> results = benchmark.run("math", limit=5)
         >>> benchmark.visualize_results()
     """
@@ -308,7 +308,7 @@ def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_ag
     Returns:
         Benchmark summary dictionary
     """
-    benchmark = Benchmark()
+    benchmark = BenchmarkRunner()
     summary = benchmark.run(
         benchmark_name=benchmark_name, 
         limit=limit,

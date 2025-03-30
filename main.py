@@ -4,7 +4,7 @@ import datetime
 import sys
 from pathlib import Path
 
-from benchmark.benchmark_runner import Benchmark
+from benchmark.benchmark_runner import BenchmarkRunner
 from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
 
 
@@ -54,7 +54,7 @@ def main():
     print("="*80 + "\n")
     
     # Create benchmark runner
-    runner = Benchmark(
+    runner = BenchmarkRunner(
         results_dir=args.results_dir,
         metrics_dir=args.metrics_dir
     )
