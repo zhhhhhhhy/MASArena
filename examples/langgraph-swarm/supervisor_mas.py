@@ -38,7 +38,7 @@ class Router(TypedDict):
 
 @traceable
 def create_supervisor():
-    model = ChatOpenAI(model="gpt-4o-mini")
+    model = ChatOpenAI(model=os.getenv("MODEL_NAME"), base_url=os.getenv("BASE_URL"), api_key=os.getenv("OPENAI_API_KEY"))
     members = ["researcher", "coder"]
 
     system_prompt = (
@@ -68,7 +68,7 @@ def create_supervisor():
 
 @traceable
 def create_research_node():
-    model = ChatOpenAI(model="gpt-4o-mini")
+    model = ChatOpenAI(model=os.getenv("MODEL_NAME"), base_url=os.getenv("BASE_URL"), api_key=os.getenv("OPENAI_API_KEY"))
     research_agent = create_react_agent(model, tools=[tavily_tool])
 
     def research_node(state: State) -> Command[Literal["supervisor"]]:
@@ -90,7 +90,7 @@ def create_research_node():
 
 @traceable
 def create_code_node():
-    model = ChatOpenAI(model="gpt-4o-mini")
+    model = ChatOpenAI(model=os.getenv("MODEL_NAME"), base_url=os.getenv("BASE_URL"), api_key=os.getenv("OPENAI_API_KEY"))
     coder_agent = create_react_agent(model, tools=[])
 
     def code_node(state: State) -> Command[Literal["supervisor"]]:
@@ -119,7 +119,7 @@ def create_mas_graph():
     builder.add_node("researcher", create_research_node())
     builder.add_node("coder", create_code_node())
 
-    return builder.compile(checkpointer=checkpointer)
+    return builder.compile(checkpointer=checkpointer)           
 
 
 def evaluate_mas(query: str):

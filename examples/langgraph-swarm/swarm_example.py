@@ -19,7 +19,7 @@ def format_conversation(result):
 
 
 def main():
-    model = ChatOpenAI(model="gpt-4")
+    model = ChatOpenAI(model=os.getenv("MODEL_NAME"), base_url=os.getenv("BASE_URL"), api_key=os.getenv("OPENAI_API_KEY"))
 
     def add(a: int, b: int) -> int:
         """Add two numbers"""
