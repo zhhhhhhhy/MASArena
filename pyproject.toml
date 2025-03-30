@@ -20,6 +20,7 @@ dependencies = [
     "psutil>=7.0.0",
     "networkx>=3.4.2",
     "matplotlib>=3.10.1",
+    "bs4>=0.0.2",
 ]
 
 [tool.ruff]
