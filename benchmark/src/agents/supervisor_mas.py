@@ -235,8 +235,8 @@ class SupervisorMAS(AgentSystem):
         run_evaluator = RunEvaluator()
         math_evaluator = MATHBenchmark(
             name=self.evaluator_name.upper(),
-            file_path=f"benchmark/src/data/{self.evaluator_name}_test.jsonl",
-            log_path=f"benchmark/src/data/results/{self.evaluator_name.upper()}",
+            file_path=f"benchmark/data/{self.evaluator_name}_test.jsonl",
+            log_path=f"benchmark/data/results/{self.evaluator_name.upper()}",
         )
 
         # Create graph
@@ -340,7 +340,7 @@ if __name__ == "__main__":
     import json
 
     # Test the agent system
-    with open("benchmark/src/data/math_test.jsonl", "r") as f:
+    with open("benchmark/data/math_test.jsonl", "r") as f:
         problems = [json.loads(line) for line in f]
 
     # Process only a few problems for testing

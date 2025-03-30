@@ -80,7 +80,7 @@ class Benchmark:
             
         # Determine data path
         if data_path is None:
-            data_path = f"benchmark/src/data/{benchmark_name}_test.jsonl"
+            data_path = f"benchmark/data/{benchmark_name}_test.jsonl"
             
         output_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}.json"
         metrics_output = Path(self.metrics_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}"

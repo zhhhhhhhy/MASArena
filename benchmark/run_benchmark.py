@@ -64,7 +64,7 @@ def main():
     
     # Set up appropriate paths
     if args.data_path is None:
-        args.data_path = f"benchmark/src/data/{args.benchmark}_test.jsonl"
+        args.data_path = f"benchmark/data/{args.benchmark}_test.jsonl"
     
     # Create output directories if they don't exist
     os.makedirs(args.output_dir, exist_ok=True)

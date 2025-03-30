@@ -188,7 +188,7 @@ def analyze_metrics(metrics_registry, results, output_dir):
 def main():
     """Main function"""
     # Load a sample of math problems
-    data_path = "benchmark/src/data/math_test.jsonl"
+    data_path = "benchmark/data/math_test.jsonl"
     with open(data_path, "r") as f:
         problems = [json.loads(line) for line in f]
     
