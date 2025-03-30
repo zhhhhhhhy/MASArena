@@ -156,6 +156,36 @@ def save_data(data, base_path):
             json.dump(table_data, f, indent=2, ensure_ascii=False)
         print(f"Saved {table_name} data to: {json_path}")
 
+def analyze_performance_metrics(json_path):
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        performance_data = []
+        for model in data:
+            model_name = model.get('Model', '')
+            throughput = model.get('Throughput', '')
+            latency = model.get('Latency (TTFT)', '')
+            
+            if model_name and (throughput or latency):
+                performance_data.append({
+                    'model': model_name,
+                    'throughput': throughput,
+                    'latency': latency
+                })
+        
+        save_dir = os.path.dirname(json_path)
+        performance_path = os.path.join(save_dir, 'llm_vellu_ai_performance_metrics.json')
+        with open(performance_path, 'w', encoding='utf-8') as f:
+            json.dump(performance_data, f, indent=2, ensure_ascii=False)
+        print(f"Saved performance metrics to: {performance_path}")
+            
+        return performance_data
+        
+    except Exception as e:
+        print(f"Failed to analyze performance metrics: {str(e)}")
+        return None
+
 def main():
     url = "https://www.vellum.ai/llm-leaderboard"
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -163,6 +193,10 @@ def main():
     data = fetch_leaderboard_data(url)
     if data:
         save_data(data, current_dir)
+        
+        model_details_path = os.path.join(current_dir, 'leaderboard', 'llm_vellu_ai_model_details.json')
+        if os.path.exists(model_details_path):
+            analyze_performance_metrics(model_details_path)
 
 if __name__ == "__main__":
     main()
