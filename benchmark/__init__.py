@@ -13,13 +13,13 @@ from benchmark.src.metrics import (
     MetricsCollectionConfig,
     SystemMetricsCollector,
     AgentMetricsCollector,
-    InterAgentMetricsCollector
+    InterAgentMetricsCollector,
 )
 
 __all__ = [
-    'MetricsRegistry',
-    'MetricsCollectionConfig',
-    'SystemMetricsCollector',
-    'AgentMetricsCollector',
-    'InterAgentMetricsCollector',
-] 
+    "MetricsRegistry",
+    "MetricsCollectionConfig",
+    "SystemMetricsCollector",
+    "AgentMetricsCollector",
+    "InterAgentMetricsCollector",
+]

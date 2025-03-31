@@ -23,8 +23,8 @@ from benchmark.src.instrumentation.tool_instrumentation import ToolInstrumenter
 from benchmark.src.instrumentation.memory_instrumentation import MemoryInstrumenter
 
 __all__ = [
-    'GraphInstrumenter',
-    'LLMInstrumenter',
-    'ToolInstrumenter',
-    'MemoryInstrumenter',
-] 
+    "GraphInstrumenter",
+    "LLMInstrumenter",
+    "ToolInstrumenter",
+    "MemoryInstrumenter",
+]

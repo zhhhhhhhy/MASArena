@@ -13,15 +13,15 @@ from benchmark.src.agents.single_agent import SingleAgent
 AVAILABLE_AGENT_SYSTEMS = {
     "single_agent": "A single LLM agent solving problems directly",
     "supervisor_mas": "A supervisor-based multi-agent system where a supervisor coordinates specialized agents",
-    "swarm": "A swarm-based multi-agent system where multiple agents work independently and results are aggregated"
+    "swarm": "A swarm-based multi-agent system where multiple agents work independently and results are aggregated",
 }
 
 __all__ = [
-    'AgentSystem',
-    'AgentSystemRegistry',
-    'create_agent_system',
-    'SupervisorMAS',
-    'SwarmSystem',
-    'SingleAgent',
-    'AVAILABLE_AGENT_SYSTEMS'
-] 
+    "AgentSystem",
+    "AgentSystemRegistry",
+    "create_agent_system",
+    "SupervisorMAS",
+    "SwarmSystem",
+    "SingleAgent",
+    "AVAILABLE_AGENT_SYSTEMS",
+]

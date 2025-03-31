@@ -26,18 +26,14 @@ from dotenv import load_dotenv
 import asyncio
 from benchmark.src.evaluators.math import MATHBenchmark
 import dotenv
-dotenv.load_dotenv()
-
-# Import the base agent system classes
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
+
+dotenv.load_dotenv()
 
 # Optional import for metrics instrumentation
 try:
-    from benchmark.src.metrics import (
-        MetricsRegistry,
-        AgentMetricsCollector,
-        InterAgentMetricsCollector
-    )
+    from benchmark.src.metrics import MetricsRegistry, AgentMetricsCollector, InterAgentMetricsCollector
+
     METRICS_AVAILABLE = True
 except ImportError:
     METRICS_AVAILABLE = False
@@ -68,44 +64,45 @@ def with_metrics(func):
     def wrapper(*args, **kwargs):
         if not METRICS_AVAILABLE:
             return func(*args, **kwargs)
-        
-        metrics_registry = kwargs.get('metrics_registry')
+
+        metrics_registry = kwargs.get("metrics_registry")
         if not metrics_registry:
             return func(*args, **kwargs)
-        
+
         agent_collector = metrics_registry.get_collector("agent")
-        inter_agent_collector = metrics_registry.get_collector("inter_agent")
-        
+
         # Record function start
         start_time = time.time()
-        
+
         # Run the original function
         result = func(*args, **kwargs)
-        
+
         # Record function completion
         end_time = time.time()
         duration_ms = (end_time - start_time) * 1000
-        
-        if 'token_usage' in result:
-            for agent_id, tokens in result['token_usage'].items():
+
+        if "token_usage" in result:
+            for agent_id, tokens in result["token_usage"].items():
                 agent_collector.record_llm_usage(
                     agent_id=agent_id,
                     model_name="gpt-4o-mini",
                     prompt_tokens=tokens // 2,
                     completion_tokens=tokens // 2,
-                    latency_ms=duration_ms / len(result['token_usage']),
+                    latency_ms=duration_ms / len(result["token_usage"]),
                 )
-        
+
         return result
-    
+
     return wrapper
 
 
 @traceable
 def create_supervisor():
-    model = ChatOpenAI(model=os.getenv("MODEL_NAME", "gpt-4o-mini"), 
-                      base_url=os.getenv("BASE_URL"), 
-                      api_key=os.getenv("OPENAI_API_KEY"))
+    model = ChatOpenAI(
+        model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+        base_url=os.getenv("BASE_URL"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
     members = ["researcher", "coder"]
 
     system_prompt = (
@@ -123,10 +120,8 @@ def create_supervisor():
     def supervisor_node(state: State) -> Command[Literal["researcher", "coder", "__end__"]]:
         messages = [{"role": "system", "content": system_prompt}] + state["messages"]
 
-        start_time = time.time()
         with get_openai_callback() as cb:
             response = model.with_structured_output(Router).invoke(messages)
-        duration_ms = (time.time() - start_time) * 1000
 
         # Record interaction for metrics collection (if available)
         if METRICS_AVAILABLE:
@@ -147,16 +142,16 @@ def create_supervisor():
 
 @traceable
 def create_research_node():
-    model = ChatOpenAI(model=os.getenv("MODEL_NAME", "gpt-4o-mini"), 
-                      base_url=os.getenv("BASE_URL"), 
-                      api_key=os.getenv("OPENAI_API_KEY"))
+    model = ChatOpenAI(
+        model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+        base_url=os.getenv("BASE_URL"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
     research_agent = create_react_agent(model, tools=[])
 
     def research_node(state: State) -> Command[Literal["supervisor"]]:
-        start_time = time.time()
         with get_openai_callback() as cb:
             result = research_agent.invoke(state)
-        duration_ms = (time.time() - start_time) * 1000
 
         state["token_usage"]["researcher"] += cb.total_tokens
 
@@ -173,9 +168,11 @@ def create_research_node():
 
 @traceable
 def create_code_node():
-    model = ChatOpenAI(model=os.getenv("MODEL_NAME", "gpt-4o-mini"), 
-                      base_url=os.getenv("BASE_URL"), 
-                      api_key=os.getenv("OPENAI_API_KEY"))
+    model = ChatOpenAI(
+        model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+        base_url=os.getenv("BASE_URL"),
+        api_key=os.getenv("OPENAI_API_KEY"),
+    )
 
     coder_agent = create_react_agent(
         model,
@@ -183,10 +180,8 @@ def create_code_node():
     )
 
     def code_node(state: State) -> Command[Literal["supervisor"]]:
-        start_time = time.time()
         with get_openai_callback() as cb:
             result = coder_agent.invoke(state)
-        duration_ms = (time.time() - start_time) * 1000
 
         state["token_usage"]["coder"] += cb.total_tokens
 
@@ -217,20 +212,20 @@ def create_mas_graph():
 class SupervisorMAS(AgentSystem):
     """
     Supervisor-based Multi-Agent System
-    
+
     This agent system uses a supervisor to coordinate specialized agents
     for solving problems.
     """
-    
+
     def __init__(self, name: str = "supervisor_mas", config: Dict[str, Any] = None):
         """Initialize the Supervisor MAS"""
         super().__init__(name, config)
         self.evaluator_name = config.get("evaluator", "math") if config else "math"
-    
+
     def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Evaluate the agent system on a problem"""
         metrics_registry = kwargs.get("metrics_registry", self.metrics_registry)
-        
+
         # Initialize evaluator
         run_evaluator = RunEvaluator()
         math_evaluator = MATHBenchmark(
@@ -248,13 +243,12 @@ class SupervisorMAS(AgentSystem):
 
         # Record start time for metrics
         start_time = time.time()
-        
+
         # Run the graph
         run_result = graph.invoke(initial_state, config={"configurable": {"thread_id": "1"}})
-        
+
         # Record execution time
-        execution_time_ms = self.record_timing("evaluate", start_time, 
-                                            {"problem_id": problem.get("id", "unknown")})
+        execution_time_ms = self.record_timing("evaluate", start_time, {"problem_id": problem.get("id", "unknown")})
 
         # Extract the final answer
         all_messages = run_result.get("messages", [])
@@ -274,7 +268,7 @@ class SupervisorMAS(AgentSystem):
 
         # Extract token usage
         token_usage = run_result.get("token_usage", {})
-        
+
         # Record token usage in metrics
         if metrics_registry and METRICS_AVAILABLE:
             agent_collector = metrics_registry.get_collector("agent")
@@ -286,9 +280,9 @@ class SupervisorMAS(AgentSystem):
                         prompt_tokens=tokens,
                         completion_tokens=0,
                         latency_ms=execution_time_ms / len(token_usage) if token_usage else 0,
-                        tags={"agent_system": self.name}
+                        tags={"agent_system": self.name},
                     )
-        
+
         # Create LangSmith run for evaluation
         run = Run(
             id=self.generate_run_id(),
@@ -315,16 +309,12 @@ class SupervisorMAS(AgentSystem):
             "run_evaluation": run_evaluation,
             "extracted_answer": extracted_answer,
             "token_usage": token_usage,
-            "execution_time_ms": execution_time_ms
+            "execution_time_ms": execution_time_ms,
         }
 
 
 # Register the agent system
-AgentSystemRegistry.register(
-    "supervisor_mas", 
-    SupervisorMAS,
-    evaluator="math"
-)
+AgentSystemRegistry.register("supervisor_mas", SupervisorMAS, evaluator="math")
 
 
 # Legacy function for backward compatibility
@@ -357,15 +347,17 @@ if __name__ == "__main__":
             results = agent.evaluate(problem)
 
             # Save results
-            all_results.append({
-                "problem": problem["problem"],
-                "expected": problem["solution"],
-                "prediction": results["extracted_answer"],
-                "passed": results["math_score"] == 1,
-                "evaluation": results["run_evaluation"],
-                "token_usage": results["token_usage"],
-                "execution_time_ms": results["execution_time_ms"]
-            })
+            all_results.append(
+                {
+                    "problem": problem["problem"],
+                    "expected": problem["solution"],
+                    "prediction": results["extracted_answer"],
+                    "passed": results["math_score"] == 1,
+                    "evaluation": results["run_evaluation"],
+                    "token_usage": results["token_usage"],
+                    "execution_time_ms": results["execution_time_ms"],
+                }
+            )
 
             print(f"Expected: {problem['solution']}")
             print(f"Predicted: {results['extracted_answer']}")
@@ -381,8 +373,8 @@ if __name__ == "__main__":
     passed = sum(1 for r in all_results if r["passed"])
     total_tokens = sum(sum(d.values()) for r in all_results if "token_usage" in r for d in [r["token_usage"]])
     total_time = sum(r.get("execution_time_ms", 0) for r in all_results)
-    
-    print(f"\nSummary:")
+
+    print("\nSummary:")
     print(f"Passed: {passed}/{total} ({passed / total:.2%})")
     print(f"Total tokens: {total_tokens}")
     print(f"Average tokens per problem: {total_tokens / total:.2f}")
