@@ -1,6 +1,9 @@
 # images
 *.png 
 
+# output
+output/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -54,7 +57,6 @@ coverage.xml
 .pytest_cache/
 cover/
 results/
-metrics/
 # Translations
 *.mo
 *.pot
