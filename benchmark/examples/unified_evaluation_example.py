@@ -294,7 +294,7 @@ def main():
     """Main function to demonstrate the unified evaluation framework."""
     parser = argparse.ArgumentParser(description="Unified Evaluation Framework Example")
     parser.add_argument("--leaderboard", type=str, help="Path to leaderboard data file")
-    parser.add_argument("--output", type=str, default="benchmark/examples/output", help="Directory to save results")
+    parser.add_argument("--output", type=str, default="results/evaluation", help="Directory to save results")
     parser.add_argument("--create-sample", action="store_true", help="Create sample leaderboard data")
     parser.add_argument("--experiment", action="store_true", help="Run hyperparameter experiment")
     
