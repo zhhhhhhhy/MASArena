@@ -31,8 +31,8 @@ def create_sample_leaderboard(output_path):
                 "model_name": "gpt4",
                 "latency": 120000,  # ms
                 "throughput": 0.5,  # tasks per minute
-                "input_token": 0.00005,  # $ per token
-                "output_token": 0.00015,  # $ per token
+                "input_token_count": 0.00005,  # number of tokens
+                "output_token_count": 0.00015,  # number of tokens
                 "parameters": 175000000000,  # 175B parameters
                 "activated_parameters": 175000000000
             }]
@@ -44,24 +44,24 @@ def create_sample_leaderboard(output_path):
                 "model_name": "gpt4",
                 "latency": 100000,  # ms
                 "throughput": 0.4,  # tasks per minute
-                "input_token": 0.00005,  # $ per token
-                "output_token": 0.00015,  # $ per token
+                "input_token_count": 0.00005,  # number of tokens
+                "output_token_count": 0.00015,  # number of tokens
                 "parameters": 175000000000,  # 175B parameters
                 "activated_parameters": 175000000000
             }, {
                 "model_name": "gpt35",
                 "latency": 50000,  # ms
                 "throughput": 0.6,  # tasks per minute
-                "input_token": 0.000015,  # $ per token
-                "output_token": 0.00002,  # $ per token
+                "input_token_count": 0.000015,  # number of tokens
+                "output_token_count": 0.00002,  # number of tokens
                 "parameters": 175000000,  # 175M parameters
                 "activated_parameters": 175000000
             }, {
                 "model_name": "gpt35",
                 "latency": 50000,  # ms
                 "throughput": 0.6,  # tasks per minute
-                "input_token": 0.000015,  # $ per token
-                "output_token": 0.00002,  # $ per token
+                "input_token_count": 0.000015,  # number of tokens
+                "output_token_count": 0.00002,  # number of tokens
                 "parameters": 175000000,  # 175M parameters
                 "activated_parameters": 175000000
             }]
@@ -73,24 +73,24 @@ def create_sample_leaderboard(output_path):
                 "model_name": "gpt4",
                 "latency": 120000,  # ms
                 "throughput": 0.5,  # tasks per minute
-                "input_token": 0.00005,  # $ per token
-                "output_token": 0.00015,  # $ per token
+                "input_token_count": 0.00005,  # number of tokens
+                "output_token_count": 0.00015,  # number of tokens
                 "parameters": 175000000000,  # 175B parameters
                 "activated_parameters": 175000000000
             }, {
                 "model_name": "gpt4",
                 "latency": 120000,  # ms
                 "throughput": 0.5,  # tasks per minute
-                "input_token": 0.00005,  # $ per token
-                "output_token": 0.00015,  # $ per token
+                "input_token_count": 0.00005,  # number of tokens
+                "output_token_count": 0.00015,  # number of tokens
                 "parameters": 175000000000,  # 175B parameters
                 "activated_parameters": 175000000000
             }, {
                 "model_name": "gpt4",
                 "latency": 120000,  # ms
                 "throughput": 0.5,  # tasks per minute
-                "input_token": 0.00005,  # $ per token
-                "output_token": 0.00015,  # $ per token
+                "input_token_count": 0.00005,  # number of tokens
+                "output_token_count": 0.00015,  # number of tokens
                 "parameters": 175000000000,  # 175B parameters
                 "activated_parameters": 175000000000
             }]
@@ -102,8 +102,8 @@ def create_sample_leaderboard(output_path):
                 "model_name": "gpt35",
                 "latency": 75000,  # ms
                 "throughput": 0.8,  # tasks per minute
-                "input_token": 0.000015,  # $ per token
-                "output_token": 0.00002,  # $ per token
+                "input_token_count": 0.000015,  # number of tokens
+                "output_token_count": 0.00002,  # number of tokens
                 "parameters": 175000000,  # 175M parameters
                 "activated_parameters": 175000000
             }]
@@ -345,8 +345,8 @@ def main():
                 model_name = model.get('model_name', f"Model-{i}")
                 latency = model.get('latency', 0.0) / 1000  # ms to seconds
                 throughput = model.get('throughput', 0.0)
-                input_cost = model.get('input_token', 0.0) 
-                output_cost = model.get('output_token', 0.0) 
+                input_cost = model.get('input_token_count', 0.0) 
+                output_cost = model.get('output_token_count', 0.0) 
                 
                 print(f"{model_name:<10} | {latency:>12.2f} | {throughput:>10.2f} | {input_cost:>14.4f} | {output_cost:>14.4f}")
     

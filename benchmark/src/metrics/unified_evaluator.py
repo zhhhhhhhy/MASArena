@@ -119,9 +119,9 @@ class UnifiedEvaluator:
         # Calculate token cost based on input/output token prices
         total_token_cost = 0.0
         for model in models:
-            input_token_cost = model.get('input_token', 0.0)
-            output_token_cost = model.get('output_token', 0.0)
-            total_token_cost += input_token_cost + output_token_cost
+            input_token_count = model.get('input_token_count', 0.0)
+            output_token_count = model.get('output_token_count', 0.0)
+            total_token_cost += input_token_count + output_token_count
         
         return {
             'accuracy': accuracy,
@@ -565,8 +565,8 @@ class UnifiedEvaluator:
                         'throughput': model.get('throughput', 0.0),
                         'parameters': model.get('parameters', 0.0),
                         'activated_parameters': model.get('activated_parameters', 0.0),
-                        'input_token_cost': model.get('input_token', 0.0),
-                        'output_token_cost': model.get('output_token', 0.0)  
+                        'input_token_count': model.get('input_token_count', 0.0),
+                        'output_token_count': model.get('output_token_count', 0.0)  
                     }
                     system_export['models'].append(model_export)
             
