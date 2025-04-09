@@ -18,8 +18,10 @@ from benchmark.src.metrics import (
     SystemMetricsCollector,
     AgentMetricsCollector,
     InterAgentMetricsCollector,
+    MetricsCollector
 )
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
+from benchmark.src.evaluators import MathEvaluator
 
 
 class BenchmarkRunner:
@@ -51,6 +53,9 @@ class BenchmarkRunner:
 
         # Set up metrics
         self.metrics_registry = self._setup_metrics()
+        
+        # Create centralized metrics collector
+        self.metrics_collector = MetricsCollector(self.metrics_registry)
 
     def _setup_metrics(self):
         """Set up metrics collection"""
@@ -59,6 +64,36 @@ class BenchmarkRunner:
         registry.register_collector("agent", AgentMetricsCollector())
         registry.register_collector("inter_agent", InterAgentMetricsCollector())
         return registry
+    
+    def _get_evaluator(self, benchmark_name, data_path=None):
+        """
+        Get the appropriate evaluator for the benchmark.
+        
+        Args:
+            benchmark_name: Name of the benchmark
+            data_path: Custom path to data file
+            
+        Returns:
+            An initialized evaluator
+        """
+        if benchmark_name.lower() == "math":
+            return MathEvaluator(
+                name=benchmark_name,
+                config={
+                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
+                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}"
+                }
+            )
+        else:
+            # Default to math evaluator for now
+            # In the future, we would add more evaluator types based on benchmark_name
+            return MathEvaluator(
+                name=benchmark_name,
+                config={
+                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
+                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}"
+                }
+            )
 
     def run(
         self,
@@ -85,7 +120,7 @@ class BenchmarkRunner:
         """
         if verbose:
             print(f"Available agent systems: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
-
+        
         # Determine data path
         if data_path is None:
             data_path = f"benchmark/data/{benchmark_name}_test.jsonl"
@@ -107,8 +142,19 @@ class BenchmarkRunner:
 
         # Start metrics collection
         self.metrics_registry.start_all_collectors()
-        system_collector = self.metrics_registry.get_collector("system")
+        
+        # Start benchmark timer
+        self.metrics_collector.start_timer(
+            "benchmark.execution",
+            {"benchmark": benchmark_name, "agent_system": agent_system}
+        )
 
+        # Create agent system with appropriate configuration
+        if agent_config is None:
+            agent_config = {}
+            
+        # Add evaluator name to configuration
+        agent_config["evaluator"] = benchmark_name
         # Create agent system
         agent = create_agent_system(agent_system, agent_config)
         if agent is None:
@@ -118,12 +164,6 @@ class BenchmarkRunner:
 
         # Set metrics registry
         agent.set_metrics_registry(self.metrics_registry)
-
-        # Record benchmark start
-        benchmark_start_time = time.time()
-        system_collector.collect_point(
-            "benchmark.start", 1.0, tags={"benchmark": benchmark_name, "agent_system": agent_system}
-        )
 
         # Process problems
         all_results = []
@@ -138,41 +178,18 @@ class BenchmarkRunner:
             if verbose:
                 print(f"\nProblem {i + 1}/{len(problems)}: {problem_id}")
 
-            # Start problem
-            problem_start_time = time.time()
-            system_collector.collect_point(
-                "problem.start",
-                1.0,
-                tags={"problem_id": problem_id, "benchmark": benchmark_name, "agent_system": agent_system},
+            # Start problem timer
+            self.metrics_collector.start_timer(
+                "problem.execution",
+                {"problem_id": problem_id, "benchmark": benchmark_name, "agent_system": agent_system}
             )
 
             try:
                 # Evaluate the problem using the agent system
                 results = agent.evaluate(problem, metrics_registry=self.metrics_registry)
 
-                # Record metrics
-                problem_end_time = time.time()
-                problem_duration_ms = (problem_end_time - problem_start_time) * 1000
-
-                system_collector.record_latency(
-                    "problem.execution",
-                    problem_duration_ms,
-                    tags={"problem_id": problem_id, "agent_system": agent_system},
-                )
-
-                # Record token usage in agent metrics
-                token_usage = results.get("token_usage", {})
-                agent_collector = self.metrics_registry.get_collector("agent")
-
-                for agent_id, tokens in token_usage.items():
-                    agent_collector.record_llm_usage(
-                        agent_id=agent_id,
-                        model_name="gpt-4o-mini",
-                        prompt_tokens=tokens,  # supervisor_mas.py counts total tokens directly
-                        completion_tokens=0,  # not splitting tokens
-                        latency_ms=problem_duration_ms / len(token_usage) if token_usage else 0,
-                        tags={"problem_id": problem_id, "benchmark": benchmark_name, "agent_system": agent_system},
-                    )
+                # Stop problem timer
+                problem_duration_ms = self.metrics_collector.stop_timer("problem.execution")
 
                 # Save results
                 result_entry = {
@@ -188,7 +205,10 @@ class BenchmarkRunner:
                     "summary": {
                         "correct": results.get("math_score", 0) == 1,
                         "duration_ms": results.get("execution_time_ms", problem_duration_ms),
-                        "total_tokens": sum(results.get("token_usage", {}).values()),
+                        "total_tokens": sum(
+                            tokens.get('total_tokens', tokens) if isinstance(tokens, dict) else tokens 
+                            for tokens in results.get("token_usage", {}).values()
+                        ),
                     },
                 }
 
@@ -197,25 +217,22 @@ class BenchmarkRunner:
                 if verbose:
                     print(f"Result: {'✓' if result_entry['score'] == 1 else '✗'} ({result_entry['duration_ms']:.0f}ms)")
 
-                # Record completion
-                system_collector.collect_point(
-                    "problem.completion",
-                    1.0,
-                    tags={"problem_id": problem_id, "success": True, "agent_system": agent_system},
-                )
-
             except Exception as e:
-                problem_end_time = time.time()
-                problem_duration_ms = (problem_end_time - problem_start_time) * 1000
+                # Stop problem timer on error
+                problem_duration_ms = self.metrics_collector.stop_timer("problem.execution")
 
                 if verbose:
                     print(f"Error: {e}")
 
-                # Record error
-                system_collector.collect_point(
+                # Record error in metrics
+                self.metrics_collector.record_metric(
                     "problem.error",
                     1.0,
-                    tags={"problem_id": problem_id, "error": str(e)[:100], "agent_system": agent_system},
+                    {
+                        "problem_id": problem_id, 
+                        "error": str(e)[:100], 
+                        "agent_system": agent_system
+                    }
                 )
 
                 all_results.append(
@@ -235,23 +252,8 @@ class BenchmarkRunner:
                     }
                 )
 
-        # Record benchmark completion
-        benchmark_end_time = time.time()
-        benchmark_duration_ms = (benchmark_end_time - benchmark_start_time) * 1000
-        system_collector.collect_point(
-            "benchmark.completion",
-            1.0,
-            tags={"benchmark": benchmark_name, "duration_ms": str(benchmark_duration_ms), "agent_system": agent_system},
-        )
-
-        # Generate interaction graph if appropriate
-        inter_agent_collector = self.metrics_registry.get_collector("inter_agent")
-        if inter_agent_collector:
-            try:
-                inter_agent_collector.generate_interaction_graph()
-            except Exception as e:
-                if verbose:
-                    print(f"Warning: Could not generate interaction graph: {e}")
+        # Stop benchmark timer
+        benchmark_duration_ms = self.metrics_collector.stop_timer("benchmark.execution")
 
         # Save results to file
         with open(output_file, "w") as f:

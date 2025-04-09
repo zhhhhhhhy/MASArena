@@ -13,7 +13,7 @@ from pathlib import Path
 
 from langchain_openai import ChatOpenAI
 from langchain_community.callbacks import get_openai_callback
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.types import Command
 from langgraph.prebuilt import create_react_agent
@@ -23,10 +23,10 @@ from langsmith.evaluation import RunEvaluator
 from langgraph.checkpoint.memory import InMemorySaver
 from langsmith.schemas import Run
 from dotenv import load_dotenv
-import asyncio
-from benchmark.src.evaluators.math import MATHBenchmark
 import dotenv
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
+from benchmark.src.evaluators.math_evaluator import MathEvaluator
+from benchmark.src.metrics.collector import MetricsCollector
 
 dotenv.load_dotenv()
 
@@ -220,19 +220,32 @@ class SupervisorMAS(AgentSystem):
     def __init__(self, name: str = "supervisor_mas", config: Dict[str, Any] = None):
         """Initialize the Supervisor MAS"""
         super().__init__(name, config)
+        print("config", config)
         self.evaluator_name = config.get("evaluator", "math") if config else "math"
+        
+        # Initialize the appropriate evaluator
+        if self.evaluator_name == "math":
+            self.evaluator = MathEvaluator(
+                name=self.evaluator_name,
+                config={
+                    "data_path": config.get("data_path", f"benchmark/data/{self.evaluator_name}_test.jsonl"),
+                    "log_path": config.get("log_path", f"benchmark/data/results/{self.evaluator_name.upper()}")
+                }
+            )
+        else:
+            # Default to math evaluator for now
+            # In future, we would add more evaluator types here
+            self.evaluator = MathEvaluator(name=self.evaluator_name)
+            
+        # Initialize metrics collector
+        self.metrics_collector = MetricsCollector()
 
     def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Evaluate the agent system on a problem"""
         metrics_registry = kwargs.get("metrics_registry", self.metrics_registry)
-
-        # Initialize evaluator
-        run_evaluator = RunEvaluator()
-        math_evaluator = MATHBenchmark(
-            name=self.evaluator_name.upper(),
-            file_path=f"benchmark/data/{self.evaluator_name}_test.jsonl",
-            log_path=f"benchmark/data/results/{self.evaluator_name.upper()}",
-        )
+        
+        # Set metrics registry for collector
+        self.metrics_collector.set_metrics_registry(metrics_registry)
 
         # Create graph
         graph = create_mas_graph()
@@ -242,72 +255,71 @@ class SupervisorMAS(AgentSystem):
         }
 
         # Record start time for metrics
-        start_time = time.time()
+        problem_id = problem.get("id", str(uuid.uuid4()))
+        self.metrics_collector.start_timer(
+            "problem_evaluation", 
+            {"problem_id": problem_id, "agent_system": self.name}
+        )
 
         # Run the graph
         run_result = graph.invoke(initial_state, config={"configurable": {"thread_id": "1"}})
 
         # Record execution time
-        execution_time_ms = self.record_timing("evaluate", start_time, {"problem_id": problem.get("id", "unknown")})
-
-        # Extract the final answer
-        all_messages = run_result.get("messages", [])
-        final_answer = ""
-
-        if all_messages:
-            last_msg = all_messages[-1]
-            if isinstance(last_msg, tuple) and len(last_msg) > 1:
-                final_answer = last_msg[1]
-            elif hasattr(last_msg, "content"):
-                final_answer = last_msg.content
-            elif isinstance(last_msg, dict) and "content" in last_msg:
-                final_answer = last_msg["content"]
-
-        # Calculate score
-        score, extracted_answer = math_evaluator.calculate_score(problem["solution"], final_answer)
+        execution_time_ms = self.metrics_collector.stop_timer("problem_evaluation")
 
         # Extract token usage
+        print("run_result", run_result)
         token_usage = run_result.get("token_usage", {})
+        
+        for message in run_result.get("messages", []):
+            if isinstance(message, AIMessage):
+                # Extract token usage metadata from AIMessage
+                if hasattr(message, 'usage_metadata'):
+                    usage_metadata = message.usage_metadata
+                    if usage_metadata:
+                        print("usage_metadata", usage_metadata)
+                        input_tokens = usage_metadata.get('input_tokens', 0)
+                        output_tokens = usage_metadata.get('output_tokens', 0)
+                        total_tokens = usage_metadata.get('total_tokens', 0)
+                        
+                        # Update token usage with detailed breakdown
+                        token_usage[message.id] = {
+                            'input_tokens': input_tokens,
+                            'output_tokens': output_tokens,
+                            'total_tokens': total_tokens,
+                            'input_token_details': usage_metadata.get('input_token_details', {}),
+                            'output_token_details': usage_metadata.get('output_token_details', {})
+                        }
+                        
+                        # Record token usage with centralized metrics collector
+                        self.metrics_collector.record_llm_usage(
+                            agent_id=message.id,
+                            model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+                            prompt_tokens=input_tokens,
+                            completion_tokens=output_tokens,
+                            total_tokens=total_tokens,
+                            latency_ms=execution_time_ms / len(run_result.get("messages", [])) if run_result.get("messages", []) else 0,
+                            tags={"agent_system": self.name, "problem_id": problem_id}
+                        )
 
-        # Record token usage in metrics
-        if metrics_registry and METRICS_AVAILABLE:
-            agent_collector = metrics_registry.get_collector("agent")
-            if agent_collector:
-                for agent_id, tokens in token_usage.items():
-                    agent_collector.record_llm_usage(
-                        agent_id=agent_id,
-                        model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-                        prompt_tokens=tokens,
-                        completion_tokens=0,
-                        latency_ms=execution_time_ms / len(token_usage) if token_usage else 0,
-                        tags={"agent_system": self.name},
-                    )
-
-        # Create LangSmith run for evaluation
-        run = Run(
-            id=self.generate_run_id(),
-            name=f"{self.evaluator_name.upper()}_MAS_Evaluation",
-            inputs={"problem": problem["problem"]},
-            outputs={
-                "prediction": final_answer,
-                "extracted_answer": extracted_answer,
-                "expected": problem["solution"],
-                "math_score": score,
-                "passed": score == 1,
-            },
-            run_type="evaluation",
-            start_time="2025-03-11T12:00:00Z",  # Example time, not actual
-            trace_id=self.generate_run_id(),
+        # Use the evaluator to evaluate the results
+        evaluation_results = self.evaluator.evaluate(problem, run_result)
+        
+        # Record evaluation metrics
+        self.metrics_collector.record_evaluation_result(
+            problem_id=problem_id,
+            score=evaluation_results.get("math_score", 0),
+            duration_ms=execution_time_ms,
+            tags={
+                "agent_system": self.name,
+                "evaluator": self.evaluator_name,
+                "problem_type": self.evaluator_name
+            }
         )
-
-        run_evaluation = run_evaluator.evaluate_run(run=run)
-
-        # Return evaluation results
+        
+        # Return final results
         return {
-            "final_answer": final_answer,
-            "math_score": score,
-            "run_evaluation": run_evaluation,
-            "extracted_answer": extracted_answer,
+            **evaluation_results,  # Include all evaluation results
             "token_usage": token_usage,
             "execution_time_ms": execution_time_ms,
         }
