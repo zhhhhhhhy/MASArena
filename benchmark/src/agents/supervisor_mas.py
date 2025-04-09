@@ -5,15 +5,14 @@ This module implements a supervisor-based multi-agent system where a supervisor
 agent coordinates the work of specialized agents.
 """
 
-import time
-import uuid
 import os
 from typing import Literal, Dict, TypedDict, Any
-from pathlib import Path
+import time
+import uuid
 
 from langchain_openai import ChatOpenAI
 from langchain_community.callbacks import get_openai_callback
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.types import Command
 from langgraph.prebuilt import create_react_agent
@@ -28,15 +27,14 @@ from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 from benchmark.src.evaluators.math_evaluator import MathEvaluator
 from benchmark.src.metrics.collector import MetricsCollector
 
-dotenv.load_dotenv()
-
 # Optional import for metrics instrumentation
 try:
     from benchmark.src.metrics import MetricsRegistry, AgentMetricsCollector, InterAgentMetricsCollector
-
     METRICS_AVAILABLE = True
 except ImportError:
     METRICS_AVAILABLE = False
+
+dotenv.load_dotenv()
 
 # root_path = Path(__file__).parent
 
@@ -220,109 +218,37 @@ class SupervisorMAS(AgentSystem):
     def __init__(self, name: str = "supervisor_mas", config: Dict[str, Any] = None):
         """Initialize the Supervisor MAS"""
         super().__init__(name, config)
-        print("config", config)
-        self.evaluator_name = config.get("evaluator", "math") if config else "math"
         
-        # Initialize the appropriate evaluator
-        if self.evaluator_name == "math":
-            self.evaluator = MathEvaluator(
-                name=self.evaluator_name,
-                config={
-                    "data_path": config.get("data_path", f"benchmark/data/{self.evaluator_name}_test.jsonl"),
-                    "log_path": config.get("log_path", f"benchmark/data/results/{self.evaluator_name.upper()}")
-                }
-            )
-        else:
-            # Default to math evaluator for now
-            # In future, we would add more evaluator types here
-            self.evaluator = MathEvaluator(name=self.evaluator_name)
+        # Initialize evaluator and metrics collector through base class methods
+        self._initialize_evaluator()
+        self._initialize_metrics_collector()
+
+    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Run the agent system on a problem without evaluation.
+        
+        This method focuses on running the agent system and collecting basic metrics.
+        
+        Args:
+            problem: Dictionary containing the problem data
             
-        # Initialize metrics collector
-        self.metrics_collector = MetricsCollector()
-
-    def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Evaluate the agent system on a problem"""
-        metrics_registry = kwargs.get("metrics_registry", self.metrics_registry)
-        
-        # Set metrics registry for collector
-        self.metrics_collector.set_metrics_registry(metrics_registry)
-
+        Returns:
+            Dictionary with run results (messages, token usage, etc.)
+        """
         # Create graph
         graph = create_mas_graph()
+        
+        # Create initial state
         initial_state = {
             "messages": [("user", problem["problem"])],
             "token_usage": {"supervisor": 0, "researcher": 0, "coder": 0},
         }
 
-        # Record start time for metrics
-        problem_id = problem.get("id", str(uuid.uuid4()))
-        self.metrics_collector.start_timer(
-            "problem_evaluation", 
-            {"problem_id": problem_id, "agent_system": self.name}
-        )
-
         # Run the graph
         run_result = graph.invoke(initial_state, config={"configurable": {"thread_id": "1"}})
-
-        # Record execution time
-        execution_time_ms = self.metrics_collector.stop_timer("problem_evaluation")
-
-        # Extract token usage
-        print("run_result", run_result)
-        token_usage = run_result.get("token_usage", {})
         
-        for message in run_result.get("messages", []):
-            if isinstance(message, AIMessage):
-                # Extract token usage metadata from AIMessage
-                if hasattr(message, 'usage_metadata'):
-                    usage_metadata = message.usage_metadata
-                    if usage_metadata:
-                        print("usage_metadata", usage_metadata)
-                        input_tokens = usage_metadata.get('input_tokens', 0)
-                        output_tokens = usage_metadata.get('output_tokens', 0)
-                        total_tokens = usage_metadata.get('total_tokens', 0)
-                        
-                        # Update token usage with detailed breakdown
-                        token_usage[message.id] = {
-                            'input_tokens': input_tokens,
-                            'output_tokens': output_tokens,
-                            'total_tokens': total_tokens,
-                            'input_token_details': usage_metadata.get('input_token_details', {}),
-                            'output_token_details': usage_metadata.get('output_token_details', {})
-                        }
-                        
-                        # Record token usage with centralized metrics collector
-                        self.metrics_collector.record_llm_usage(
-                            agent_id=message.id,
-                            model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-                            prompt_tokens=input_tokens,
-                            completion_tokens=output_tokens,
-                            total_tokens=total_tokens,
-                            latency_ms=execution_time_ms / len(run_result.get("messages", [])) if run_result.get("messages", []) else 0,
-                            tags={"agent_system": self.name, "problem_id": problem_id}
-                        )
-
-        # Use the evaluator to evaluate the results
-        evaluation_results = self.evaluator.evaluate(problem, run_result)
-        
-        # Record evaluation metrics
-        self.metrics_collector.record_evaluation_result(
-            problem_id=problem_id,
-            score=evaluation_results.get("math_score", 0),
-            duration_ms=execution_time_ms,
-            tags={
-                "agent_system": self.name,
-                "evaluator": self.evaluator_name,
-                "problem_type": self.evaluator_name
-            }
-        )
-        
-        # Return final results
-        return {
-            **evaluation_results,  # Include all evaluation results
-            "token_usage": token_usage,
-            "execution_time_ms": execution_time_ms,
-        }
+        # Return results
+        return run_result
 
 
 # Register the agent system
