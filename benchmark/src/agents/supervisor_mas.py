@@ -12,20 +12,15 @@ import uuid
 
 from langchain_openai import ChatOpenAI
 from langchain_community.callbacks import get_openai_callback
-from langchain_core.messages import AIMessage
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.types import Command
 from langgraph.prebuilt import create_react_agent
 from langchain_community.tools.tavily_search import TavilySearchResults
 from langsmith import traceable, RunTree
-from langsmith.evaluation import RunEvaluator
 from langgraph.checkpoint.memory import InMemorySaver
-from langsmith.schemas import Run
 from dotenv import load_dotenv
 import dotenv
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
-from benchmark.src.evaluators.math_evaluator import MathEvaluator
-from benchmark.src.metrics.collector import MetricsCollector
 
 dotenv.load_dotenv()
 
@@ -187,4 +182,4 @@ class SupervisorMAS(AgentSystem):
 
 
 # Register the agent system
-AgentSystemRegistry.register("supervisor_mas", SupervisorMAS, evaluator="math")
+AgentSystemRegistry.register("supervisor_mas", SupervisorMAS)
