@@ -108,7 +108,8 @@ class AgentMetricsCollector(BaseMetricsCollector):
     # LLM Usage Metrics
     
     def record_llm_usage(self, agent_id: str, model_name: str, prompt_tokens: int, 
-                        completion_tokens: int, latency_ms: float, 
+                        completion_tokens: int, reasoning_tokens: int,
+                        latency_ms: float, 
                         tags: Dict[str, str] = None) -> None:
         """
         Record usage of an LLM by an agent.

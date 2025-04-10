@@ -10,6 +10,7 @@ Modules:
     inter_agent_metrics: Communication and coordination metrics between agents
     collectors: Unified metrics collection framework components
     unified_evaluator: Unified evaluation framework for comparing agent systems
+    collector: Centralized metrics collection system
 """
 
 from benchmark.src.metrics.system_metrics import SystemMetricsCollector
@@ -25,6 +26,7 @@ from benchmark.src.metrics.unified_evaluator import (
     UnifiedEvaluationConfig,
     LeaderboardInstrumentationCollector
 )
+from benchmark.src.metrics.collector import MetricsCollector
 
 __all__ = [
     'SystemMetricsCollector',
@@ -36,4 +38,5 @@ __all__ = [
     'UnifiedEvaluator',
     'UnifiedEvaluationConfig',
     'LeaderboardInstrumentationCollector',
+    'MetricsCollector',
 ] 

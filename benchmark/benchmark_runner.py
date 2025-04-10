@@ -120,7 +120,7 @@ class BenchmarkRunner:
         """
         if verbose:
             print(f"Available agent systems: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
-        
+
         # Determine data path
         if data_path is None:
             data_path = f"benchmark/data/{benchmark_name}_test.jsonl"
@@ -133,20 +133,29 @@ class BenchmarkRunner:
             print(f"Using data from: {data_path}")
             print(f"Processing up to {limit} problems")
 
-        # Load problems
-        with open(data_path, "r") as f:
-            problems = [json.loads(line) for line in f]
-
-        # Limit problems
-        problems = problems[:limit]
-
         # Start metrics collection
         self.metrics_registry.start_all_collectors()
         
-        # Start benchmark timer
+        # Record benchmark metadata using centralized collector
+        self.metrics_collector.record_metric(
+            "benchmark.metadata",
+            1.0,
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system,
+                "limit": limit,
+                "timestamp": self.timestamp
+            }
+        )
+        
+        # Start benchmark timer through centralized collector
         self.metrics_collector.start_timer(
             "benchmark.execution",
-            {"benchmark": benchmark_name, "agent_system": agent_system}
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system,
+                "limit": limit
+            }
         )
 
         # Create agent system with appropriate configuration
@@ -155,6 +164,7 @@ class BenchmarkRunner:
             
         # Add evaluator name to configuration
         agent_config["evaluator"] = benchmark_name
+
         # Create agent system
         agent = create_agent_system(agent_system, agent_config)
         if agent is None:
@@ -165,8 +175,28 @@ class BenchmarkRunner:
         # Set metrics registry
         agent.set_metrics_registry(self.metrics_registry)
 
+        # Load problems
+        with open(data_path, "r") as f:
+            problems = [json.loads(line) for line in f]
+
+        # Limit problems
+        problems = problems[:limit]
+        
+        # Record problem count
+        self.metrics_collector.record_metric(
+            "benchmark.problem_count",
+            len(problems),
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system
+            }
+        )
+
         # Process problems
         all_results = []
+        correct_count = 0
+        error_count = 0
+        total_duration = 0
 
         for i, problem in enumerate(problems):
             # Add problem ID if not present
@@ -180,8 +210,13 @@ class BenchmarkRunner:
 
             # Start problem timer
             self.metrics_collector.start_timer(
-                "problem.execution",
-                {"problem_id": problem_id, "benchmark": benchmark_name, "agent_system": agent_system}
+                f"benchmark.problem.{problem_id}",
+                {
+                    "problem_id": problem_id,
+                    "benchmark": benchmark_name,
+                    "agent_system": agent_system,
+                    "problem_index": i
+                }
             )
 
             try:
@@ -189,63 +224,84 @@ class BenchmarkRunner:
                 results = agent.evaluate(problem, metrics_registry=self.metrics_registry)
 
                 # Stop problem timer
-                problem_duration_ms = self.metrics_collector.stop_timer("problem.execution")
-
-                # Save results
+                problem_duration_ms = self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
+                
+                duration_ms = results.get("execution_time_ms", problem_duration_ms)
+                score = results.get("math_score", 0)
+                is_correct = score == 1
+                
+                # Update statistics
+                total_duration += duration_ms
+                if is_correct:
+                    correct_count += 1
+                    
+                # Record problem result
+                self.metrics_collector.record_metric(
+                    "benchmark.problem.result",
+                    score,
+                    {
+                        "problem_id": problem_id,
+                        "benchmark": benchmark_name,
+                        "agent_system": agent_system,
+                        "correct": is_correct,
+                        "duration_ms": duration_ms
+                    }
+                )
+                
+                # Create result entry
                 result_entry = {
                     "problem_id": problem_id,
                     "problem": problem["problem"],
                     "expected": problem["solution"],
                     "prediction": results.get("extracted_answer", ""),
-                    "score": results.get("math_score", 0),
-                    "token_usage": results.get("token_usage", {}),
-                    "duration_ms": results.get("execution_time_ms", problem_duration_ms),
+                    "score": score,
+                    "duration_ms": duration_ms,
                     "agent_system": agent_system,
+                    "llm_usage": results.get("llm_usage", {}),  # Include LLM usage metrics
                     # Add a simplified summary for quick reference
                     "summary": {
-                        "correct": results.get("math_score", 0) == 1,
-                        "duration_ms": results.get("execution_time_ms", problem_duration_ms),
-                        "total_tokens": sum(
-                            tokens.get('total_tokens', tokens) if isinstance(tokens, dict) else tokens 
-                            for tokens in results.get("token_usage", {}).values()
-                        ),
+                        "correct": is_correct,
+                        "duration_ms": duration_ms,
+                        "total_tokens": results.get("llm_usage", {}).get("total_tokens", 0)
                     },
                 }
 
                 all_results.append(result_entry)
 
                 if verbose:
-                    print(f"Result: {'✓' if result_entry['score'] == 1 else '✗'} ({result_entry['duration_ms']:.0f}ms)")
+                    print(f"Result: {'✓' if is_correct else '✗'} ({duration_ms:.0f}ms)")
 
             except Exception as e:
-                # Stop problem timer on error
-                problem_duration_ms = self.metrics_collector.stop_timer("problem.execution")
+                # Stop problem timer
+                self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
+                
+                # Record error in metrics
+                error_count += 1
+                self.metrics_collector.record_error(
+                    "problem_processing",
+                    str(e),
+                    {
+                        "problem_id": problem_id,
+                        "benchmark": benchmark_name,
+                        "agent_system": agent_system,
+                        "error_type": type(e).__name__
+                    }
+                )
 
                 if verbose:
                     print(f"Error: {e}")
-
-                # Record error in metrics
-                self.metrics_collector.record_metric(
-                    "problem.error",
-                    1.0,
-                    {
-                        "problem_id": problem_id, 
-                        "error": str(e)[:100], 
-                        "agent_system": agent_system
-                    }
-                )
 
                 all_results.append(
                     {
                         "problem_id": problem_id,
                         "problem": problem["problem"],
                         "error": str(e),
-                        "duration_ms": problem_duration_ms,
+                        "duration_ms": 0,
                         "agent_system": agent_system,
                         # Add a simplified summary for error cases
                         "summary": {
                             "correct": False,
-                            "duration_ms": problem_duration_ms,
+                            "duration_ms": 0,
                             "error": True,
                             "error_type": type(e).__name__,
                         },
@@ -254,6 +310,22 @@ class BenchmarkRunner:
 
         # Stop benchmark timer
         benchmark_duration_ms = self.metrics_collector.stop_timer("benchmark.execution")
+        
+        # Record final benchmark statistics
+        self.metrics_collector.record_system_metrics(
+            {
+                "total_problems": len(problems),
+                "correct_count": correct_count,
+                "error_count": error_count,
+                "accuracy": correct_count / len(problems) if problems else 0,
+                "total_duration_ms": total_duration,
+                "avg_duration_per_problem": total_duration / len(problems) if problems else 0,
+            },
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system
+            }
+        )
 
         # Save results to file
         with open(output_file, "w") as f:
@@ -305,7 +377,7 @@ class BenchmarkRunner:
         Args:
             output_dir: Directory to save visualizations (defaults to metrics_dir/benchmark_timestamp/viz)
         """
-        pass
+        pass 
 
 
 def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_agent", visualize=True):
@@ -352,7 +424,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     summary = run_simple_benchmark(
-        benchmark_name=args.benchmark, limit=args.limit, agent_system=args.agent_system, visualize=not args.no_viz
+        benchmark_name=args.benchmark, 
+        limit=args.limit, 
+        agent_system=args.agent_system, 
+        visualize=not args.no_viz
     )
 
     print(f"\nAccuracy: {summary['accuracy']:.2%}")
