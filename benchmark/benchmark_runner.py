@@ -404,6 +404,7 @@ def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_ag
 
 if __name__ == "__main__":
     import argparse
+    from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
 
     parser = argparse.ArgumentParser(description="Run a benchmark with a simplified interface")
     parser.add_argument(
@@ -415,7 +416,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--agent-system",
         default="single_agent",
-        choices=["single_agent", "supervisor_mas", "swarm"],
+        choices=list(AVAILABLE_AGENT_SYSTEMS.keys()),
         help="Agent system to use",
     )
     parser.add_argument("--limit", type=int, default=5, help="Maximum number of problems to process")

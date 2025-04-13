@@ -15,8 +15,6 @@ import asyncio
 from concurrent.futures import ThreadPoolExecutor
 
 from langchain_openai import ChatOpenAI
-from langchain_community.callbacks import get_openai_callback
-from langchain_core.messages import AIMessage
 from dotenv import load_dotenv
 
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
@@ -61,11 +59,9 @@ class SwarmAgent:
         ]
 
         start_time = time.time()
-        with get_openai_callback() as cb:
-            response = self.llm.invoke(messages)
+        response = self.llm.invoke(messages)
         end_time = time.time()
 
-        # Create an AIMessage with usage metadata for metrics tracking
         ai_message = response
         ai_message.id = f"{self.agent_id}_{uuid.uuid4()}"
         ai_message.name = self.agent_id
@@ -139,11 +135,9 @@ Make sure your final answer is clearly formatted and precise.
         ]
 
         start_time = time.time()
-        with get_openai_callback() as cb:
-            response = self.llm.invoke(messages)
+        response = self.llm.invoke(messages)
         end_time = time.time()
 
-        # Create an AIMessage with usage metadata for the aggregator
         ai_message = response
         ai_message.id = f"aggregator_{uuid.uuid4()}"
         ai_message.name = "aggregator"

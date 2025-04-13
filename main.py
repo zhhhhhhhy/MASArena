@@ -12,6 +12,9 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run benchmarks for multi-agent systems")
 
+    # Import available agent systems
+    from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
+
     parser.add_argument(
         "--benchmark",
         type=str,
