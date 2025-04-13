@@ -260,7 +260,7 @@ class Evaluator:
             content = content.strip()
             content = re.sub(r'```$', '', content).strip()
             
-            print("Cleaned content for parsing:", content[:100] + "..." if len(content) > 100 else content)
+            # print("Cleaned content for parsing:", content[:100] + "..." if len(content) > 100 else content)
             
             # Try direct JSON parsing first
             try:
@@ -475,17 +475,14 @@ class AgentVerse(AgentSystem):
                 break
             else:
                 feedback = evaluation.get("feedback", "")
-                print(f"Need new experts. Feedback: {feedback[:100]}...")
         
         # If we reached max iterations without a satisfactory solution, use the last evaluation
         if final_solution is None and all_solutions:
             last_evaluation = evaluator.evaluate(problem_text, all_solutions[-1]["solutions"], self.max_iterations)
             final_solution = last_evaluation.get("evaluation", {}).get("final_solution", "No satisfactory solution found")
-            print("last_evaluation: ", last_evaluation)
             # Add final evaluator message
             if "message" in last_evaluation:
                 all_messages.append(last_evaluation["message"])
-        print(f"Final solution: {final_solution}")
         
         # For math problems, ensure the final solution is properly formatted
         if isinstance(final_solution, (int, float)):
