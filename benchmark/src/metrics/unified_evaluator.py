@@ -5,7 +5,7 @@ This module implements the unified evaluation framework described in the benchma
 documentation, using leaderboard data as instrumentation for evaluation.
 """
 
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Set
 from dataclasses import dataclass
 import json
 import os
@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from benchmark.src.metrics.collectors import BaseMetricsCollector, MetricsCollectionConfig
+from benchmark.src.metrics.system_metrics import SystemMetricsCollector
 
 
 @dataclass
@@ -529,54 +530,100 @@ class UnifiedEvaluator:
     
     def export_results(self, results: Dict[str, Dict[str, Any]], output_path: str) -> None:
         """
-        Export evaluation results to a file.
+        Export evaluation results to file.
         
         Args:
-            results: Dictionary mapping system names to their evaluation metrics
-            output_path: Path to save the results to
+            results: Dictionary mapping system names to performance metrics
+            output_path: Path to export results to
         """
-        # Create output directory if it doesn't exist
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-        
-        # Prepare data for export
-        export_data = {}
-        for system_name, metrics in results.items():
-            raw_data = metrics['raw_data']
+        with open(output_path, "w") as f:
+            json.dump(results, f, indent=2)
             
-            # Basic system metrics
-            system_export = {
-                'utility': metrics['utility'],
-                'efficiency_ratio': metrics['efficiency_ratio'],
-                'system_type': metrics['system_type'],
-                'accuracy': raw_data.get('accuracy', 0.0),
-                'throughput': raw_data.get('throughput', 0.0),
-                'latency': raw_data.get('latency', 0.0),
-                'resource_usage': raw_data.get('resource_usage', 0.0),
-                'token_cost': raw_data.get('token_cost', 0.0)
+    def evaluate_inference_metrics(self, result_files: List[str]) -> Dict[str, Dict[str, Any]]:
+        """
+        Evaluate inference metrics from benchmark result files.
+        
+        Args:
+            result_files: List of paths to benchmark result files
+            
+        Returns:
+            Dictionary mapping agent system names to metrics
+        """
+        results = {}
+        
+        for file_path in result_files:
+            # Load the results file
+            with open(file_path, 'r') as f:
+                data = json.load(f)
+            
+            # Extract agent system name from file name
+            file_name = os.path.basename(file_path)
+            parts = file_name.split('_')
+            agent_system_name = parts[1]  # Assuming format math_<system>_date.json
+            
+            # Initialize metrics
+            total_problems = len(data)
+            correct = sum(1 for item in data if item.get('score', 0) == 1)
+            accuracy = correct / total_problems if total_problems > 0 else 0
+            
+            # Calculate average throughput and latency
+            total_duration_ms = sum(item.get('duration_ms', 0) for item in data)
+            avg_duration_ms = total_duration_ms / total_problems if total_problems > 0 else 0
+            throughput = 1000.0 / avg_duration_ms if avg_duration_ms > 0 else 0  # Tasks per second
+            
+            # Process model metrics
+            models_info = []
+            total_memory = 0
+            ttft_sum = 0
+            model_metrics = {}
+            
+            for item in data:
+                llm_usage = item.get('llm_usage', {})
+                agent_usage = llm_usage.get('agent_usage', [])
+                
+                for agent in agent_usage:
+                    model_name = agent.get('model_name', '')
+                    prompt_tokens = agent.get('prompt_tokens', 0)
+                    completion_tokens = agent.get('completion_tokens', 0)
+                    latency_ms = agent.get('latency_ms', 0)
+                    
+                    # Use estimate_inference_metrics from SystemMetricsCollector
+                    system_metrics = SystemMetricsCollector()
+                    inference_metrics = system_metrics.estimate_inference_metrics(
+                        model_name=model_name,
+                        input_token_count=prompt_tokens,
+                        output_token_count=completion_tokens
+                    )
+                    
+                    ttft_sum += inference_metrics.get('ttft_seconds', 0) * 1000  # Convert to ms
+                    total_memory += inference_metrics.get('memory_usage_bytes', 0)
+                    
+                    # Track model information if not already tracked
+                    if model_name not in model_metrics:
+                        model_metrics[model_name] = {
+                            'model_name': model_name,
+                            'latency': inference_metrics.get('ttft_seconds', 0) * 1000,  # Convert to ms
+                            'input_token_count': prompt_tokens,
+                            'output_token_count': completion_tokens,
+                        }
+            
+            # Convert model_metrics dictionary to list
+            models_info = list(model_metrics.values())
+            
+            # Calculate average TTFT
+            total_agents = sum(len(item.get('llm_usage', {}).get('agent_usage', [])) for item in data)
+            avg_ttft = ttft_sum / total_agents if total_agents else 0
+            
+            # Create results entry
+            results[agent_system_name] = {
+                'accuracy': accuracy,
+                'throughput': throughput,
+                'latency': avg_ttft,
+                'memory': total_memory / (1024 * 1024),  # Convert to MB
+                'model': models_info
             }
-            
-            # Include model details if available
-            if 'model' in raw_data:
-                system_export['models'] = []
-                for model in raw_data['model']:
-                    model_export = {
-                        'model_name': model.get('model_name', 'unknown'),
-                        'latency': model.get('latency', 0.0),
-                        'throughput': model.get('throughput', 0.0),
-                        'parameters': model.get('parameters', 0.0),
-                        'activated_parameters': model.get('activated_parameters', 0.0),
-                        'input_token_count': model.get('input_token_count', 0.0),
-                        'output_token_count': model.get('output_token_count', 0.0)  
-                    }
-                    system_export['models'].append(model_export)
-            
-            export_data[system_name] = system_export
         
-        # Export as JSON
-        with open(output_path, 'w') as f:
-            json.dump(export_data, f, indent=2)
-        
-        print(f"Results exported to {output_path}")
+        return results
 
 
 class LeaderboardInstrumentationCollector(BaseMetricsCollector):

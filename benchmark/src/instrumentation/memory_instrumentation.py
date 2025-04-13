@@ -133,3 +133,80 @@ class MemoryInstrumenter:
             Contention metrics if detected
         """
         pass
+    
+    def estimate_model_memory_cost(self, model_name, input_token_count, output_token_count):
+        """
+        Estimate memory usage for LLM inference based on model size and token counts.
+        
+        Calculates the sum of:
+          - Parameter memory (full model weights)
+          - Activated parameter memory (subset of weights actively used)
+          - KV cache memory (scales with context length)
+        
+        Args:
+            model_name (str): Name of the model to estimate memory for
+            input_token_count (int): Number of input tokens
+            output_token_count (int): Number of output tokens
+        
+        Returns:
+            dict: Memory usage breakdown in bytes with keys:
+                  'parameter_memory', 'activated_memory', 'kv_cache', 'total'
+        """
+        # Model parameter sizes in billions
+        # todo: provide the configuration for the model
+        model_sizes = {
+            "gpt-3.5-turbo": 6.7,
+            "gpt-4": 175.0,
+            "gpt-4o": 230.0,
+            "claude-3-opus": 150.0,
+            "claude-3-sonnet": 70.0,
+            "claude-3-haiku": 20.0,
+            "llama-2-7b": 7.0,
+            "llama-2-13b": 13.0,
+            "llama-2-70b": 70.0,
+            "mistral-7b": 7.0,
+            "mixtral-8x7b": 56.0,
+            "gemma-7b": 7.0,
+            "gemma-2b": 2.0,
+        }
+        
+        # Get parameter size (in billions)
+        if model_name in model_sizes:
+            parameter_size_b = model_sizes[model_name]
+        else:
+            # For unknown models, estimate based on name or return default
+            try:
+                # Try to extract size from name (e.g., llama-7b)
+                import re
+                size_match = re.search(r'(\d+)b', model_name.lower())
+                if size_match:
+                    parameter_size_b = float(size_match.group(1))
+                else:
+                    parameter_size_b = 7.0  # Default assumption
+            except:
+                parameter_size_b = 7.0  # Default assumption
+        
+        # Convert billions of parameters to bytes (assuming 2 bytes per parameter for FP16)
+        bytes_per_parameter = 2  # FP16 format
+        parameter_memory_bytes = parameter_size_b * 1e9 * bytes_per_parameter
+        
+        # Activated parameter memory (typically 20-60% of full model)
+        # This varies by architecture but we'll use a rough estimate
+        activation_ratio = 0.3  # 30% activated during inference
+        activated_memory_bytes = parameter_memory_bytes * activation_ratio
+        
+        # KV cache scales with context length (input + output tokens)
+        # Each token might use ~8-12 bytes per layer per attention head
+        context_length = input_token_count + output_token_count
+        bytes_per_token_in_kv_cache = 8 * (parameter_size_b / 6)  # Rough estimate scaling with model size
+        kv_cache_bytes = context_length * bytes_per_token_in_kv_cache
+        
+        # Total memory usage
+        total_memory_bytes = parameter_memory_bytes + activated_memory_bytes + kv_cache_bytes
+        
+        return {
+            "parameter_memory": parameter_memory_bytes,
+            "activated_memory": activated_memory_bytes, 
+            "kv_cache": kv_cache_bytes,
+            "total": total_memory_bytes
+        }

@@ -149,6 +149,81 @@ config = SystemMetricsConfig(
 collector = SystemMetricsCollector(config)
 ```
 
+## Inference Metrics Evaluation
+
+The `UnifiedEvaluator` class provides functionality to evaluate benchmark results and generate detailed inference metrics for agent systems. This is particularly useful for comparing different agent architectures or configurations.
+
+```python
+from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
+
+# Initialize the evaluator
+evaluator = UnifiedEvaluator()
+
+# Evaluate benchmark results from multiple systems
+results = evaluator.evaluate_inference_metrics([
+    "results/math_swarm_20250413_113622.json",
+    "results/math_agentverse_20250413_141244.json"
+])
+
+# Example of the results structure:
+"""
+{
+  "agentverse": {
+    "accuracy": 0.66666,
+    "throughput": 0.07972,         # Tasks per second
+    "latency": 348.36,             # Average TTFT in milliseconds
+    "memory": 156211.92,           # Total estimated memory in MB
+    "model": [
+      {
+        "model_name": "gpt-4o-mini",
+        "latency": 212.10,         # TTFT in milliseconds
+        "input_token_count": 293,
+        "output_token_count": 259
+      }
+    ]
+  },
+  "swarm": {
+    "accuracy": 0.5,
+    "throughput": 0.034,
+    "latency": 298.12,
+    "memory": 184325.73,
+    "model": [
+      {
+        "model_name": "gpt-4o-mini",
+        "latency": 212.10,
+        "input_token_count": 320,
+        "output_token_count": 480
+      }
+    ]
+  }
+}
+"""
+
+# Example usage with BenchmarkRunner
+from benchmark.benchmark_runner import BenchmarkRunner
+
+benchmark = BenchmarkRunner()
+summary = benchmark.run("math", limit=5, agent_system="swarm")
+# The summary includes inference metrics automatically:
+print(summary["inference_metrics"]["accuracy"])  # 0.5
+```
+
+### Data Structure Details
+
+The inference metrics evaluation provides the following information:
+
+- **accuracy**: Fraction of problems solved correctly (0.0-1.0)
+- **throughput**: Number of tasks the system can process per second
+- **latency**: Average time to first token (TTFT) across all requests in milliseconds
+- **memory**: Total estimated memory usage in megabytes (includes model parameters, KV cache, and activations)
+- **model**: List of unique models used by the agent system, with per-model metrics:
+  - **model_name**: Name of the language model
+  - **latency**: Estimated time to first token in milliseconds
+  - **input_token_count**: Average number of prompt tokens
+  - **output_token_count**: Average number of completion tokens
+
+The `estimate_inference_metrics` function from `SystemMetricsCollector` is used internally to calculate these metrics based on model parameters, input token count, and output token count. This provides a standardized way to compare different agent architectures even when direct measurements are not available.
+
 ## Custom Metrics
 
 You can extend the framework with custom metrics:

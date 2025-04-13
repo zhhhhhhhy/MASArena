@@ -22,6 +22,7 @@ except ImportError:
     GPU_AVAILABLE = False
 
 from benchmark.src.metrics.collectors import BaseMetricsCollector, MetricsCollectionConfig
+from benchmark.src.instrumentation.memory_instrumentation import MemoryInstrumenter
 
 
 @dataclass
@@ -48,6 +49,11 @@ class SystemMetricsConfig(MetricsCollectionConfig):
     # Queue monitoring
     monitor_queue_depths: bool = True
     queue_names_to_monitor: Set[str] = field(default_factory=set)
+    
+    # Hardware specification defaults for estimation
+    default_gpu_flops: float = 20.0e12  # 20 TFLOPS for a mid-range GPU
+    default_memory_bandwidth: float = 600.0e9  # 600 GB/s for a mid-range GPU
+    default_tokens_per_second: int = 30  # Default tokens per second for generation
 
 
 class SystemMetricsCollector(BaseMetricsCollector):
@@ -564,4 +570,80 @@ class SystemMetricsCollector(BaseMetricsCollector):
         except Exception:
             pass
         
-        return result 
+        return result
+    
+    def estimate_inference_metrics(self, model_name: str, input_token_count: int, output_token_count: int, 
+                                  hardware_config: Optional[Dict[str, float]] = None) -> Dict[str, float]:
+        """
+        Estimate inference metrics like TTFT, throughput, and memory usage based on model and hardware parameters.
+        
+        Uses the formula:
+        TTFT ≈ T_prefill = (2 × Parameters × N_input)/(Effective FLOPS) + (Activation Memory)/(Memory Bandwidth)
+        
+        Args:
+            model_name: Name of the model to estimate for
+            input_token_count: Number of input tokens
+            output_token_count: Number of output tokens
+            hardware_config: Optional hardware configuration with keys:
+                            'gpu_flops': GPU FLOPS in operations per second
+                            'memory_bandwidth': Memory bandwidth in bytes per second
+                            'hardware_efficiency': Efficiency factor (0.0-1.0) of achieved vs theoretical FLOPS
+        
+        Returns:
+            Dictionary with estimated metrics:
+                'ttft_seconds': Time to first token in seconds
+                'total_time_seconds': Total inference time in seconds
+                'tokens_per_second': Estimated token generation rate
+                'memory_usage_bytes': Total memory usage in bytes
+        """
+        # Get hardware configuration or use defaults
+        hw_config = hardware_config or {}
+        gpu_flops = hw_config.get('gpu_flops', self.config.default_gpu_flops)  # Operations/second
+        memory_bandwidth = hw_config.get('memory_bandwidth', self.config.default_memory_bandwidth)  # Bytes/second
+        hardware_efficiency = hw_config.get('hardware_efficiency', 0.4)  # 40% of theoretical peak is typical
+        
+        # Use MemoryInstrumenter to get model memory estimates
+        memory_instrumentation = MemoryInstrumenter()
+        memory_estimates = memory_instrumentation.estimate_model_memory_cost(
+            model_name, input_token_count, output_token_count
+        )
+        
+        # Extract needed values
+        parameter_count = memory_estimates['parameter_memory'] / 2  # Convert from bytes back to parameter count
+        activation_memory = memory_estimates['activated_memory']  # In bytes
+        
+        # Calculate TTFT based on the formula
+        # TTFT ≈ T_prefill = (2 × Parameters × N_input)/(Effective FLOPS) + (Activation Memory)/(Memory Bandwidth)
+        compute_time = (2 * parameter_count * input_token_count) / gpu_flops
+        memory_time = activation_memory / memory_bandwidth
+        ttft_seconds = compute_time + memory_time
+        
+        # Calculate tokens_per_second based on model size and hardware
+        # During generation, computation is roughly proportional to parameter count
+        # with ~2 FLOPs per parameter per output token for decoder models
+        effective_flops = gpu_flops * hardware_efficiency
+        operations_per_token = 2 * parameter_count  # ~2 FLOPs per parameter per token for generation
+        tokens_per_second = effective_flops / operations_per_token
+        
+        # Apply bandwidth limits - generation can also be memory-bound
+        kv_cache_per_token = memory_estimates['kv_cache'] / (input_token_count + output_token_count)
+        memory_bound_tokens_per_second = memory_bandwidth / kv_cache_per_token
+        
+        # Use the lower of compute-bound or memory-bound token generation rate
+        tokens_per_second = min(tokens_per_second, memory_bound_tokens_per_second)
+        
+        # Estimate total inference time (TTFT + generation time)
+        generation_time = output_token_count / tokens_per_second
+        total_time_seconds = ttft_seconds + generation_time
+        
+        # Calculate effective tokens per second (considering the entire process)
+        effective_tokens_per_second = output_token_count / total_time_seconds if total_time_seconds > 0 else 0
+        
+        return {
+            'ttft_seconds': ttft_seconds,
+            'total_time_seconds': total_time_seconds,
+            'memory_usage_bytes': memory_estimates['total'],
+            'parameter_memory_bytes': memory_estimates['parameter_memory'],
+            'activation_memory_bytes': memory_estimates['activated_memory'],
+            'kv_cache_bytes': memory_estimates['kv_cache']
+        } 

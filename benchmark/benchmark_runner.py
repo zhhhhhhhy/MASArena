@@ -20,6 +20,7 @@ from benchmark.src.metrics import (
     InterAgentMetricsCollector,
     MetricsCollector
 )
+from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
 from benchmark.src.evaluators import MathEvaluator
 
@@ -339,6 +340,10 @@ class BenchmarkRunner:
         total = len(all_results)
         accuracy = correct / total if total > 0 else 0
 
+        # Generate inference metrics using UnifiedEvaluator
+        evaluator = UnifiedEvaluator()
+        inference_metrics = evaluator.evaluate_inference_metrics([str(output_file)])
+        
         # Summary
         summary = {
             "benchmark": benchmark_name,
@@ -351,7 +356,13 @@ class BenchmarkRunner:
             "results_file": str(output_file),
             "metrics_dir": str(metrics_output),
             "timestamp": self.timestamp,
+            "inference_metrics": inference_metrics.get(agent_system, {})
         }
+
+        # Save summary with inference metrics to a separate file
+        summary_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}_summary.json"
+        with open(summary_file, "w") as f:
+            json.dump(summary, f, indent=2)
 
         # Save results for visualization
         self.results = all_results
