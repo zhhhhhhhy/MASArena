@@ -18,8 +18,8 @@ from langchain_community.callbacks.openai_info import OpenAICallbackHandler
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 from langgraph.graph import StateGraph, START, END, MessagesState
-from src.evaluators.math import MATHBenchmark
-from src.agents.base import AgentSystem, AgentSystemRegistry
+from benchmark.src.evaluators.math import MATHBenchmark
+from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
 @dataclass
 class ExpertProfile:
@@ -49,6 +49,7 @@ dis_graph = SumDiscussion(
 )
 
 class RecruiterAgent:
+    """招募智能体：用以生成对工作智能体的描述"""
     def __init__(self, agent_id: str, model_name: str = None, system_prompt: str = None):
         self.agent_id = agent_id
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
@@ -113,6 +114,7 @@ class RecruiterAgent:
         }
 
 class WorkAgents:
+    """工作智能体"""
     def __init__(self, agent_id: str, system_prompt: str = None) -> object:
         self.agent_id = agent_id
         self.model_name = "gpt-4o-mini"
@@ -133,7 +135,7 @@ class WorkAgents:
 
 
 class AgentVerse(AgentSystem):
-    MAX_EVALUATE_LENGTH = 3000  # 根据模型上下文窗口调整
+    MAX_EVALUATE_LENGTH = 3000  
     def __init__(self, name: str = "agentverse", config: Dict[str, Any] = None):
         """Initialize the Swarm Agent System"""
         super().__init__(name, config)
@@ -143,7 +145,7 @@ class AgentVerse(AgentSystem):
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.use_parallel = self.config.get("parallel", True)
         self.token_usage = {}
-
+#创建工作智能体
     def _create_agents(self, problem):
         recruiter = RecruiterAgent(
             agent_id="HR_Manager_001",
@@ -197,7 +199,7 @@ class AgentVerse(AgentSystem):
                 }}"""
 
         print("inner_evaluate start...")
-
+#存在超时问题，暂时不使用反馈调节
         # try:
         #     evaluation = await llm.ainvoke(prompt)
         #     print(evaluation)
@@ -207,7 +209,7 @@ class AgentVerse(AgentSystem):
         #     return Eva(evaluation="评估失败", score=0)
         evaluation = Eva(evaluation= "No" ,score = 90)
         return evaluation
-
+#最终输出
     def output(self, raw_solution):
         llm = ChatOpenAI(
             model=self.model_name,
@@ -219,7 +221,7 @@ class AgentVerse(AgentSystem):
             f"According to the above conclusions：{raw_solution}.the final solution is summarized(Only Answer)")
         print(final_solution)
         return str(final_solution)
-
+#过程输出
     async def async_worker(self, worker: Any, problem: str, feedback: str = None) -> Discussion:
         # 创建异步回调处理器
         callback_handler = OpenAICallbackHandler()
@@ -266,7 +268,7 @@ class AgentVerse(AgentSystem):
 
         print("Solutions:", solutions, "\n")
         return solutions
-
+#反馈
     async def solve_problem_with_feedback(self, problem_text: str, agents: list):
         feedback = None
         max_attempts = 5  # 防止无限循环
@@ -293,7 +295,7 @@ class AgentVerse(AgentSystem):
         # 达到最大尝试次数仍不合格
         print(f"经过 {max_attempts} 次尝试仍未达标，返回最终方案")
         return self.output(raw_solution)
-
+#评估
     def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Evaluate the agent system on a problem"""
         metrics_registry = kwargs.get("metrics_registry", self.metrics_registry)
