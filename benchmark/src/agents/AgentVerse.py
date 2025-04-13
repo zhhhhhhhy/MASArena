@@ -51,10 +51,11 @@ class RecruiterAgent:
         self.system_prompt = (
             "You are a professional AI recruitment expert who needs to generate the right work team configuration based on the needs of the problem."
             """Please strictly follow the following rules:
-            1.Generate expert descriptions in different fields at a time,
-            2.Output in dict format, structure must contain agents array
-            3.Each expert contains 2 fields: name, describe
-            4.The description includes the specific division of labor needed to solve the problem"""
+            1. Generate expert descriptions in different fields based on problem requirements
+            2. If feedback is provided, adapt the team composition to address the feedback
+            3. Output in dict format, structure must contain agents array
+            4. Each expert contains 2 fields: name, describe
+            5. The description includes the specific division of labor needed to solve the problem"""
         )
         # Create a regular LLM without structured output
         self.llm = ChatOpenAI(
@@ -63,12 +64,24 @@ class RecruiterAgent:
             api_key=os.getenv("OPENAI_API_KEY")
         )
 
-    def _create_prompt(self, problem: str) -> str:
+    def _create_prompt(self, problem: str, feedback: str = None) -> str:
+        feedback_section = ""
+        if feedback:
+            feedback_section = f"""
+            Previous evaluation feedback:
+            {feedback}
+            
+            IMPORTANT: Consider this feedback when forming your new team of experts.
+            You may need to completely change the experts or adjust their roles and responsibilities.
+            """
+            
         return f"""
             Generate the configuration of {self.num_agents} expert agents based on the following problem requirements:
 
             Problem description:
             {problem}
+            
+            {feedback_section}
 
             Please respond in the following dict format:
 
@@ -82,15 +95,16 @@ class RecruiterAgent:
     // Residual same structure
   ]
 }}
-            Think carefully about the problem step by step. Describe in detail the roles of different experts
+            Think carefully about the problem step by step. Describe in detail the roles of different experts.
+            If feedback was provided, make sure your new team addresses those specific concerns.
 
             Agent ID: {self.agent_id}
         """
 
-    def describe(self, problem: str):
+    def describe(self, problem: str, feedback: str = None):
         messages = [
             SystemMessage(content=self.system_prompt),
-            HumanMessage(content=self._create_prompt(problem))
+            HumanMessage(content=self._create_prompt(problem, feedback))
         ]
 
         start_time = time.time()
@@ -163,54 +177,138 @@ class WorkAgent:
             "latency_ms": (end_time - start_time) * 1000,
         }
 
-class Aggregator:
-    """Aggregates results from work agents to produce a final solution"""
-    def __init__(self, model_name: str = None):
+class Evaluator:
+    """Evaluates agent solutions and decides whether to recruit new experts or provide final solution"""
+    def __init__(self, model_name: str = None, max_iterations: int = 3):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
+        self.max_iterations = max_iterations
         self.llm = ChatOpenAI(
             model=self.model_name,
             base_url=os.getenv("BASE_URL"),
             api_key=os.getenv("OPENAI_API_KEY")
         )
-
-    def aggregate(self, problem: str, solutions: List[Dict[str, Any]]) -> Dict[str, Any]:
-        """Aggregate solutions from multiple agents"""
+        
+    def evaluate(self, problem: str, solutions: List[Dict[str, Any]], iteration: int) -> Dict[str, Any]:
+        """
+        Evaluate solutions from multiple agents and decide whether to:
+        1. Provide final solution if satisfactory
+        2. Provide feedback for another round of recruitment
+        
+        Args:
+            problem: Original problem description
+            solutions: List of solutions from agents
+            iteration: Current iteration count
+            
+        Returns:
+            Dictionary with evaluation results
+        """
         solutions_text = "\n\n".join([f"Expert {sol['agent_id']} solution:\n{sol['solution']}" for sol in solutions])
-
+        
         prompt = f"""
-        I need you to analyze multiple solutions to the same problem and provide the most accurate answer.
-
+        I need you to analyze multiple solutions to the same problem.
+        
         The original problem:
         {problem}
-
+        
         The solutions from different experts:
         {solutions_text}
-
-        Please carefully analyze these solutions, identify the correct approach, and provide the final answer.
-        Make sure your final answer is clearly formatted and precise. Only include the final answer.
+        
+        This is iteration {iteration} out of {self.max_iterations}.
+        
+        Please carefully analyze these solutions and decide:
+        1. If the solutions adequately address the problem, provide a final answer
+        2. If the solutions need improvement, provide feedback for recruiting better experts
+        
+        YOUR RESPONSE MUST BE VALID JSON following this format:
+        {{
+            "status": "complete" or "need_new_experts",
+            "final_solution": "IMPORTANT: This should contain the COMPLETE and DETAILED solution to the original problem, not just comments about correctness. Include only the final answer as: \\\\boxed{{answer}}",
+            "feedback": "Feedback for expert recruitment if status is need_new_experts, otherwise leave empty",
+            "reasoning": "Your reasoning for the decision"
+        }}
+        
+        DO NOT wrap your JSON in markdown code blocks (```). Just respond with the raw JSON object.
+        Ensure your JSON is properly formatted - escape all special characters like backslashes with double backslashes.
+        Be critical in your evaluation. If any important aspects of the problem remain unsolved, indicate that we need new experts.
+        
+        IMPORTANT: If you decide the solutions are adequate (status="complete"), your final_solution MUST include:
+        1. Complete step-by-step reasoning
+        2. Detailed mathematical explanation
+        3. The final answer in a boxed format: \\\\boxed{{answer}}
         """
-
+        
         messages = [
-            {
-                "role": "system",
-                "content": "You are an expert aggregator that analyzes multiple solutions and determines the most accurate one.",
-            },
-            {"role": "user", "content": prompt},
+            SystemMessage(content="You are an expert evaluator that analyzes multiple solutions, determines if they're adequate, and provides feedback for improvement if needed. Always respond with valid JSON only, not wrapped in code blocks. When solutions are adequate, your final_solution must contain the complete mathematical solution with step-by-step reasoning and the final answer in a boxed format (\\boxed{answer})."),
+            HumanMessage(content=prompt)
         ]
-
+        
         start_time = time.time()
         response = self.llm.invoke(messages)
         end_time = time.time()
-
         
-        # Create a proper AIMessage for the aggregator
-        ai_message = response
-        ai_message.name = "aggregator"
-
+        # Set name on the AIMessage
+        response.name = "evaluator"
+        
+        # Parse the content as JSON to get structured data
+        try:
+            # Clean the response by removing markdown code blocks if present
+            content = response.content
+            
+            # Remove markdown code blocks if present (```json ... ```)
+            import re
+            content = re.sub(r'```(?:json)?', '', content)
+            content = content.strip()
+            content = re.sub(r'```$', '', content).strip()
+            
+            print("Cleaned content for parsing:", content[:100] + "..." if len(content) > 100 else content)
+            
+            # Try direct JSON parsing first
+            try:
+                evaluation = json.loads(content)
+            except json.JSONDecodeError:
+                # If that fails, try to extract JSON object with regex
+                json_match = re.search(r'({.*})', content.replace('\n', ' '), re.DOTALL)
+                
+                if json_match:
+                    json_str = json_match.group(1)
+                    # Handle any problematic escape sequences
+                    json_str = json_str.replace('\\', '\\\\')
+                    try:
+                        evaluation = json.loads(json_str)
+                    except:
+                        # If still fails, use a more lenient approach
+                        print("Using more lenient JSON parsing")
+                        import ast
+                        evaluation = ast.literal_eval(json_str)
+                else:
+                    raise ValueError("Could not find JSON object in response")
+                
+            # Ensure required fields exist
+            if "status" not in evaluation:
+                evaluation["status"] = "need_new_experts" if iteration < self.max_iterations else "complete"
+            if "final_solution" not in evaluation:
+                evaluation["final_solution"] = ""
+            if "feedback" not in evaluation:
+                evaluation["feedback"] = ""
+            if "reasoning" not in evaluation:
+                evaluation["reasoning"] = "No reasoning provided"
+                
+        except Exception as e:
+            print(f"Error parsing JSON evaluation: {e}")
+            print(f"Raw response: {response.content[:200]}...")
+            # Default values if parsing fails
+            evaluation = {
+                "status": "need_new_experts" if iteration < self.max_iterations else "complete",
+                "final_solution": response.content if iteration >= self.max_iterations else "",
+                "feedback": f"Error parsing previous response. Please provide a team of experts that can solve this problem: {problem[:200]}..." if iteration < self.max_iterations else "",
+                "reasoning": "Error parsing structured evaluation"
+            }
+        
         return {
-            "final_solution": response.content,
-            "message": ai_message,
+            "final_solution": evaluation.get("final_solution", ""),
+            "message": response,
             "latency_ms": (end_time - start_time) * 1000,
+            "evaluation": evaluation,
         }
 
 class AgentVerse(AgentSystem):
@@ -229,20 +327,30 @@ class AgentVerse(AgentSystem):
         self.num_agents = self.config.get("num_agents", 3)
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.use_parallel = self.config.get("parallel", True)
+        self.max_iterations = self.config.get("max_iterations", 3)
         
         # Initialize evaluator and metrics collector through base class methods
         self._initialize_evaluator()
         self._initialize_metrics_collector()
-
-    def _create_agents(self, problem: str) -> List[WorkAgent]:
-        """Create specialized work agents based on the problem"""
+    
+    def _create_agents(self, problem: str, feedback: str = None) -> Dict[str, Any]:
+        """
+        Create specialized work agents based on the problem and optional feedback
+        
+        Args:
+            problem: Original problem description
+            feedback: Optional feedback from previous evaluation
+            
+        Returns:
+            Dictionary with workers and message
+        """
         # Use recruiter to determine agent profiles
         recruiter = RecruiterAgent(
             agent_id="recruiter_001", 
             model_name=self.model_name,
             num_agents=self.num_agents
         )
-        response_dict = recruiter.describe(problem)
+        response_dict = recruiter.describe(problem, feedback)
         agents_list = response_dict.get("solution", {}).get("agents", [])
         expert_team = [
             ExpertProfile(
@@ -294,57 +402,104 @@ class AgentVerse(AgentSystem):
         problem_text = problem["problem"]
         problem_id = problem.get("id", f"problem_{hash(problem_text)}")
         
-        # Create specialized agents for this problem
-        recruiter_response = self._create_agents(problem_text)
-        agents = recruiter_response.get("workers", [])
-        recruiter_message = recruiter_response.get("message", None)
-        
-        # Collect agent solutions and messages
+        # Initialize messages and solutions
         all_messages = []
-        all_messages.append(recruiter_message)
+        all_solutions = []
+        feedback = None
+        final_solution = None
         
-        # Run agents either in parallel or sequentially
-        if self.use_parallel:
-            # Set up async execution
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                
-            # Run all agents asynchronously
-            agent_solutions = loop.run_until_complete(
-                self._async_solve_problem(problem_text, agents)
-            )
-        else:
-            # Run agents sequentially
-            agent_solutions = []
-            for agent in agents:
-                solution = agent.solve(problem_text)
-                agent_solutions.append(solution)
+        # Create evaluator
+        evaluator = Evaluator(model_name=self.model_name, max_iterations=self.max_iterations)
         
-        # Collect all agent messages
-        for solution in agent_solutions:
-            if "message" in solution:
-                all_messages.append(solution["message"])
+        # Run iterations until evaluator is satisfied or max iterations reached
+        for iteration in range(1, self.max_iterations + 1):
+            print(f"Starting iteration {iteration}/{self.max_iterations}")
+            
+            # Create specialized agents for this problem with feedback from previous iteration
+            # Don't combine problem and feedback, but pass feedback separately
+            recruiter_response = self._create_agents(problem_text, feedback)
+            agents = recruiter_response.get("workers", [])
+            recruiter_message = recruiter_response.get("message", None)
+            
+            # Add recruiter message to all messages
+            if recruiter_message:
+                all_messages.append(recruiter_message)
+            
+            # Run agents either in parallel or sequentially
+            if self.use_parallel:
+                # Set up async execution
+                try:
+                    loop = asyncio.get_event_loop()
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                # Run all agents asynchronously - don't pass feedback to workers
+                agent_solutions = loop.run_until_complete(
+                    self._async_solve_problem(problem_text, agents)
+                )
+            else:
+                # Run agents sequentially - don't pass feedback to workers
+                agent_solutions = []
+                for agent in agents:
+                    solution = agent.solve(problem_text)
+                    agent_solutions.append(solution)
+            
+            # Collect agent messages and solutions for this iteration
+            iteration_messages = []
+            for solution in agent_solutions:
+                if "message" in solution:
+                    iteration_messages.append(solution["message"])
+                    all_messages.append(solution["message"])
+            
+            # Store solutions for current iteration
+            all_solutions.append({
+                "iteration": iteration,
+                "solutions": agent_solutions
+            })
+            
+            # Evaluate solutions
+            evaluation_result = evaluator.evaluate(problem_text, agent_solutions, iteration)
+            evaluation = evaluation_result.get("evaluation", {})
+            
+            # Add evaluator message
+            if "message" in evaluation_result:
+                all_messages.append(evaluation_result["message"])
+            
+            # Check if we need another iteration
+            status = evaluation.get("status", "need_new_experts")
+            
+            if status == "complete":
+                final_solution = evaluation.get("final_solution", "")
+                print(f"Evaluation complete after {iteration} iterations")
+                break
+            else:
+                feedback = evaluation.get("feedback", "")
+                print(f"Need new experts. Feedback: {feedback[:100]}...")
         
-        # Aggregate solutions
-        aggregator = Aggregator(model_name=self.model_name)
-        aggregated = aggregator.aggregate(problem_text, agent_solutions)
+        # If we reached max iterations without a satisfactory solution, use the last evaluation
+        if final_solution is None and all_solutions:
+            last_evaluation = evaluator.evaluate(problem_text, all_solutions[-1]["solutions"], self.max_iterations)
+            final_solution = last_evaluation.get("evaluation", {}).get("final_solution", "No satisfactory solution found")
+            print("last_evaluation: ", last_evaluation)
+            # Add final evaluator message
+            if "message" in last_evaluation:
+                all_messages.append(last_evaluation["message"])
+        print(f"Final solution: {final_solution}")
         
-        # Add aggregator message
-        if "message" in aggregated:
-            all_messages.append(aggregated["message"])
-        
+        # For math problems, ensure the final solution is properly formatted
+        if isinstance(final_solution, (int, float)):
+            final_solution = f"The answer is \\boxed{{{final_solution}}}"
+            
         # Return final answer and all messages
         return {
             "messages": all_messages,
-            "final_answer": aggregated["final_solution"],
-            "agent_solutions": [{"agent_id": s["agent_id"], "solution": s["solution"]} for s in agent_solutions],
+            "final_answer": final_solution,
+            "agent_solutions": all_solutions,
         }
 
 # Register the agent system
-AgentSystemRegistry.register("agentverse", AgentVerse, num_agents=3, parallel=True)
+AgentSystemRegistry.register("agentverse", AgentVerse, num_agents=3, parallel=True, max_iterations=100)
 
 
 
