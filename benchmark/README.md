@@ -240,60 +240,73 @@ The inference metrics evaluation provides the following information:
 The `estimate_inference_metrics` function from `SystemMetricsCollector` is used internally to calculate these metrics based on model parameters, input token count, and output token count. This provides a standardized way to compare different agent architectures even when direct measurements are not available.
 
 ## Memory Usage Estimation
-
+`benchmark/src/instrumentation/memory_instrumentation.py`
 The computational resource usage for LLM inference is dominated by memory requirements. The framework estimates memory cost using a mathematical model based on model size and usage patterns.
 
 ### Memory Cost Formula
 
 The total memory cost for a model $M$ during inference is calculated as:
 
-$$M_{total} = M_{params} + M_{activated} + M_{kv\_cache}$$
+$$
+M_{\mathrm{total}} = M_{\mathrm{params}} + M_{\mathrm{activated}} + M_{\mathrm{kv\_cache}}
+$$
 
 Where:
-- $M_{total}$ is the total memory usage in bytes
-- $M_{params}$ is the parameter memory (full model weights)
-- $M_{activated}$ is the activated parameter memory during inference
-- $M_{kv\_cache}$ is the key-value cache memory
+- $M_{\mathrm{total}}$ is the total memory usage in bytes
+- $M_{\mathrm{params}}$ is the parameter memory (full model weights)
+- $M_{\mathrm{activated}}$ is the activated parameter memory during inference
+- $M_{\mathrm{kv\_cache}}$ is the key-value cache memory
 
 #### Parameter Memory
 
-$$M_{params} = P \times B_{param}$$
+The memory allocated for all model parameters is:
+
+$$
+M_{\mathrm{params}} = P \times 10^9 \times B_{\mathrm{param}}
+$$
 
 Where:
-- $P$ is the number of parameters in the model (e.g., 7 billion, 70 billion)
-- $B_{param}$ is the bytes per parameter (typically 2 bytes for FP16 precision)
+- $P$ is the total number of parameters, in billions
+- $B_{\mathrm{param}}$ is the number of bytes per parameter (e.g., 2 for FP16)
 
 #### Activated Memory
 
-TODO: The activation memory size should be included in the config dictionary.
+During inference only a subset of parameters is activated. We denote this by $P_{act}$ (in billions):
 
-$$M_{activated} = M_{params} \times \alpha_{act}$$
+$$
+M_{\mathrm{activated}} = P_{\mathrm{act}} \times 10^9 \times B_{\mathrm{param}}
+$$
 
-TODO: $$M_{activated} = P_{act} \times B_{param}$$
+Where $P_{\mathrm{act}}$ is the activated parameter count, in billions (provided in configuration).
+
+#### KV Cache Memory 
+<!-- todo: review this -->
+
+Key-value cache memory scales with context length and model size. We assume a base token cost $B_{kv}$ = 8 bytes at a reference parameter count $P_{base} = 6$ (billion parameters):
+
+$$
+M_{\mathrm{kv\_cache}} = (T_{\mathrm{in}} + T_{\mathrm{out}}) \times B_{\mathrm{kv}} \times \frac{P}{P_{\mathrm{base}}}
+$$
+
 Where:
-- $\alpha_{act}$ is the activation ratio, representing the fraction of model 
+- $T_{\mathrm{in}}$ is the number of input tokens
+- $T_{\mathrm{out}}$ is the number of output tokens
+- $B_{\mathrm{kv}}$ is base bytes per token in KV cache (8 bytes)
+- $P_{\mathrm{base}}$ is reference parameter count (6 billion)
+- $P$ is total parameter count in billions
 
-#### KV Cache Memory
+#### Total Memory Usage
 
-$$M_{kv\_cache} = (T_{in} + T_{out}) \times B_{kv} \times \frac{P}{P_{base}}$$
+Summing these components yields the total memory footprint:
 
-TODO: revise the base parameter count for scaling.
+$$
+M_{\mathrm{total}} = M_{\mathrm{params}} + M_{\mathrm{activated}} + M_{\mathrm{kv\_cache}}
+$$
 
-Where:
-- $T_{in}$ is the input token count
-- $T_{out}$ is the output token count
-- $B_{kv}$ is the base bytes per token in KV cache (typically 8 bytes)
-- $P$ is the number of parameters in billions
-- $P_{base}$ is a base parameter count for scaling (typically 6 billion)
-
-### Assumptions and Scaling
-
-1. **Model Size & Activation Ratio**: For open-source models, parameter counts are taken from a predefined dictionary. The activation ratio is assumed to be 30% of the parameters. (TODO: The activation memory size should be included in the config dictionary.)
-2. **Memory Precision**: All calculations assume FP16 precision (2 bytes per parameter) for inference. More efficient quantization methods (INT8, INT4) would reduce memory requirements.
-
-3. **KV Cache Scaling**: KV cache cost scales linearly with context length (input + output tokens) and proportionally to model size relative to a base size of 6B parameters.
-
-4. **Multi-agent Memory**: For multi-agent systems, total memory includes the sum of all component models' memory requirements, which represents a worst-case scenario where all models are loaded simultaneously.
+#### Assumptions
+- Parameters are stored in FP16 precision (2 bytes per parameter).
+- Activated parameter counts ($P_{\mathrm{act}}$) are defined in `model_data.py`.
+- KV cache uses a base rate of 8 bytes per token at 6B parameters and scales linearly with model size.
 
 ## Latency and Throughput Estimation
 
@@ -301,50 +314,50 @@ The framework also provides mathematical models for estimating inference latency
 
 ### Time to First Token (TTFT)
 
-TTFT represents the time between submitting a prompt and receiving the first token of the response. It is a key metric for user-perceived latency. The TTFT is calculated as:
+TTFT represents the latency between prompt submission and receiving the first output token:
 
-$$T_{TTFT} = T_{compute} + T_{memory}$$
+$$
+T_{\mathrm{TTFT}} = T_{\mathrm{compute}} + T_{\mathrm{memory}}
+$$
 
-Where:
-- $T_{compute}$ is the computation time required for processing the input prompt
-- $T_{memory}$ is the memory access time required for activating the model
+where
 
-These components are calculated as:
+$$
+T_{\mathrm{compute}} = \frac{2 \times P \times T_{\mathrm{in}}}{F_{\mathrm{effective}}},
+\quad
+T_{\mathrm{memory}} = \frac{M_{\mathrm{activated}}}{B_{\mathrm{memory}}}
+$$
 
-$$T_{compute} = \frac{2 \times P \times T_{in}}{F_{effective}}$$
-
-$$T_{memory} = \frac{M_{activated}}{B_{memory}}$$
-
-Where:
-- $P$ is the number of parameters in the model
-- $T_{in}$ is the input token count
-- $F_{effective}$ is the effective FLOPS (floating-point operations per second) of the hardware, calculated as $F_{GPU} \times \eta_{hw}$
-- $F_{GPU}$ is the theoretical peak FLOPS of the GPU
-- $\eta_{hw}$ is the hardware efficiency factor (typically 0.4 or 40%)
-- $M_{activated}$ is the activated memory in bytes (as calculated in the memory estimation section)
-- $B_{memory}$ is the memory bandwidth in bytes per second
+with:
+- $P$: total parameters (billions × $10^9$ parameters)
+- $T_{\mathrm{in}}$: number of input tokens
+- $F_{\mathrm{effective}} = F_{\mathrm{GPU}} \times \eta_{\mathrm{hw}}$ (effective FLOPS)
+- $M_{\mathrm{activated}}$: activated memory in bytes
+- $B_{\mathrm{memory}}$: memory bandwidth (bytes/sec)
 
 ### Throughput Estimation
 
-Throughput is measured in tokens per second during generation. For decoder-only models, throughput is constrained by both computational limits and memory bandwidth:
+Throughput (tokens/sec) is the minimum of compute-bound and memory-bound rates:
 
-$$TP = \min(TP_{compute}, TP_{memory})$$
+$$
+\mathrm{TP} = \min(\mathrm{TP}_{\mathrm{compute}}, \mathrm{TP}_{\mathrm{memory}})
+$$
 
-The compute-bound throughput is calculated as:
+where
 
-$$TP_{compute} = \frac{F_{effective}}{O_{token}}$$
+$$
+\mathrm{TP}_{\mathrm{compute}} = \frac{F_{\mathrm{effective}}}{O_{\mathrm{token}}},
+\quad
+O_{\mathrm{token}} = 2 \times P
+$$
 
-Where:
-- $F_{effective}$ is the effective FLOPS as defined above
-- $O_{token}$ is the operations required per token, approximately $2 \times P$ (2 FLOPs per parameter per token)
+$$
+\mathrm{TP}_{\mathrm{memory}} = \frac{B_{\mathrm{memory}}}{M_{\mathrm{kv\_per\_token}}},
+\quad
+M_{\mathrm{kv\_per\_token}} = \frac{M_{\mathrm{kv\_cache}}}{T_{\mathrm{in}} + T_{\mathrm{out}}}
+$$
 
-The memory-bound throughput is calculated as:
-
-$$TP_{memory} = \frac{B_{memory}}{M_{kv\_per\_token}}$$
-
-Where:
-- $B_{memory}$ is the memory bandwidth in bytes per second
-- $M_{kv\_per\_token}$ is the KV cache memory required per token, calculated as $\frac{M_{kv\_cache}}{T_{in} + T_{out}}$
+with variables as defined above.
 
 ### System-Level Metrics
 

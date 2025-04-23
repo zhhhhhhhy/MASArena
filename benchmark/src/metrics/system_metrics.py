@@ -608,8 +608,9 @@ class SystemMetricsCollector(BaseMetricsCollector):
             model_name, input_token_count, output_token_count
         )
         
-        # Extract needed values
-        parameter_count = memory_estimates['parameter_memory'] / 2  # Convert from bytes back to parameter count
+        # parameter count
+        from benchmark.data.model_data import MODEL_DATA
+        parameter_count = MODEL_DATA[model_name]["parameter_size_b"] * 1e9
         activation_memory = memory_estimates['activated_memory']  # In bytes
         
         # Calculate TTFT based on the formula
@@ -622,7 +623,7 @@ class SystemMetricsCollector(BaseMetricsCollector):
         # During generation, computation is roughly proportional to parameter count
         # with ~2 FLOPs per parameter per output token for decoder models
         effective_flops = gpu_flops * hardware_efficiency
-        operations_per_token = 2 * parameter_count  # ~2 FLOPs per parameter per token for generation
+        operations_per_token = 2 * parameter_count  # todo: review this ~2 FLOPs per parameter per token for generation
         tokens_per_second = effective_flops / operations_per_token
         
         # Apply bandwidth limits - generation can also be memory-bound
