@@ -370,11 +370,18 @@ class BenchmarkRunner:
 
         if verbose:
             print("\nBenchmark complete!")
+            
+            print("\n" + "=" * 80)
+            print("Benchmark Summary")
+            print("=" * 80)
+            
             print(f"Agent system: {agent_system}")
             print(f"Accuracy: {accuracy:.2%} ({correct}/{total})")
             print(f"Total duration: {benchmark_duration_ms:.0f}ms")
             print(f"Results saved to: {output_file}")
             print(f"Metrics saved to: {metrics_output}")
+            print(f"Summary saved to: {summary_file}")
+            print(f"Run visualization: $ python benchmark/src/visualization/visualize_benchmark.py visualize --summary {summary_file}")
 
         # Stop metrics collection
         self.metrics_registry.stop_all_collectors()

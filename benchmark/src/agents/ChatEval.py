@@ -5,7 +5,7 @@ from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from src.agents.base import AgentSystem, AgentSystemRegistry
+from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
 @dataclass
 class Agent:

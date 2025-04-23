@@ -80,21 +80,6 @@ def main():
             agent_system=args.agent_system,
             verbose=args.verbose,
         )
-
-        print("\n" + "=" * 80)
-        print("Benchmark Summary")
-        print("=" * 80)
-        print(f"Benchmark: {summary['benchmark']}")
-        print(f"Agent System: {summary['agent_system']}")
-        print(f"Problems: {summary['total_problems']}")
-        print(f"Correct: {summary['correct']}")
-        print(f"Accuracy: {summary['accuracy']:.2%}")
-        print(f"Total Duration: {summary['total_duration_ms']:.2f} ms")
-        print(f"Average Duration: {summary['avg_duration_ms']:.2f} ms")
-        print(f"Results saved to: {summary['results_file']}")
-        print(f"Metrics saved to: {summary['metrics_dir']}")
-        print("=" * 80)
-
         return 0
 
     except Exception as e:
