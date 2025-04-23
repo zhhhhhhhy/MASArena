@@ -64,8 +64,6 @@ def main():
     print(f"Agent System: {args.agent_system}")
     print(f"Data: {args.data or 'default'}")
     print(f"Limit: {args.limit}")
-    print(f"Results will be stored in: {args.results_dir}")
-    print(f"Metrics will be stored in: {args.metrics_dir}")
     print("=" * 80 + "\n")
 
     # Create benchmark runner
