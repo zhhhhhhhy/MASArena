@@ -28,5 +28,6 @@ __all__ = [
     "SingleAgent",
     "AgentVerse",
     "ChatEval",
+    "EvoAgent",
     "AVAILABLE_AGENT_SYSTEMS",
 ]
