@@ -37,6 +37,9 @@ class Agent:
         ]
         
         response = self.llm.invoke(messages)
+        # 设置AI消息的名字
+        response.name = self.name
+        
         self.chat_history.append({
             "role": "human",
             "human": context
@@ -45,7 +48,7 @@ class Agent:
             "role": "ai",
             "ai": response.content
         })
-        # 返回完整的response对象，而不仅仅是content
+        # 返回完整的响应对象，而不仅仅是内容
         return response
 
 class ResultExtractor:
@@ -64,20 +67,20 @@ class ResultExtractor:
         """
         # 构建提示
         prompt = f"""
-        原始问题：{problem}
+        Original problem: {problem}
         
-        以下是多个AI代理的讨论历史：
+        Below are the discussion histories of multiple AI agents:
         
         {self._format_histories(all_histories)}
         
-        请分析以上讨论，提供最终答案。要求：
-        1. 综合所有代理的观点
-        2. 选择最合理的解决方案
-        3. 以数学问题的标准格式输出答案：\\boxed{{answer}}
+        Please analyze the above discussions and provide a final answer. Requirements:
+        1. Synthesize all agents' viewpoints
+        2. Choose the most reasonable solution
+        3. Output the answer in standard mathematical format: \\boxed{{answer}}
         """
         
         messages = [
-            SystemMessage(content="你是一个专业的结果分析器，负责从多个AI代理的讨论中提取最终答案。"),
+            SystemMessage(content="You are a professional result analyzer, responsible for extracting the final answer from discussions of multiple AI agents."),
             HumanMessage(content=prompt)
         ]
         
@@ -87,13 +90,14 @@ class ResultExtractor:
     def _format_histories(self, all_histories: List[List[Dict[str, str]]]) -> str:
         """格式化所有对话历史"""
         formatted = []
+        agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         for i, history in enumerate(all_histories):
-            formatted.append(f"\n代理 {i+1} 的讨论：")
+            formatted.append(f"\n{agent_names[i]}'s discussion:")
             for msg in history:
                 if msg.get("role") == "human":
-                    formatted.append(f"问题：{msg['human']}")
+                    formatted.append(f"Question: {msg['human']}")
                 else:
-                    formatted.append(f"回答：{msg['ai']}")
+                    formatted.append(f"Answer: {msg['ai']}")
         return "\n".join(formatted)
 
 class ChatEval(AgentSystem):
@@ -113,10 +117,11 @@ class ChatEval(AgentSystem):
     def _create_agents(self) -> List[Agent]:
         """创建多个代理实例"""
         agents = []
+        agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         for i in range(self.num_agents):
             agent = Agent(
                 agent_id=f"agent_{i+1}",
-                name=f"Expert {i+1}",
+                name=agent_names[i],
                 model_name=self.model_name,
                 system_prompt=self._get_agent_prompt(i)
             )
@@ -125,13 +130,34 @@ class ChatEval(AgentSystem):
 
     def _get_agent_prompt(self, agent_index: int) -> str:
         """为每个代理生成特定的系统提示"""
-        base_prompt = """你是一个专业的问题解决专家，需要：
-1. 仔细分析问题和其他专家的观点
-2. 提供你的专业见解
-3. 必要时质疑或补充其他专家的观点
-4. 确保答案准确且符合逻辑"""
-        
-        return f"{base_prompt}\n你是专家 {agent_index + 1}，专注于提供独特的视角。"
+        # 为三个不同角色设置不同的prompt
+        if agent_index == 0:
+            return """You are a Mathematics Expert, focused on solving mathematical problems. You need to:
+1. Carefully analyze the key points of mathematical problems
+2. Provide clear mathematical reasoning processes
+3. Question or supplement other experts' viewpoints when necessary
+4. Ensure answers are accurate and logically sound
+5. Use mathematical symbols and formulas to express your thoughts
+
+You are the Mathematics Expert, focused on providing mathematical perspective analysis."""
+        elif agent_index == 1:
+            return """You are a Logic Expert, focused on logical analysis of problems. You need to:
+1. Carefully analyze the logical structure of problems
+2. Provide clear reasoning chains
+3. Question or supplement other experts' viewpoints when necessary
+4. Ensure reasoning processes are rigorous and without loopholes
+5. Pay attention to implicit conditions and boundary cases
+
+You are the Logic Expert, focused on providing logical perspective analysis."""
+        else:  # agent_index == 2
+            return """You are a Critical Thinking Expert, focused on multi-angle analysis of problems. You need to:
+1. Carefully analyze multiple aspects of problems
+2. Provide comprehensive thinking perspectives
+3. Question or supplement other experts' viewpoints when necessary
+4. Ensure consideration of various possibilities
+5. Pay attention to potential traps and misconceptions
+
+You are the Critical Thinking Expert, focused on providing multi-angle perspective analysis."""
 
     def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """运行迭代辩论过程"""
@@ -142,6 +168,7 @@ class ChatEval(AgentSystem):
         all_responses = []
         
         # 迭代讨论过程
+        agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         for t in range(self.num_rounds):
             for n, agent in enumerate(self.agents):
                 # 生成当前代理的响应
@@ -155,7 +182,7 @@ class ChatEval(AgentSystem):
                 for m in range(n + 1, len(self.agents)):
                     self.agents[m].chat_history.append({
                         "role": "human",
-                        "human": f"Expert {n+1}'s response: {response.content}"
+                        "human": f"{agent_names[n]}'s response: {response.content}"
                     })
         
         # 提取最终答案
@@ -170,24 +197,27 @@ class ChatEval(AgentSystem):
             "extracted_answer": self._extract_boxed_answer(final_answer),
             "agent_discussions": all_histories,
             "execution_time_ms": duration_ms,
-            "messages": all_responses  # 添加messages字段
+            "messages": all_responses  # 添加messages字段，包含所有LLM响应对象
         }
 
     def _build_context(self, problem: str, agent_index: int, round_num: int) -> str:
         """构建当前代理的上下文"""
+        agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
+        agent_name = agent_names[agent_index]
+        
         if round_num == 0 and agent_index == 0:
-            return f"请解决这个问题：{problem}"
+            return f"Please solve this problem: {problem}"
         
-        return f"""Round {round_num + 1}, Expert {agent_index + 1}
+        return f"""Round {round_num + 1}, {agent_name}
         
-原始问题：{problem}
+Original problem: {problem}
 
-请基于之前的讨论提供你的见解。你可以：
-1. 同意并补充之前的观点
-2. 提出不同的解决方案
-3. 指出之前解决方案的潜在问题
-4. 提供新的思路或方法
-5. 不要过多的拓展到其他问题"""
+Please provide your insights based on previous discussions. You can:
+1. Agree with and supplement previous viewpoints
+2. Propose different solutions
+3. Point out potential issues with previous solutions
+4. Provide new ideas or methods
+5. Do not overly expand to other problems"""
 
     def _extract_boxed_answer(self, text: str) -> str:
         """从文本中提取 \boxed{} 中的答案"""
