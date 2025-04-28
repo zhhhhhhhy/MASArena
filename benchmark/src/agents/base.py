@@ -12,6 +12,8 @@ import os
 import json
 from pathlib import Path
 import datetime
+import importlib
+import glob
 
 
 class AgentSystem(abc.ABC):
@@ -745,6 +747,29 @@ class AgentSystemRegistry:
     """Registry for agent systems available in the benchmark"""
 
     _registry = {}
+    _initialized = False
+
+    @classmethod
+    def _import_agent_systems(cls):
+        """Import all agent system modules to ensure registration"""
+        if cls._initialized:
+            return
+            
+        # Get the directory containing agent system modules
+        current_dir = Path(__file__).parent
+        
+        # Import all Python files in the agents directory
+        for file_path in glob.glob(str(current_dir / "*.py")):
+            if file_path == __file__:  # Skip this base.py file
+                continue
+                
+            module_name = Path(file_path).stem
+            try:
+                importlib.import_module(f"benchmark.src.agents.{module_name}")
+            except ImportError as e:
+                print(f"Warning: Failed to import agent system module {module_name}: {e}")
+                
+        cls._initialized = True
 
     @classmethod
     def register(cls, name: str, agent_class, **default_config):
@@ -770,6 +795,9 @@ class AgentSystemRegistry:
         Returns:
             An instance of the requested agent system or None if not found
         """
+        # Ensure all agent systems are imported
+        cls._import_agent_systems()
+        
         if name not in cls._registry:
             return None
 
@@ -783,6 +811,9 @@ class AgentSystemRegistry:
     @classmethod
     def list_available(cls) -> Dict[str, Any]:
         """List all available agent systems"""
+        # Ensure all agent systems are imported
+        cls._import_agent_systems()
+        
         return {
             name: {"class": info["class"].__name__, "default_config": info["default_config"]}
             for name, info in cls._registry.items()

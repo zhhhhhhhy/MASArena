@@ -5,7 +5,6 @@ import sys
 from pathlib import Path
 
 from benchmark.benchmark_runner import BenchmarkRunner
-from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
 
 
 def main():

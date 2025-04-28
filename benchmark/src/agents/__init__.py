@@ -5,11 +5,13 @@ This package provides various agent system implementations for benchmarking.
 """
 
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry, create_agent_system
-from benchmark.src.agents.supervisor_mas import SupervisorMAS
-from benchmark.src.agents.swarm import SwarmSystem
-from benchmark.src.agents.single_agent import SingleAgent
-from benchmark.src.agents.AgentVerse import AgentVerse
-from benchmark.src.agents.ChatEval import ChatEval
+# from benchmark.src.agents.supervisor_mas import SupervisorMAS
+# from benchmark.src.agents.swarm import SwarmSystem
+# from benchmark.src.agents.single_agent import SingleAgent
+# from benchmark.src.agents.AgentVerse import AgentVerse
+# from benchmark.src.agents.ChatEval import ChatEval
+# from benchmark.src.agents.EvoAgent import EvoAgent
+
 # List available agent systems for easy reference
 AVAILABLE_AGENT_SYSTEMS = {
     "single_agent": "A single LLM agent solving problems directly",
