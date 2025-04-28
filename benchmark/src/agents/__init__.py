@@ -17,6 +17,7 @@ AVAILABLE_AGENT_SYSTEMS = {
     "swarm": "A swarm-based multi-agent system where multiple agents work independently and results are aggregated",
     "agentverse": "A multi-agent system that uses a recruiter to create specialized agents for different aspects of a problem",
     "chateval": "A multi-agent system that uses debate to generate a better answer",
+    "evoagent": "An evolutionary agent system that improves over generations using LLM-based operations",
 }
 
 __all__ = [
