@@ -11,7 +11,7 @@ from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
 @dataclass
 class Agent:
-    """Represent an LLM agent"""
+    """代表一个LLM代理"""
     agent_id: str
     name: str
     model_name: str
@@ -26,8 +26,8 @@ class Agent:
             api_key=os.getenv("OPENAI_API_KEY")
         )
 
-    def generate_response(self, context: str) -> str:
-        """generate agent response"""
+    def generate_response(self, context: str) -> Any:
+        """生成代理响应"""
         messages = [
             SystemMessage(content=self.system_prompt),
             *[HumanMessage(content=msg["human"]) if msg.get("role") == "human" 
@@ -45,10 +45,11 @@ class Agent:
             "role": "ai",
             "ai": response.content
         })
-        return response.content
+        # 返回完整的response对象，而不仅仅是content
+        return response
 
 class ResultExtractor:
-    """Extract the final result from the conversation history"""
+    """从对话历史中提取最终结果"""
     def __init__(self, model_name: str = None):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.llm = ChatOpenAI(
@@ -59,7 +60,7 @@ class ResultExtractor:
         
     def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> str:
         """
-        Extract the final answer from the conversation history of all agents
+        从所有代理的对话历史中提取最终答案
         """
         # 构建提示
         prompt = f"""
@@ -84,7 +85,7 @@ class ResultExtractor:
         return response.content
 
     def _format_histories(self, all_histories: List[List[Dict[str, str]]]) -> str:
-        """Format all conversation histories"""
+        """格式化所有对话历史"""
         formatted = []
         for i, history in enumerate(all_histories):
             formatted.append(f"\n代理 {i+1} 的讨论：")
@@ -96,7 +97,7 @@ class ResultExtractor:
         return "\n".join(formatted)
 
 class ChatEval(AgentSystem):
-    """Multi-agent evaluation system based on iterative debate"""
+    """基于迭代辩论的多智能体评估系统"""
     
     def __init__(self, name: str = "chateval", config: Dict[str, Any] = None):
         super().__init__(name, config)
@@ -110,7 +111,7 @@ class ChatEval(AgentSystem):
         self.extractor = ResultExtractor(self.model_name)
 
     def _create_agents(self) -> List[Agent]:
-        """Create multiple agent instances"""
+        """创建多个代理实例"""
         agents = []
         for i in range(self.num_agents):
             agent = Agent(
@@ -123,7 +124,7 @@ class ChatEval(AgentSystem):
         return agents
 
     def _get_agent_prompt(self, agent_index: int) -> str:
-        """Generate specific system prompts for each agent"""
+        """为每个代理生成特定的系统提示"""
         base_prompt = """你是一个专业的问题解决专家，需要：
 1. 仔细分析问题和其他专家的观点
 2. 提供你的专业见解
@@ -133,25 +134,31 @@ class ChatEval(AgentSystem):
         return f"{base_prompt}\n你是专家 {agent_index + 1}，专注于提供独特的视角。"
 
     def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Run the iterative debate process"""
+        """运行迭代辩论过程"""
         problem_text = problem["problem"]
         start_time = time.time()
         
-        # Iterative discussion process
+        # 存储所有LLM响应对象
+        all_responses = []
+        
+        # 迭代讨论过程
         for t in range(self.num_rounds):
             for n, agent in enumerate(self.agents):
-                # Generate the response of the current agent
+                # 生成当前代理的响应
                 context = self._build_context(problem_text, n, t)
                 response = agent.generate_response(context)
                 
-                # Add the response to the context of the subsequent agent
+                # 保存响应对象
+                all_responses.append(response)
+                
+                # 将响应添加到后续代理的上下文
                 for m in range(n + 1, len(self.agents)):
                     self.agents[m].chat_history.append({
                         "role": "human",
-                        "human": f"Expert {n+1}'s response: {response}"
+                        "human": f"Expert {n+1}'s response: {response.content}"
                     })
         
-        # Extract the final answer
+        # 提取最终答案
         all_histories = [agent.chat_history for agent in self.agents]
         final_answer = self.extractor.extract(all_histories, problem_text)
         
@@ -162,11 +169,12 @@ class ChatEval(AgentSystem):
             "final_answer": final_answer,
             "extracted_answer": self._extract_boxed_answer(final_answer),
             "agent_discussions": all_histories,
-            "execution_time_ms": duration_ms
+            "execution_time_ms": duration_ms,
+            "messages": all_responses  # 添加messages字段
         }
 
     def _build_context(self, problem: str, agent_index: int, round_num: int) -> str:
-        """Build the context of the current agent"""
+        """构建当前代理的上下文"""
         if round_num == 0 and agent_index == 0:
             return f"请解决这个问题：{problem}"
         
@@ -178,15 +186,16 @@ class ChatEval(AgentSystem):
 1. 同意并补充之前的观点
 2. 提出不同的解决方案
 3. 指出之前解决方案的潜在问题
-4. 提供新的思路或方法"""
+4. 提供新的思路或方法
+5. 不要过多的拓展到其他问题"""
 
     def _extract_boxed_answer(self, text: str) -> str:
-        """Extract the answer from \boxed{} in the text"""
+        """从文本中提取 \boxed{} 中的答案"""
         import re
         match = re.search(r'\\boxed{(.*?)}', text)
         return match.group(1) if match else text
 
-# Register agents system
+# 注册代理系统
 AgentSystemRegistry.register(
     "chateval",
     ChatEval,
@@ -195,9 +204,9 @@ AgentSystemRegistry.register(
 )
 
 if __name__ == "__main__":
-    # text
+    # 测试
     problem = {
-        "problem": "如果一个正整数是偶数，那么它一定是2的倍数。"
+        "problem": "一个正整数，它的平方根是 452，求这个正整数。"
     }
     agent = ChatEval(name="chateval", config={"num_agents": 3, "num_rounds": 2})
     result = agent.run_agent(problem)
