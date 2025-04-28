@@ -5,11 +5,13 @@ This module provides the base classes and interfaces for agent systems.
 """
 
 import abc
-from typing import Dict, Any, Optional, Type, Callable
+from typing import Dict, Any, Optional, Type, Callable, List
 import time
 import uuid
 import os
+import json
 from pathlib import Path
+import datetime
 
 
 class AgentSystem(abc.ABC):
@@ -28,6 +30,17 @@ class AgentSystem(abc.ABC):
         self.metrics_registry = None
         self.evaluator = None
         self.metrics_collector = None
+        
+        # Initialize storage for agent responses
+        self.agent_responses = []
+        
+        # Configure paths for saving agent responses and visualizations
+        self.responses_dir = Path(self.config.get("responses_dir", "results/agent_responses"))
+        self.visualizations_dir = Path(self.config.get("visualizations_dir", "results/visualizations"))
+        
+        # Create directories if they don't exist
+        self.responses_dir.mkdir(parents=True, exist_ok=True)
+        self.visualizations_dir.mkdir(parents=True, exist_ok=True)
         
     def _initialize_evaluator(self, evaluator_type: Type = None):
         """
@@ -185,6 +198,227 @@ class AgentSystem(abc.ABC):
             "agent_usage": usage_metrics
         }
 
+    def _record_agent_responses(self, problem_id: str, messages: list):
+        """
+        Record internal agent responses to be saved to a file.
+        
+        Args:
+            problem_id: ID of the problem
+            messages: List of messages from the run
+            
+        Returns:
+            List of formatted agent responses
+        """
+        try:
+            from langchain_core.messages import AIMessage, HumanMessage
+        except ImportError:
+            return []
+        
+        formatted_responses = []
+        
+        for i, message in enumerate(messages):
+            response_data = {
+                "timestamp": datetime.datetime.now().isoformat(),
+                "problem_id": problem_id,
+                "message_index": i,
+                "agent_system": self.name,
+            }
+            
+            # Handle different message formats
+            if isinstance(message, AIMessage):
+                agent_id = message.name if hasattr(message, 'name') and message.name else message.id if hasattr(message, 'id') and message.id else f"agent_{hash(message)}"
+                response_data.update({
+                    "agent_id": agent_id,
+                    "content": message.content,
+                    "role": "assistant",
+                    "message_type": "ai_response"
+                })
+                
+                # Include tool calls if present
+                if hasattr(message, 'tool_calls') and message.tool_calls:
+                    response_data["tool_calls"] = message.tool_calls
+                
+                # Include additional metadata if present
+                if hasattr(message, 'additional_kwargs') and message.additional_kwargs:
+                    response_data["additional_metadata"] = message.additional_kwargs
+                
+            elif isinstance(message, HumanMessage):
+                response_data.update({
+                    "agent_id": "user",
+                    "content": message.content,
+                    "role": "user",
+                    "message_type": "human_query"
+                })
+                
+            # Handle tuple-style messages from multi-agent systems
+            elif isinstance(message, tuple) and len(message) > 1:
+                agent_id, content = message
+                agent_type = "user" if agent_id == "user" else "agent"
+                
+                response_data.update({
+                    "agent_id": agent_id,
+                    "content": content,
+                    "role": "user" if agent_id == "user" else "assistant",
+                    "message_type": f"{agent_type}_message"
+                })
+                
+            # Handle dictionary-style messages
+            elif isinstance(message, dict):
+                agent_id = message.get("agent_id", message.get("name", f"unknown_agent_{i}"))
+                response_data.update({
+                    "agent_id": agent_id,
+                    "content": message.get("content", ""),
+                    "role": message.get("role", "assistant"),
+                    "message_type": message.get("message_type", "agent_message")
+                })
+                
+                # Include any additional fields from the dict
+                for key, value in message.items():
+                    if key not in response_data:
+                        response_data[key] = value
+            
+            if response_data.get("content"):  # Only add if there's content
+                formatted_responses.append(response_data)
+                self.agent_responses.append(response_data)
+        
+        return formatted_responses
+
+    def save_agent_responses(self, problem_id: str, run_id: str = None):
+        """
+        Save agent responses to a file.
+        
+        Args:
+            problem_id: ID of the problem
+            run_id: Optional run ID to use in the filename
+            
+        Returns:
+            Path to the saved file
+        """
+        if not self.agent_responses:
+            return None
+            
+        # Generate filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_id = run_id or self.generate_run_id()
+        filename = f"{self.name}_{problem_id}_{timestamp}_{run_id[:8]}.json"
+        file_path = self.responses_dir / filename
+        
+        # Save to file
+        with open(file_path, 'w') as f:
+            json.dump({
+                "problem_id": problem_id,
+                "agent_system": self.name,
+                "run_id": run_id,
+                "timestamp": timestamp,
+                "responses": self.agent_responses
+            }, f, indent=2)
+        print(f"Saved agent responses to {file_path}")
+        return file_path
+
+    def generate_visualization_data(self, problem_id=None):
+        """
+        Generate data for visualization of agent interactions.
+        
+        Args:
+            problem_id: Optional problem ID to filter responses
+            
+        Returns:
+            Dictionary with visualization data
+        """
+        # Filter responses by problem_id if provided
+        responses = self.agent_responses
+        if problem_id:
+            responses = [r for r in responses if r.get("problem_id") == problem_id]
+            
+        if not responses:
+            return {"nodes": [], "links": []}
+            
+        # Extract unique agent IDs
+        agent_ids = set()
+        for response in responses:
+            agent_ids.add(response.get("agent_id", "unknown"))
+            
+        # Create nodes for each agent
+        nodes = [{"id": agent_id, "type": "user" if agent_id == "user" else "agent"} for agent_id in agent_ids]
+        
+        # Create links based on message sequence
+        links = []
+        prev_agent_id = None
+        
+        for i, response in enumerate(responses):
+            agent_id = response.get("agent_id", "unknown")
+            
+            # Skip if this is the first message or same agent talking consecutively
+            if prev_agent_id and prev_agent_id != agent_id:
+                links.append({
+                    "source": prev_agent_id,
+                    "target": agent_id,
+                    "value": 1,  # Count of interactions
+                    "message_indices": [i-1, i]  # Include both the source and target message indices
+                })
+                
+            prev_agent_id = agent_id
+            
+        # Combine parallel links (same source and target)
+        combined_links = {}
+        for link in links:
+            key = f"{link['source']}->{link['target']}"
+            if key in combined_links:
+                combined_links[key]["value"] += 1
+                # Add all message indices without duplicates
+                for idx in link["message_indices"]:
+                    if idx not in combined_links[key]["message_indices"]:
+                        combined_links[key]["message_indices"].append(idx)
+            else:
+                combined_links[key] = {
+                    "source": link["source"],
+                    "target": link["target"],
+                    "value": 1,
+                    "message_indices": link["message_indices"]
+                }
+                
+        return {
+            "nodes": nodes,
+            "links": list(combined_links.values())
+        }
+
+    def save_visualization_data(self, problem_id: str, run_id: str = None):
+        """
+        Save visualization data to a file.
+        
+        Args:
+            problem_id: ID of the problem
+            run_id: Optional run ID to use in the filename
+            
+        Returns:
+            Path to the saved file
+        """
+        visualization_data = self.generate_visualization_data(problem_id)
+        if not visualization_data["nodes"]:
+            return None
+            
+        # Generate filename
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_id = run_id or self.generate_run_id()
+        filename = f"viz_{self.name}_{problem_id}_{timestamp}_{run_id[:8]}.json"
+        file_path = self.visualizations_dir / filename
+        
+        # Get responses for this problem
+        responses = [r for r in self.agent_responses if r.get("problem_id") == problem_id]
+        
+        # Save to file
+        with open(file_path, 'w') as f:
+            json.dump({
+                "problem_id": problem_id,
+                "agent_system": self.name,
+                "run_id": run_id,
+                "timestamp": timestamp,
+                "visualization": visualization_data,
+                "responses": responses
+            }, f, indent=2)
+            
+        return file_path
+
     def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Evaluate the agent system on a given problem.
@@ -206,6 +440,9 @@ class AgentSystem(abc.ABC):
         self._initialize_evaluator()
         self._initialize_metrics_collector()
         
+        # Generate a run ID for this evaluation
+        run_id = self.generate_run_id()
+        
         # Set up metrics collection
         if self.metrics_collector:
             self.metrics_collector.set_metrics_registry(self.metrics_registry)
@@ -220,7 +457,8 @@ class AgentSystem(abc.ABC):
                 {
                     "problem_id": problem_id,
                     "agent_system": self.name,
-                    "evaluator": self.evaluator.name if self.evaluator else "unknown"
+                    "evaluator": self.evaluator.name if self.evaluator else "unknown",
+                    "run_id": run_id
                 }
             )
             
@@ -230,7 +468,8 @@ class AgentSystem(abc.ABC):
                 {
                     "problem_id": problem_id, 
                     "agent_system": self.name,
-                    "evaluator": self.evaluator.name if self.evaluator else "unknown"
+                    "evaluator": self.evaluator.name if self.evaluator else "unknown",
+                    "run_id": run_id
                 }
             )
         
@@ -246,6 +485,28 @@ class AgentSystem(abc.ABC):
                 # Extract and record metrics from AI message metadata
                 messages = run_result.get("messages", [])
                 usage_metrics = self._record_token_usage(problem_id, execution_time_ms, messages)
+                
+                # Process and save agent responses
+                self._record_agent_responses(problem_id, messages)
+                response_file = self.save_agent_responses(problem_id, run_id)
+                
+                # Generate and save visualization data
+                visualization_file = self.save_visualization_data(problem_id, run_id)
+                
+                # Record paths to saved files
+                if response_file or visualization_file:
+                    self.metrics_collector.record_metric(
+                        "agent.response_files",
+                        {
+                            "response_file": str(response_file) if response_file else None,
+                            "visualization_file": str(visualization_file) if visualization_file else None
+                        },
+                        {
+                            "problem_id": problem_id,
+                            "agent_system": self.name,
+                            "run_id": run_id
+                        }
+                    )
             
             # Evaluate results
             evaluation_results = {}
@@ -262,11 +523,13 @@ class AgentSystem(abc.ABC):
                         metrics={
                             "passed": score == 1,
                             "agent_system": self.name,
+                            "run_id": run_id
                         },
                         tags={
                             "agent_system": self.name,
                             "evaluator": self.evaluator.name,
-                            "problem_type": self.evaluator.name
+                            "problem_type": self.evaluator.name,
+                            "run_id": run_id
                         }
                     )
             
@@ -275,7 +538,10 @@ class AgentSystem(abc.ABC):
                 **evaluation_results,  # Include all evaluation results
                 "messages": messages,  # Include messages for token analysis in benchmark_runner
                 "execution_time_ms": execution_time_ms,
-                "llm_usage": usage_metrics  # Include the collected LLM usage metrics
+                "llm_usage": usage_metrics,  # Include the collected LLM usage metrics
+                "response_file": str(response_file) if 'response_file' in locals() and response_file else None,
+                "visualization_file": str(visualization_file) if 'visualization_file' in locals() and visualization_file else None,
+                "run_id": run_id
             }
             
         except Exception as e:
@@ -288,7 +554,8 @@ class AgentSystem(abc.ABC):
                     {
                         "problem_id": problem_id,
                         "agent_system": self.name,
-                        "error_type": type(e).__name__
+                        "error_type": type(e).__name__,
+                        "run_id": run_id
                     }
                 )
             raise  # Re-raise the exception
@@ -412,6 +679,66 @@ class AgentSystem(abc.ABC):
         llm_metrics = [m for m in agent_metrics if m.get("name", "").startswith("llm.")]
         
         return llm_metrics
+
+    def generate_benchmark_visualization(self, run_results, summary_data=None, output_dir=None):
+        """
+        Generate a benchmark summary visualization from the run results of multiple problems.
+        
+        Args:
+            run_results: List of problem evaluation results
+            summary_data: Optional dictionary with benchmark summary data
+            output_dir: Optional directory to save visualization files
+            
+        Returns:
+            Path to the generated HTML file
+        """
+        try:
+            from benchmark.src.visualization.mas_visualizer import BenchmarkVisualizer
+        except ImportError:
+            print("Could not import BenchmarkVisualizer. Make sure the visualization module is available.")
+            return None
+        
+        # Create output directory if specified
+        output_dir = output_dir or "results/visualizations/html"
+        os.makedirs(output_dir, exist_ok=True)
+        
+        # Generate summary data if not provided
+        if not summary_data:
+            # Extract metrics from run_results
+            total_problems = len(run_results)
+            correct = sum(1 for r in run_results if r.get("score") == 1)
+            accuracy = correct / total_problems if total_problems > 0 else 0
+            total_duration_ms = sum(r.get("duration_ms", 0) for r in run_results)
+            avg_duration_ms = total_duration_ms / total_problems if total_problems > 0 else 0
+            
+            # Create summary data
+            summary_data = {
+                "benchmark": "unknown",
+                "agent_system": self.name,
+                "total_problems": total_problems,
+                "correct": correct,
+                "accuracy": accuracy,
+                "total_duration_ms": total_duration_ms,
+                "avg_duration_ms": avg_duration_ms,
+                "timestamp": datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            }
+        
+        # Create benchmark visualizer
+        visualizer = BenchmarkVisualizer(output_dir)
+        
+        # Find visualization files for each problem
+        visualizations_dir = self.visualizations_dir
+        
+        # Generate and return the benchmark visualization
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        output_file = Path(output_dir) / f"benchmark_{self.name}_{timestamp}.html"
+        
+        return visualizer.visualize_benchmark(
+            summary_data=summary_data,
+            results_data=run_results,
+            visualizations_dir=visualizations_dir,
+            output_file=output_file
+        )
 
 
 class AgentSystemRegistry:

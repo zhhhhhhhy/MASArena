@@ -20,6 +20,7 @@ from benchmark.src.metrics import (
     InterAgentMetricsCollector,
     MetricsCollector
 )
+from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
 from benchmark.src.evaluators import MathEvaluator
 
@@ -339,6 +340,10 @@ class BenchmarkRunner:
         total = len(all_results)
         accuracy = correct / total if total > 0 else 0
 
+        # Generate inference metrics using UnifiedEvaluator
+        evaluator = UnifiedEvaluator()
+        inference_metrics = evaluator.evaluate_inference_metrics([str(output_file)])
+        
         # Summary
         summary = {
             "benchmark": benchmark_name,
@@ -351,7 +356,13 @@ class BenchmarkRunner:
             "results_file": str(output_file),
             "metrics_dir": str(metrics_output),
             "timestamp": self.timestamp,
+            "inference_metrics": inference_metrics.get(agent_system, {})
         }
+
+        # Save summary with inference metrics to a separate file
+        summary_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}_summary.json"
+        with open(summary_file, "w") as f:
+            json.dump(summary, f, indent=2)
 
         # Save results for visualization
         self.results = all_results
@@ -359,11 +370,18 @@ class BenchmarkRunner:
 
         if verbose:
             print("\nBenchmark complete!")
+            
+            print("\n" + "=" * 80)
+            print("Benchmark Summary")
+            print("=" * 80)
+            
             print(f"Agent system: {agent_system}")
             print(f"Accuracy: {accuracy:.2%} ({correct}/{total})")
             print(f"Total duration: {benchmark_duration_ms:.0f}ms")
             print(f"Results saved to: {output_file}")
-            print(f"Metrics saved to: {metrics_output}")
+            # print(f"Metrics saved to: {metrics_output}")
+            print(f"Summary saved to: {summary_file}")
+            print(f"Run visualization: $ python benchmark/src/visualization/visualize_benchmark.py visualize --summary {summary_file}")
 
         # Stop metrics collection
         self.metrics_registry.stop_all_collectors()
@@ -404,6 +422,7 @@ def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_ag
 
 if __name__ == "__main__":
     import argparse
+    from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
 
     parser = argparse.ArgumentParser(description="Run a benchmark with a simplified interface")
     parser.add_argument(
@@ -415,7 +434,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--agent-system",
         default="single_agent",
-        choices=["single_agent", "supervisor_mas", "swarm"],
+        choices=list(AVAILABLE_AGENT_SYSTEMS.keys()),
         help="Agent system to use",
     )
     parser.add_argument("--limit", type=int, default=5, help="Maximum number of problems to process")

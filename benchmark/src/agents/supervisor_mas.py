@@ -11,11 +11,9 @@ import time
 import uuid
 
 from langchain_openai import ChatOpenAI
-from langchain_community.callbacks import get_openai_callback
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.types import Command
 from langgraph.prebuilt import create_react_agent
-from langchain_community.tools.tavily_search import TavilySearchResults
 from langsmith import traceable, RunTree
 from langgraph.checkpoint.memory import InMemorySaver
 from dotenv import load_dotenv
@@ -58,8 +56,7 @@ def create_supervisor():
     def supervisor_node(state: State) -> Command[Literal["researcher", "coder", "__end__"]]:
         messages = [{"role": "system", "content": system_prompt}] + state["messages"]
 
-        with get_openai_callback() as cb:
-            response = model.with_structured_output(Router).invoke(messages)
+        response = model.with_structured_output(Router).invoke(messages)
 
         goto = response["next"]
 
@@ -80,8 +77,7 @@ def create_research_node():
     research_agent = create_react_agent(model, tools=[])
 
     def research_node(state: State) -> Command[Literal["supervisor"]]:
-        with get_openai_callback() as cb:
-            result = research_agent.invoke(state)
+        result = research_agent.invoke(state)
 
         ai_message = result["messages"][-1]
         ai_message.name = "researcher"
@@ -108,8 +104,7 @@ def create_code_node():
     )
 
     def code_node(state: State) -> Command[Literal["supervisor"]]:
-        with get_openai_callback() as cb:
-            result = coder_agent.invoke(state)
+        result = coder_agent.invoke(state)
 
         ai_message = result["messages"][-1]
         ai_message.name = "coder"

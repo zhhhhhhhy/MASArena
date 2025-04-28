@@ -49,16 +49,14 @@ You can also use the runner scripts for more options:
 ./run_benchmark.py --benchmark math --all-agents --limit 5
 ```
 
-### Analyzing Results
 
-After running benchmarks, analyze the results with:
+
+### Visualizing Agent Interactions
+
+The framework provides interactive visualizations for agent interactions and benchmark results:
 
 ```bash
-# Compare performance across all agent systems
-./analyze_results.py --compare
-
-# Analyze a specific results file
-./analyze_results.py results/math_swarm_20240330_123456.json
+python benchmark/src/visualization/visualize_benchmark.py visualize --summary results/math_swarm_20250423_170316_summary.json
 ```
 
 ## Available Agent Systems
@@ -162,15 +160,14 @@ The agent system format is a JSON object to be evaluated by the UnifiedEvaluator
   "agent_system_name": {
     "system_type": "single_agent"|"mas"|"swarm",
     "accuracy": float,  // Performance accuracy (0.0-1.0)
+    "throughput": float, // number of tasks per second
+    "latency": float, // ttft on average for all tasks
     "model": [
       {
         "model_name": string,  // Name of the LLM used
-        "latency": int,        // Response time in milliseconds, can be computed
-        "throughput": float,   // Tasks per minute, can be computed
+        "latency": int,        // ttft
         "input_token_count": int,  // Number of input tokens
         "output_token_count": int, // Number of output tokens
-        "parameters": int,     // Total parameters in the model
-        "activated_parameters": int  // Actually used parameters
       },
       // Additional models for multi-agent systems
     ]
@@ -190,6 +187,6 @@ The agent system format is a JSON object to be evaluated by the UnifiedEvaluator
 
 #### Adding a New Benchmark Dataset
 
-1. Add your dataset to `benchmark/data/`
+1. Add your dataset to `results/`
 2. Create a corresponding evaluator in `benchmark/src/evaluators/`
 3. Update the available choices in `main.py`

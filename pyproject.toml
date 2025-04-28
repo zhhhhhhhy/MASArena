@@ -22,6 +22,8 @@ dependencies = [
     "matplotlib>=3.10.1",
     "bs4>=0.0.2",
     "seaborn>=0.13.2",
+    "tree-sitter-python>=0.23.6",
+    "tree-sitter>=0.24.0",
 ]
 
 [tool.ruff]

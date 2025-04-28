@@ -12,6 +12,9 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run benchmarks for multi-agent systems")
 
+    # Import available agent systems
+    from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
+
     parser.add_argument(
         "--benchmark",
         type=str,
@@ -61,8 +64,6 @@ def main():
     print(f"Agent System: {args.agent_system}")
     print(f"Data: {args.data or 'default'}")
     print(f"Limit: {args.limit}")
-    print(f"Results will be stored in: {args.results_dir}")
-    print(f"Metrics will be stored in: {args.metrics_dir}")
     print("=" * 80 + "\n")
 
     # Create benchmark runner
@@ -77,21 +78,6 @@ def main():
             agent_system=args.agent_system,
             verbose=args.verbose,
         )
-
-        print("\n" + "=" * 80)
-        print("Benchmark Summary")
-        print("=" * 80)
-        print(f"Benchmark: {summary['benchmark']}")
-        print(f"Agent System: {summary['agent_system']}")
-        print(f"Problems: {summary['total_problems']}")
-        print(f"Correct: {summary['correct']}")
-        print(f"Accuracy: {summary['accuracy']:.2%}")
-        print(f"Total Duration: {summary['total_duration_ms']:.2f} ms")
-        print(f"Average Duration: {summary['avg_duration_ms']:.2f} ms")
-        print(f"Results saved to: {summary['results_file']}")
-        print(f"Metrics saved to: {summary['metrics_dir']}")
-        print("=" * 80)
-
         return 0
 
     except Exception as e:

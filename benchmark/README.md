@@ -157,3 +157,245 @@ The framework supports various scenarios by adjusting the four core hyperparamet
    - $V_T$: Medium (standard throughput needs)
 
 These scenarios can be used to evaluate system performance under different operational conditions and help identify the optimal system configuration for specific use cases.
+
+
+-----
+
+# Metrics Estimation
+
+
+## Metrics Evaluation Output
+
+The `UnifiedEvaluator` class provides functionality to evaluate benchmark results and generate detailed inference metrics for agent systems. This is particularly useful for comparing different agent architectures or configurations.
+
+```python
+from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
+
+# Initialize the evaluator
+evaluator = UnifiedEvaluator()
+
+# Evaluate benchmark results from multiple systems
+results = evaluator.evaluate_inference_metrics([
+    "results/math_swarm_20250413_113622.json",
+    "results/math_agentverse_20250413_141244.json"
+])
+
+# Example of the results structure:
+"""
+{
+  "agentverse": {
+    "accuracy": 0.66666,
+    "throughput": 0.07972,         # Tasks per second
+    "latency": 348.36,             # Average TTFT in milliseconds
+    "memory": 156211.92,           # Total estimated memory in MB
+    "model": [
+      {
+        "model_name": "gpt-4o-mini",
+        "latency": 212.10,         # TTFT in milliseconds
+        "input_token_count": 293,
+        "output_token_count": 259
+      }
+    ]
+  },
+  "swarm": {
+    "accuracy": 0.5,
+    "throughput": 0.034,
+    "latency": 298.12,
+    "memory": 184325.73,
+    "model": [
+      {
+        "model_name": "gpt-4o-mini",
+        "latency": 212.10,
+        "input_token_count": 320,
+        "output_token_count": 480
+      }
+    ]
+  }
+}
+"""
+
+# Example usage with BenchmarkRunner
+from benchmark.benchmark_runner import BenchmarkRunner
+
+benchmark = BenchmarkRunner()
+summary = benchmark.run("math", limit=5, agent_system="swarm")
+# The summary includes inference metrics automatically:
+print(summary["inference_metrics"]["accuracy"])  # 0.5
+```
+
+### Data Structure Details
+
+The inference metrics evaluation provides the following information:
+
+- **accuracy**: Fraction of problems solved correctly (0.0-1.0)
+- **throughput**: Number of tasks the system can process per second
+- **latency**: Average time to first token (TTFT) across all requests in milliseconds
+- **memory**: Total estimated memory usage in megabytes (includes model parameters, KV cache, and activations)
+- **model**: List of unique models used by the agent system, with per-model metrics:
+  - **model_name**: Name of the language model
+  - **latency**: Estimated time to first token in milliseconds
+  - **input_token_count**: Average number of prompt tokens
+  - **output_token_count**: Average number of completion tokens
+
+The `estimate_inference_metrics` function from `SystemMetricsCollector` is used internally to calculate these metrics based on model parameters, input token count, and output token count. This provides a standardized way to compare different agent architectures even when direct measurements are not available.
+
+## Memory Usage Estimation
+`benchmark/src/instrumentation/memory_instrumentation.py`
+The computational resource usage for LLM inference is dominated by memory requirements. The framework estimates memory cost using a mathematical model based on model size and usage patterns.
+
+### Memory Cost Formula
+
+The total memory cost for a model $M$ during inference is calculated as:
+
+$$
+M_{\mathrm{total}} = M_{\mathrm{params}} + M_{\mathrm{activated}} + M_{\mathrm{kv\_cache}}
+$$
+
+Where:
+- $M_{\mathrm{total}}$ is the total memory usage in bytes
+- $M_{\mathrm{params}}$ is the parameter memory (full model weights)
+- $M_{\mathrm{activated}}$ is the activated parameter memory during inference
+- $M_{\mathrm{kv\_cache}}$ is the key-value cache memory
+
+#### Parameter Memory
+
+The memory allocated for all model parameters is:
+
+$$
+M_{\mathrm{params}} = P \times 10^9 \times B_{\mathrm{param}}
+$$
+
+Where:
+- $P$ is the total number of parameters, in billions
+- $B_{\mathrm{param}}$ is the number of bytes per parameter (e.g., 2 for FP16)
+
+#### Activated Memory
+
+During inference only a subset of parameters is activated. We denote this by $P_{act}$ (in billions):
+
+$$
+M_{\mathrm{activated}} = P_{\mathrm{act}} \times 10^9 \times B_{\mathrm{param}}
+$$
+
+Where $P_{\mathrm{act}}$ is the activated parameter count, in billions (provided in configuration).
+
+#### KV Cache Memory 
+<!-- todo: review this -->
+
+Key-value cache memory scales with context length and model size. We assume a base token cost $B_{kv}$ = 8 bytes at a reference parameter count $P_{base} = 6$ (billion parameters):
+
+$$
+M_{\mathrm{kv\_cache}} = (T_{\mathrm{in}} + T_{\mathrm{out}}) \times B_{\mathrm{kv}} \times \frac{P}{P_{\mathrm{base}}}
+$$
+
+Where:
+- $T_{\mathrm{in}}$ is the number of input tokens
+- $T_{\mathrm{out}}$ is the number of output tokens
+- $B_{\mathrm{kv}}$ is base bytes per token in KV cache (8 bytes)
+- $P_{\mathrm{base}}$ is reference parameter count (6 billion)
+- $P$ is total parameter count in billions
+
+#### Total Memory Usage
+
+Summing these components yields the total memory footprint:
+
+$$
+M_{\mathrm{total}} = M_{\mathrm{params}} + M_{\mathrm{activated}} + M_{\mathrm{kv\_cache}}
+$$
+
+#### Assumptions
+- Parameters are stored in FP16 precision (2 bytes per parameter).
+- Activated parameter counts ($P_{\mathrm{act}}$) are defined in `model_data.py`.
+- KV cache uses a base rate of 8 bytes per token at 6B parameters and scales linearly with model size.
+
+## Latency and Throughput Estimation
+
+The framework also provides mathematical models for estimating inference latency and throughput, which are critical for evaluating the performance of language models in real-world applications.
+
+### Time to First Token (TTFT)
+
+TTFT represents the latency between prompt submission and receiving the first output token:
+
+$$
+T_{\mathrm{TTFT}} = T_{\mathrm{compute}} + T_{\mathrm{memory}}
+$$
+
+where
+
+$$
+T_{\mathrm{compute}} = \frac{2 \times P \times T_{\mathrm{in}}}{F_{\mathrm{effective}}},
+\quad
+T_{\mathrm{memory}} = \frac{M_{\mathrm{activated}}}{B_{\mathrm{memory}}}
+$$
+
+with:
+- $P$: total parameters (billions × $10^9$ parameters)
+- $T_{\mathrm{in}}$: number of input tokens
+- $F_{\mathrm{effective}} = F_{\mathrm{GPU}} \times \eta_{\mathrm{hw}}$ (effective FLOPS)
+- $M_{\mathrm{activated}}$: activated memory in bytes
+- $B_{\mathrm{memory}}$: memory bandwidth (bytes/sec)
+
+### Throughput Estimation
+
+Throughput (tokens/sec) is the minimum of compute-bound and memory-bound rates:
+
+$$
+\mathrm{TP} = \min(\mathrm{TP}_{\mathrm{compute}}, \mathrm{TP}_{\mathrm{memory}})
+$$
+
+where
+
+$$
+\mathrm{TP}_{\mathrm{compute}} = \frac{F_{\mathrm{effective}}}{O_{\mathrm{token}}},
+\quad
+O_{\mathrm{token}} = 2 \times P
+$$
+
+$$
+\mathrm{TP}_{\mathrm{memory}} = \frac{B_{\mathrm{memory}}}{M_{\mathrm{kv\_per\_token}}},
+\quad
+M_{\mathrm{kv\_per\_token}} = \frac{M_{\mathrm{kv\_cache}}}{T_{\mathrm{in}} + T_{\mathrm{out}}}
+$$
+
+with variables as defined above.
+
+### System-Level Metrics
+
+For multi-agent systems, the framework calculates:
+
+1. **Average Latency**: The weighted average TTFT across all agent interactions.
+
+$$T_{avg} = \frac{\sum_{i=1}^{n} T_{TTFT,i}}{n}$$
+
+Where $n$ is the total number of agent interactions.
+
+2. **Effective Throughput**: The aggregate throughput of the system measured in tasks per second.
+
+$$TP_{system} = \frac{1000}{D_{avg}}$$
+
+Where $D_{avg}$ is the average duration per task in milliseconds.
+
+### Assumptions and Hardware Considerations
+
+1. **Hardware Configuration**: Default values are used if specific hardware details are not provided:
+   - Default GPU FLOPS: 20 TFLOPS (typical for mid-range GPUs)
+   - Default memory bandwidth: 600 GB/s
+   - Default hardware efficiency: 40% of theoretical peak
+
+2. **Computational Model**: The framework assumes that inference has two distinct phases:
+   - Prefill phase: Processing the input prompt (computed in TTFT)
+   - Generation phase: Producing each output token sequentially
+
+3. **Bottleneck Determination**: Generation throughput is determined by the minimum of compute-bound and memory-bound estimates, as the slower factor becomes the bottleneck.
+
+4. **Task-Level Metrics**: For complete tasks, total inference time is estimated as:
+   
+$$T_{total} = T_{TTFT} + \frac{T_{out}}{TP}$$
+
+Where $T_{out}$ is the output token count and $TP$ is the throughput in tokens per second.
+
+By applying these mathematical models, the framework provides standardized estimates of performance metrics that enable objective comparisons between different model architectures and agent system designs.
+
+## Custom Metrics
+
+...

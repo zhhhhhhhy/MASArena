@@ -28,6 +28,7 @@ Collected Metrics:
 - Semantic drift tracking (for long-running systems)
 """
 
+from benchmark.data.model_data import MODEL_DATA
 
 class MemoryInstrumenter:
     """
@@ -133,3 +134,50 @@ class MemoryInstrumenter:
             Contention metrics if detected
         """
         pass
+    
+    def estimate_model_memory_cost(self, model_name, input_token_count, output_token_count):
+        """
+        Estimate memory usage for LLM inference based on model size and token counts.
+        
+        Calculates the sum of:
+          - Parameter memory (full model weights)
+          - Activated parameter memory (subset of weights actively used)
+          - KV cache memory (scales with context length)
+        
+        Args:
+            model_name (str): Name of the model to estimate memory for
+            input_token_count (int): Number of input tokens
+            output_token_count (int): Number of output tokens
+        
+        Returns:
+            dict: Memory usage breakdown in bytes with keys:
+                  'parameter_memory', 'activated_memory', 'kv_cache', 'total'
+        """
+        # Get model data or raise error for unknown models
+        if model_name in MODEL_DATA:
+            model_info = MODEL_DATA[model_name]
+            parameter_size_b = model_info["parameter_size_b"]
+            activated_size_b = model_info["activated_size_b"]
+            bytes_per_parameter = model_info["bytes_per_parameter"]
+        else:
+            raise ValueError(f"Model {model_name} not found in MODEL_DATA")
+        
+        # Convert billions of parameters to bytes using model-specific format
+        parameter_memory_bytes = parameter_size_b * 1e9 * bytes_per_parameter
+        activated_memory_bytes = activated_size_b * 1e9 * bytes_per_parameter
+        
+        # KV cache scales with context length (input + output tokens)
+        # Each token typically uses ~8-12 bytes per layer per attention head
+        context_length = input_token_count + output_token_count
+        bytes_per_token_in_kv_cache = 8 * (parameter_size_b / 6)  # todo: review this
+        kv_cache_bytes = context_length * bytes_per_token_in_kv_cache
+        
+        # Total memory usage
+        total_memory_bytes = parameter_memory_bytes + activated_memory_bytes + kv_cache_bytes
+        
+        return {
+            "parameter_memory": parameter_memory_bytes,
+            "activated_memory": activated_memory_bytes, 
+            "kv_cache": kv_cache_bytes,
+            "total": total_memory_bytes
+        }
