@@ -53,15 +53,29 @@ class Agent:
         
         execution_time_ms = (end_time - start_time) * 1000
         
+        # 确保正确提取token使用情况
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+        
+        if hasattr(response, "usage"):
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+            total_tokens = response.usage.total_tokens
+        elif hasattr(response, "llm_output") and hasattr(response.llm_output, "token_usage"):
+            prompt_tokens = response.llm_output.token_usage.prompt_tokens
+            completion_tokens = response.llm_output.token_usage.completion_tokens
+            total_tokens = response.llm_output.token_usage.total_tokens
+        
         result = {
             "agent_id": self.agent_id,
             "name": self.name,
             "execution_time_ms": execution_time_ms,
             "extracted_answer": response.content,
             "llm_usage": {
-                "prompt_tokens": response.usage.prompt_tokens if hasattr(response, "usage") else 0,
-                "completion_tokens": response.usage.completion_tokens if hasattr(response, "usage") else 0,
-                "total_tokens": response.usage.total_tokens if hasattr(response, "usage") else 0
+                "prompt_tokens": prompt_tokens,
+                "completion_tokens": completion_tokens,
+                "total_tokens": total_tokens
             }
         }
         
@@ -116,7 +130,7 @@ class EvoAgent(AgentSystem):
         # 创建初始智能体
         for i in range(self.initial_agents_count):
             agent_id = str(uuid.uuid4())
-            name = f"Agent-{i+1}"
+            name = f"EVO-{i+1}"  # 使用EVO-1、EVO-2、EVO-3等格式
             system_prompt = base_prompts[i % len(base_prompts)]
             
             agent = Agent(
@@ -165,7 +179,7 @@ class EvoAgent(AgentSystem):
         新配置应该继承两个父代的优点，同时避免它们的缺点。
 
         请以JSON格式返回新配置，包含以下字段:
-        - name: 新智能体的名称
+        - name: 新智能体的名称 (必须以"EVO-C-"开头，例如"EVO-C-1")
         - system_prompt: 新智能体的系统提示
         """
         
@@ -175,10 +189,15 @@ class EvoAgent(AgentSystem):
             # 尝试解析JSON响应
             config = json.loads(response.content)
             
+            # 确保名称以EVO-C-开头
+            name = config.get("name", "")
+            if not name.startswith("EVO-C-"):
+                name = f"EVO-C-{random.randint(1, 999)}"
+            
             # 创建子代智能体
             child = Agent(
                 agent_id=str(uuid.uuid4()),
-                name=config.get("name", f"Child-{random.randint(1000, 9999)}"),
+                name=name,
                 model_name=self.model_name,
                 system_prompt=config.get("system_prompt", parent1.system_prompt)
             )
@@ -188,7 +207,7 @@ class EvoAgent(AgentSystem):
             # 如果解析失败，使用简单的随机选择
             child = Agent(
                 agent_id=str(uuid.uuid4()),
-                name=f"Child-{random.randint(1000, 9999)}",
+                name=f"EVO-C-{random.randint(1, 999)}",
                 model_name=self.model_name,
                 system_prompt=parent1.system_prompt if random.random() < 0.5 else parent2.system_prompt
             )
@@ -224,7 +243,7 @@ class EvoAgent(AgentSystem):
         变异应该引入一些随机性，同时保持智能体解决问题的能力。
 
         请以JSON格式返回变异后的配置，包含以下字段:
-        - name: 变异后智能体的名称
+        - name: 变异后智能体的名称 (必须以"EVO-M-"开头，例如"EVO-M-1")
         - system_prompt: 变异后智能体的系统提示
         """
         
@@ -234,10 +253,15 @@ class EvoAgent(AgentSystem):
             # 尝试解析JSON响应
             config = json.loads(response.content)
             
+            # 确保名称以EVO-M-开头
+            name = config.get("name", "")
+            if not name.startswith("EVO-M-"):
+                name = f"EVO-M-{random.randint(1, 999)}"
+            
             # 创建变异的子代智能体
             child = Agent(
                 agent_id=str(uuid.uuid4()),
-                name=config.get("name", f"Mutant-{random.randint(1000, 9999)}"),
+                name=name,
                 model_name=self.model_name,
                 system_prompt=config.get("system_prompt", parent.system_prompt)
             )
@@ -247,7 +271,7 @@ class EvoAgent(AgentSystem):
             # 如果解析失败，使用简单的随机修改
             child = Agent(
                 agent_id=str(uuid.uuid4()),
-                name=f"Mutant-{random.randint(1000, 9999)}",
+                name=f"EVO-M-{random.randint(1, 999)}",
                 model_name=self.model_name,
                 system_prompt=parent.system_prompt + f" 变异版本 {random.randint(1, 100)}"
             )
@@ -312,6 +336,28 @@ class EvoAgent(AgentSystem):
         """
         
         response = llm.invoke([{"role": "user", "content": prompt}])
+        
+        # 记录token使用情况
+        prompt_tokens = 0
+        completion_tokens = 0
+        total_tokens = 0
+        
+        if hasattr(response, "usage"):
+            prompt_tokens = response.usage.prompt_tokens
+            completion_tokens = response.usage.completion_tokens
+            total_tokens = response.usage.total_tokens
+        elif hasattr(response, "llm_output") and hasattr(response.llm_output, "token_usage"):
+            prompt_tokens = response.llm_output.token_usage.prompt_tokens
+            completion_tokens = response.llm_output.token_usage.completion_tokens
+            total_tokens = response.llm_output.token_usage.total_tokens
+        
+        # 将token使用情况添加到结果中
+        for result in results:
+            if "llm_usage" not in result:
+                result["llm_usage"] = {}
+            result["llm_usage"]["summary_prompt_tokens"] = prompt_tokens
+            result["llm_usage"]["summary_completion_tokens"] = completion_tokens
+            result["llm_usage"]["summary_total_tokens"] = total_tokens
         
         return response.content
     
@@ -428,6 +474,63 @@ class EvoAgent(AgentSystem):
                 "best_score": final_agents[0].score if final_agents else 0.0
             }
         }
+        
+        # 添加messages字段，用于记录tokens和回答
+        messages = []
+        
+        # 添加所有智能体的回答作为消息
+        for agent in final_agents:
+            # 创建一个AIMessage对象，包含智能体的回答和token使用情况
+            from langchain_core.messages import AIMessage
+            
+            # 从agent.result中提取token使用情况
+            llm_usage = agent.result.get("llm_usage", {})
+            
+            # 创建usage_metadata字典
+            usage_metadata = {
+                "input_tokens": llm_usage.get("prompt_tokens", 0),
+                "output_tokens": llm_usage.get("completion_tokens", 0),
+                "total_tokens": llm_usage.get("total_tokens", 0),
+                "output_token_details": {"reasoning": 0}  # 默认值
+            }
+            
+            # 创建AIMessage对象
+            ai_message = AIMessage(
+                content=agent.result.get("extracted_answer", ""),
+                name=agent.name,
+                id=agent.agent_id,
+                usage_metadata=usage_metadata
+            )
+            
+            messages.append(ai_message)
+        
+        # 添加汇总结果作为消息
+        from langchain_core.messages import AIMessage
+        
+        # 计算汇总消息的token使用情况（简单估算）
+        total_prompt_tokens = sum(agent.result.get("llm_usage", {}).get("prompt_tokens", 0) for agent in final_agents)
+        total_completion_tokens = sum(agent.result.get("llm_usage", {}).get("completion_tokens", 0) for agent in final_agents)
+        
+        # 创建汇总消息的usage_metadata
+        summary_usage_metadata = {
+            "input_tokens": total_prompt_tokens,
+            "output_tokens": total_completion_tokens,
+            "total_tokens": total_prompt_tokens + total_completion_tokens,
+            "output_token_details": {"reasoning": 0}  # 默认值
+        }
+        
+        # 创建汇总消息
+        summary_message = AIMessage(
+            content=summary,
+            name="EVO-SUMMARY",  # 使用EVO-SUMMARY格式
+            id="summary",
+            usage_metadata=summary_usage_metadata
+        )
+        
+        messages.append(summary_message)
+        
+        # 将messages添加到结果中
+        result["messages"] = messages
         
         return result
 
