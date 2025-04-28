@@ -12,6 +12,12 @@ MODEL_DATA = {
         "parameter_format": "FP16",
         "bytes_per_parameter": 2
     },
+    "gpt-4o-mini": {
+        "parameter_size_b": 1.3,
+        "activated_size_b": 0.39,  # 30% activation
+        "parameter_format": "FP16",
+        "bytes_per_parameter": 2
+    },
     "gpt-4": {
         "parameter_size_b": 175.0,
         "activated_size_b": 61.25,  # 35% activation
