@@ -41,7 +41,7 @@ class SwarmAgent:
             system_prompt
             or "You are an intelligent AI assistant specialized in solving problems carefully and step by step."
         )
-        self.llm = ChatOpenAI(model=self.model_name, base_url=os.getenv("BASE_URL"))
+        self.llm = ChatOpenAI(model=self.model_name)
 
     def solve(self, problem: str) -> Dict[str, Any]:
         """
@@ -98,7 +98,7 @@ class Aggregator:
             model_name: LLM model to use for aggregation
         """
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
-        self.llm = ChatOpenAI(model=self.model_name, base_url=os.getenv("BASE_URL"))
+        self.llm = ChatOpenAI(model=self.model_name)
 
     def aggregate(self, problem: str, solutions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """

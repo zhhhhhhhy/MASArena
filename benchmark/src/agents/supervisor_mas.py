@@ -37,7 +37,6 @@ class Router(TypedDict):
 def create_supervisor():
     model = ChatOpenAI(
         model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-        base_url=os.getenv("BASE_URL"),
     )
     members = ["researcher", "coder"]
 
@@ -72,7 +71,6 @@ def create_supervisor():
 def create_research_node():
     model = ChatOpenAI(
         model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-        base_url=os.getenv("BASE_URL"),
     )
     research_agent = create_react_agent(model, tools=[])
 
@@ -95,7 +93,6 @@ def create_research_node():
 def create_code_node():
     model = ChatOpenAI(
         model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-        base_url=os.getenv("BASE_URL"),
     )
 
     coder_agent = create_react_agent(

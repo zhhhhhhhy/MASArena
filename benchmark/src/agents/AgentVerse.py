@@ -58,12 +58,7 @@ class RecruiterAgent:
             5. The description includes the specific division of labor needed to solve the problem"""
         )
         # Create a regular LLM without structured output
-        self.llm = ChatOpenAI(
-            model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
-
+        self.llm = ChatOpenAI(model=self.model_name)
     def _create_prompt(self, problem: str, feedback: str = None) -> str:
         feedback_section = ""
         if feedback:
@@ -149,8 +144,6 @@ class WorkAgent:
         )
         self.llm = ChatOpenAI(
             model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY"),
             max_tokens=1000
         )
 
@@ -182,11 +175,7 @@ class Evaluator:
     def __init__(self, model_name: str = None, max_iterations: int = 3):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.max_iterations = max_iterations
-        self.llm = ChatOpenAI(
-            model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
+        self.llm = ChatOpenAI(model=self.model_name)
         
     def evaluate(self, problem: str, solutions: List[Dict[str, Any]], iteration: int) -> Dict[str, Any]:
         """

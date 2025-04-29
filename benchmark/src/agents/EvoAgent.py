@@ -7,18 +7,10 @@ import uuid
 from dotenv import load_dotenv
 from dataclasses import dataclass, field
 from typing import Dict, TypedDict, Any, List, Optional, Tuple
-from pathlib import Path
-import sys
-
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pydantic import BaseModel, Field
-from typing import Annotated
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain.callbacks.manager import AsyncCallbackManager
 from langchain_community.callbacks.openai_info import OpenAICallbackHandler
-from langsmith.evaluation import RunEvaluator
-from langsmith.schemas import Run
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
 # 禁用LangSmith跟踪
@@ -69,8 +61,6 @@ class Agent:
         
         llm = ChatOpenAI(
             model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY"),
             callback_manager=callback_manager
         )
         
@@ -202,8 +192,6 @@ class EvoAgent(AgentSystem):
                 
                 llm = ChatOpenAI(
                     model=self.model_name,
-                    base_url=os.getenv("BASE_URL"),
-                    api_key=os.getenv("OPENAI_API_KEY"),
                     callback_manager=callback_manager
                 )
                 
@@ -327,8 +315,6 @@ class EvoAgent(AgentSystem):
                 
                 llm = ChatOpenAI(
                     model=self.model_name,
-                    base_url=os.getenv("BASE_URL"),
-                    api_key=os.getenv("OPENAI_API_KEY"),
                     callback_manager=callback_manager
                 )
                 
@@ -470,8 +456,6 @@ class EvoAgent(AgentSystem):
                 
                 llm = ChatOpenAI(
                     model=self.model_name,
-                    base_url=os.getenv("BASE_URL"),
-                    api_key=os.getenv("OPENAI_API_KEY"),
                     callback_manager=callback_manager
                 )
                 

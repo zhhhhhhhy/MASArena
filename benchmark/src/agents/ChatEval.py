@@ -20,11 +20,7 @@ class Agent:
     
     def __post_init__(self):
         self.chat_history = []
-        self.llm = ChatOpenAI(
-            model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
+        self.llm = ChatOpenAI(model=self.model_name)
 
     def generate_response(self, context: str) -> Any:
         """生成代理响应"""
@@ -55,11 +51,7 @@ class ResultExtractor:
     """从对话历史中提取最终结果"""
     def __init__(self, model_name: str = None):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
-        self.llm = ChatOpenAI(
-            model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY")
-        )
+        self.llm = ChatOpenAI(model=self.model_name)
         
     def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> str:
         """
