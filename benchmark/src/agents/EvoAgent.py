@@ -63,10 +63,15 @@ class Agent:
     
     async def solve(self, problem: str) -> Dict[str, Any]:
         """解决给定问题并返回结果"""
+        # 创建回调处理器来收集token使用情况
+        callback_handler = OpenAICallbackHandler()
+        callback_manager = AsyncCallbackManager([callback_handler])
+        
         llm = ChatOpenAI(
             model=self.model_name,
             base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY")
+            api_key=os.getenv("OPENAI_API_KEY"),
+            callback_manager=callback_manager
         )
         
         messages = [
@@ -80,28 +85,34 @@ class Agent:
         
         execution_time_ms = (end_time - start_time) * 1000
         
-        # 确保正确提取token使用情况
-        prompt_tokens = 0
-        completion_tokens = 0
-        total_tokens = 0
+        # 从回调处理器获取token使用情况
+        input_tokens = callback_handler.prompt_tokens
+        output_tokens = callback_handler.completion_tokens
+        total_tokens = callback_handler.total_tokens
         
-        if hasattr(response, "usage"):
-            prompt_tokens = response.usage.prompt_tokens
-            completion_tokens = response.usage.completion_tokens
-            total_tokens = response.usage.total_tokens
-        elif hasattr(response, "llm_output") and hasattr(response.llm_output, "token_usage"):
-            prompt_tokens = response.llm_output.token_usage.prompt_tokens
-            completion_tokens = response.llm_output.token_usage.completion_tokens
-            total_tokens = response.llm_output.token_usage.total_tokens
+        # 为AIMessage添加usage_metadata
+        if isinstance(response, AIMessage):
+            response.usage_metadata = {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "total_tokens": total_tokens,
+                "input_token_details": {
+                    "system_prompt": len(self.system_prompt.split()),
+                    "user_prompt": len(problem.split())
+                },
+                "output_token_details": {
+                    "reasoning": output_tokens,  # 简化处理，将所有输出标记视为推理
+                }
+            }
         
         result = {
             "agent_id": self.agent_id,
             "name": self.name,
             "execution_time_ms": execution_time_ms,
             "extracted_answer": response.content,
-            "llm_usage": {
-                "prompt_tokens": prompt_tokens,
-                "completion_tokens": completion_tokens,
+            "usage_metadata": {
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
                 "total_tokens": total_tokens
             }
         }
@@ -185,11 +196,15 @@ class EvoAgent(AgentSystem):
         try:
             # 添加超时处理
             async with asyncio.timeout(30):  # 设置30秒超时
-                # 使用LLM进行交叉
+                # 使用LLM进行交叉，添加回调以收集token用量
+                callback_handler = OpenAICallbackHandler()
+                callback_manager = AsyncCallbackManager([callback_handler])
+                
                 llm = ChatOpenAI(
                     model=self.model_name,
                     base_url=os.getenv("BASE_URL"),
-                    api_key=os.getenv("OPENAI_API_KEY")
+                    api_key=os.getenv("OPENAI_API_KEY"),
+                    callback_manager=callback_manager
                 )
                 
                 prompt = f"""
@@ -216,6 +231,16 @@ class EvoAgent(AgentSystem):
                 """
                 
                 response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                
+                # 添加token用量元数据
+                if isinstance(response, AIMessage):
+                    response.usage_metadata = {
+                        "input_tokens": callback_handler.prompt_tokens,
+                        "output_tokens": callback_handler.completion_tokens,
+                        "total_tokens": callback_handler.total_tokens,
+                        "input_token_details": {"prompt": len(prompt.split())},
+                        "output_token_details": {"reasoning": callback_handler.completion_tokens}
+                    }
                 
                 try:
                     # 尝试提取JSON内容
@@ -296,11 +321,15 @@ class EvoAgent(AgentSystem):
         try:
             # 添加超时处理
             async with asyncio.timeout(30):  # 设置30秒超时
-                # 使用LLM进行变异
+                # 使用LLM进行变异，添加回调以收集token用量
+                callback_handler = OpenAICallbackHandler()
+                callback_manager = AsyncCallbackManager([callback_handler])
+                
                 llm = ChatOpenAI(
                     model=self.model_name,
                     base_url=os.getenv("BASE_URL"),
-                    api_key=os.getenv("OPENAI_API_KEY")
+                    api_key=os.getenv("OPENAI_API_KEY"),
+                    callback_manager=callback_manager
                 )
                 
                 prompt = f"""
@@ -322,6 +351,16 @@ class EvoAgent(AgentSystem):
                 """
                 
                 response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                
+                # 添加token用量元数据
+                if isinstance(response, AIMessage):
+                    response.usage_metadata = {
+                        "input_tokens": callback_handler.prompt_tokens,
+                        "output_tokens": callback_handler.completion_tokens,
+                        "total_tokens": callback_handler.total_tokens,
+                        "input_token_details": {"prompt": len(prompt.split())},
+                        "output_token_details": {"reasoning": callback_handler.completion_tokens}
+                    }
                 
                 try:
                     # 尝试提取JSON内容
@@ -411,7 +450,7 @@ class EvoAgent(AgentSystem):
         except Exception as e:
             return 0.0
     
-    async def _summarize_results(self, problem: str, results: List[Dict[str, Any]]) -> str:
+    async def _summarize_results(self, problem: str, results: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]:
         """
         使用LLM汇总多个智能体的结果
         
@@ -420,15 +459,20 @@ class EvoAgent(AgentSystem):
             results: 多个智能体的结果列表
             
         Returns:
-            汇总后的结果
+            汇总后的结果和token使用情况
         """
         try:
             # 添加超时处理
             async with asyncio.timeout(60):  # 设置60秒超时
+                # 添加回调以收集token用量
+                callback_handler = OpenAICallbackHandler()
+                callback_manager = AsyncCallbackManager([callback_handler])
+                
                 llm = ChatOpenAI(
                     model=self.model_name,
                     base_url=os.getenv("BASE_URL"),
-                    api_key=os.getenv("OPENAI_API_KEY")
+                    api_key=os.getenv("OPENAI_API_KEY"),
+                    callback_manager=callback_manager
                 )
                 
                 # 构建汇总提示
@@ -451,39 +495,30 @@ class EvoAgent(AgentSystem):
                 
                 response = await llm.ainvoke([{"role": "user", "content": prompt}])
                 
-                # 记录token使用情况
-                prompt_tokens = 0
-                completion_tokens = 0
-                total_tokens = 0
+                # 创建token使用情况元数据
+                usage_metadata = {
+                    "input_tokens": callback_handler.prompt_tokens,
+                    "output_tokens": callback_handler.completion_tokens,
+                    "total_tokens": callback_handler.total_tokens,
+                    "input_token_details": {"prompt": len(prompt.split())},
+                    "output_token_details": {"reasoning": callback_handler.completion_tokens}
+                }
                 
-                if hasattr(response, "usage"):
-                    prompt_tokens = response.usage.prompt_tokens
-                    completion_tokens = response.usage.completion_tokens
-                    total_tokens = response.usage.total_tokens
-                elif hasattr(response, "llm_output") and hasattr(response.llm_output, "token_usage"):
-                    prompt_tokens = response.llm_output.token_usage.prompt_tokens
-                    completion_tokens = response.llm_output.token_usage.completion_tokens
-                    total_tokens = response.llm_output.token_usage.total_tokens
+                # 添加token用量元数据到AIMessage
+                if isinstance(response, AIMessage):
+                    response.usage_metadata = usage_metadata
                 
-                # 将token使用情况添加到结果中
-                for result in results:
-                    if "llm_usage" not in result:
-                        result["llm_usage"] = {}
-                    result["llm_usage"]["summary_prompt_tokens"] = prompt_tokens
-                    result["llm_usage"]["summary_completion_tokens"] = completion_tokens
-                    result["llm_usage"]["summary_total_tokens"] = total_tokens
-                
-                return response.content
+                return response.content, usage_metadata
         except asyncio.TimeoutError:
             print(f"{Colors.RED}警告: 汇总结果超时，使用最佳智能体的回答{Colors.ENDC}")
             # 超时情况下使用最佳智能体的回答
             best_result = max(results, key=lambda x: x.get("score", 0))
-            return best_result.get("extracted_answer", "无法汇总结果，使用最佳智能体的回答")
+            return best_result.get("extracted_answer", "无法汇总结果，使用最佳智能体的回答"), {}
         except Exception as e:
             print(f"{Colors.RED}警告: 汇总结果出错: {str(e)}，使用最佳智能体的回答{Colors.ENDC}")
             # 出错情况下使用最佳智能体的回答
             best_result = max(results, key=lambda x: x.get("score", 0))
-            return best_result.get("extracted_answer", f"无法汇总结果: {str(e)}")
+            return best_result.get("extracted_answer", f"无法汇总结果: {str(e)}"), {}
     
     async def _run_agent_async(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -499,8 +534,9 @@ class EvoAgent(AgentSystem):
         # 记录开始时间
         start_time = time.time()
         
-        # 提取问题文本
+        # 提取问题文本和问题ID
         problem_text = problem.get("problem", "")
+        problem_id = problem.get("id", f"problem_{hash(problem_text)}")
         
         # 显示问题
         print_step("问题", Colors.GREEN)
@@ -662,7 +698,7 @@ class EvoAgent(AgentSystem):
         # 汇总最终智能体的结果
         print_step("汇总最终结果")
         final_results = [agent.result for agent in final_agents]
-        summary = await self._summarize_results(problem_text, final_results)
+        summary, summary_usage = await self._summarize_results(problem_text, final_results)
         
         # 记录结束时间
         end_time = time.time()
@@ -673,19 +709,54 @@ class EvoAgent(AgentSystem):
         print(f"{Colors.YELLOW}{summary}{Colors.ENDC}")
         print(f"{Colors.CYAN}执行时间: {execution_time_ms:.2f}ms{Colors.ENDC}")
         
-        # 构建最终结果
-        result = {
-            "execution_time_ms": execution_time_ms,
-            "extracted_answer": summary,
-            "final_agents": [
-                {
-                    "agent_id": agent.agent_id,
-                    "name": agent.name,
-                    "score": agent.score,
-                    "answer": agent.result.get("extracted_answer", "")
+        # 构建消息列表，适配AgentSystem.evaluate的格式
+        messages = []
+        
+        # 添加用户的原始问题
+        user_message = HumanMessage(content=problem_text)
+        messages.append(user_message)
+        
+        # 添加所有智能体的回答为AIMessage，并包含usage_metadata
+        for agent in final_agents:
+            ai_message = AIMessage(
+                content=agent.result.get("extracted_answer", ""),
+                name=agent.name
+            )
+            
+            # 添加token使用情况元数据
+            usage_metadata = agent.result.get("usage_metadata", {})
+            if usage_metadata:
+                ai_message.usage_metadata = {
+                    "input_tokens": usage_metadata.get("input_tokens", 0),
+                    "output_tokens": usage_metadata.get("output_tokens", 0),
+                    "total_tokens": usage_metadata.get("total_tokens", 0),
+                    "input_token_details": {
+                        "system_prompt": len(agent.system_prompt.split()),
+                        "user_prompt": len(problem_text.split())
+                    },
+                    "output_token_details": {
+                        "reasoning": usage_metadata.get("output_tokens", 0)
+                    }
                 }
-                for agent in final_agents
-            ],
+            
+            messages.append(ai_message)
+        
+        # 添加最终汇总结果为AIMessage，并包含usage_metadata
+        summary_message = AIMessage(
+            content=summary,
+            name="EVO-SUMMARY"
+        )
+        
+        # 添加汇总的token使用情况元数据
+        if summary_usage:
+            summary_message.usage_metadata = summary_usage
+            
+        messages.append(summary_message)
+        
+        # 返回结果，包含消息、执行时间和进化指标
+        return {
+            "messages": messages,
+            "execution_time_ms": execution_time_ms,
             "evolution_metrics": {
                 "initial_agents": len(base_agents),
                 "crossover_agents": len(crossover_agents),
@@ -694,65 +765,6 @@ class EvoAgent(AgentSystem):
                 "best_score": final_agents[0].score if final_agents else 0.0
             }
         }
-        
-        # 添加messages字段，用于记录tokens和回答
-        messages = []
-        
-        # 添加所有智能体的回答作为消息
-        for agent in final_agents:
-            # 创建一个AIMessage对象，包含智能体的回答和token使用情况
-            from langchain_core.messages import AIMessage
-            
-            # 从agent.result中提取token使用情况
-            llm_usage = agent.result.get("llm_usage", {})
-            
-            # 创建usage_metadata字典
-            usage_metadata = {
-                "input_tokens": llm_usage.get("prompt_tokens", 0),
-                "output_tokens": llm_usage.get("completion_tokens", 0),
-                "total_tokens": llm_usage.get("total_tokens", 0),
-                "output_token_details": {"reasoning": 0}  # 默认值
-            }
-            
-            # 创建AIMessage对象
-            ai_message = AIMessage(
-                content=agent.result.get("extracted_answer", ""),
-                name=agent.name,
-                id=agent.agent_id,
-                usage_metadata=usage_metadata
-            )
-            
-            messages.append(ai_message)
-        
-        # 添加汇总结果作为消息
-        from langchain_core.messages import AIMessage
-        
-        # 计算汇总消息的token使用情况（简单估算）
-        total_prompt_tokens = sum(agent.result.get("llm_usage", {}).get("prompt_tokens", 0) for agent in final_agents)
-        total_completion_tokens = sum(agent.result.get("llm_usage", {}).get("completion_tokens", 0) for agent in final_agents)
-        
-        # 创建汇总消息的usage_metadata
-        summary_usage_metadata = {
-            "input_tokens": total_prompt_tokens,
-            "output_tokens": total_completion_tokens,
-            "total_tokens": total_prompt_tokens + total_completion_tokens,
-            "output_token_details": {"reasoning": 0}  # 默认值
-        }
-        
-        # 创建汇总消息
-        summary_message = AIMessage(
-            content=summary,
-            name="EVO-SUMMARY",  # 使用EVO-SUMMARY格式
-            id="summary",
-            usage_metadata=summary_usage_metadata
-        )
-        
-        messages.append(summary_message)
-        
-        # 将messages添加到结果中
-        result["messages"] = messages
-        
-        return result
         
     def run_agent_sync(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -777,10 +789,8 @@ class EvoAgent(AgentSystem):
             print(f"{Colors.RED}错误: 运行智能体时出错: {str(e)}{Colors.ENDC}")
             # 返回一个包含错误信息的结果
             return {
-                "execution_time_ms": 0,
-                "extracted_answer": f"执行出错: {str(e)}",
-                "error": str(e),
-                "messages": []
+                "messages": [("error", f"执行出错: {str(e)}")],
+                "execution_time_ms": 0
             }
         finally:
             try:
@@ -825,10 +835,12 @@ class EvoAgent(AgentSystem):
                 "name": agent.name,
                 "execution_time_ms": 60000,  # 超时时间
                 "extracted_answer": "执行超时，无法获取回答",
-                "llm_usage": {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0
+                "usage_metadata": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "total_tokens": 0,
+                    "input_token_details": {},
+                    "output_token_details": {}
                 }
             }
         except Exception as e:
@@ -839,10 +851,12 @@ class EvoAgent(AgentSystem):
                 "name": agent.name,
                 "execution_time_ms": 0,
                 "extracted_answer": f"执行出错: {str(e)}",
-                "llm_usage": {
-                    "prompt_tokens": 0,
-                    "completion_tokens": 0,
-                    "total_tokens": 0
+                "usage_metadata": {
+                    "input_tokens": 0,
+                    "output_tokens": 0,
+                    "total_tokens": 0,
+                    "input_token_details": {},
+                    "output_token_details": {}
                 }
             }
 
