@@ -20,6 +20,7 @@ AVAILABLE_AGENT_SYSTEMS = {
     "agentverse": "A multi-agent system that uses a recruiter to create specialized agents for different aspects of a problem",
     "chateval": "A multi-agent system that uses debate to generate a better answer",
     "evoagent": "An evolutionary agent system that improves over generations using LLM-based operations",
+    "metagpt": "A multi-agent system that uses SOPs to generate codes",
 }
 
 __all__ = [
@@ -32,5 +33,6 @@ __all__ = [
     "AgentVerse",
     "ChatEval",
     "EvoAgent",
+    "MetaGPT",
     "AVAILABLE_AGENT_SYSTEMS",
 ]
