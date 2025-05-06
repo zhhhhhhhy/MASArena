@@ -3,6 +3,7 @@ import argparse
 import datetime
 import sys
 from pathlib import Path
+import os
 
 from benchmark.benchmark_runner import BenchmarkRunner
 
@@ -48,8 +49,41 @@ def main():
         "--metrics-dir", type=str, default="metrics", help="Directory to store metrics (default: metrics)"
     )
 
+    parser.add_argument(
+        "--use-mcp-tools", action="store_true", default=False,
+        help="Enable integration of MCP tools (default: False)"
+    )
+
+    parser.add_argument(
+        "--mcp-config-file", type=str, default=None,
+        help="Path to MCP servers configuration JSON file"
+    )
+
     # Parse arguments
     args = parser.parse_args()
+
+    # Build agent configuration for MCP tool integration
+    agent_config = {}
+    if args.use_mcp_tools:
+        agent_config["use_mcp_tools"] = True
+        import json
+        if not args.mcp_config_file:
+            parser.error("--use-mcp-tools requires --mcp-config-file")
+        try:
+            with open(args.mcp_config_file, "r") as f:
+                agent_config["mcp_servers"] = json.load(f)
+                
+            # Store the config file path for reference
+            agent_config["mcp_config_file"] = args.mcp_config_file
+            
+            # Enable mock mode if "mock" appears in the config file name
+            if "mock" in args.mcp_config_file.lower():
+                agent_config["mock_mcp"] = True
+                print(f"Using mock MCP tools (config: {args.mcp_config_file})")
+                
+        except Exception as e:
+            print(f"Failed to load MCP config file: {e}", file=sys.stderr)
+            return 1
 
     # Create directories if needed
     Path(args.results_dir).mkdir(exist_ok=True)
@@ -75,6 +109,7 @@ def main():
             data_path=args.data,
             limit=args.limit,
             agent_system=args.agent_system,
+            agent_config=agent_config if agent_config else None,
             verbose=args.verbose,
         )
         return 0

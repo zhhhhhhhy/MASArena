@@ -44,6 +44,15 @@ class AgentSystem(abc.ABC):
         self.responses_dir.mkdir(parents=True, exist_ok=True)
         self.visualizations_dir.mkdir(parents=True, exist_ok=True)
         
+        # Initialize tool manager if MCP tools are enabled
+        self.tool_manager = None
+        if self.config.get("use_mcp_tools"):
+            # mcp_servers may be empty dict
+            mcp_servers = self.config.get("mcp_servers", {})
+            self.init_tool_manager(mcp_servers)
+            # Auto-integrate tools for multi-agent or single-agent systems
+            self._apply_tool_integration()
+        
     def _initialize_evaluator(self, evaluator_type: Type = None):
         """
         Initialize the appropriate evaluator based on configuration.
@@ -63,16 +72,18 @@ class AgentSystem(abc.ABC):
                 from benchmark.src.evaluators import MathEvaluator
                 evaluator_type = MathEvaluator
             except ImportError:
-                raise ImportError("Could not import evaluator. Please provide evaluator_type.")
+                # Could not import evaluator; skip evaluator initialization
+                return
         
-        # Create evaluator instance
-        self.evaluator = evaluator_type(
-            name=evaluator_name,
-            config={
-                "data_path": self.config.get("data_path", f"benchmark/data/{evaluator_name}_test.jsonl"),
-                "log_path": self.config.get("log_path", f"benchmark/data/results/{evaluator_name.upper()}")
-            }
-        )
+        # Create evaluator instance if evaluator_type is available
+        if evaluator_type:
+            self.evaluator = evaluator_type(
+                name=evaluator_name,
+                config={
+                    "data_path": self.config.get("data_path", f"benchmark/data/{evaluator_name}_test.jsonl"),
+                    "log_path": self.config.get("log_path", f"benchmark/data/results/{evaluator_name.upper()}")
+                }
+            )
 
     def _initialize_metrics_collector(self):
         """Initialize the metrics collector"""
@@ -742,6 +753,71 @@ class AgentSystem(abc.ABC):
             output_file=output_file
         )
 
+    def init_tool_manager(self, mcp_servers):
+        """Initialize the tool manager with MCP server configurations"""
+        try:
+            from benchmark.src.tools.tool_manager import ToolManager
+            
+            # Check if we should use mock mode
+            mock_mode = self.config.get("mock_mcp", False)
+            # Extract tool assignment rules if present
+            tool_assignment = None
+            if isinstance(mcp_servers, dict) and "tool_assignment" in mcp_servers:
+                tool_assignment = mcp_servers.get("tool_assignment")
+                # Remove assignment rules from server configs to avoid passing them to MCP client
+                mcp_servers = {k: v for k, v in mcp_servers.items() if k != "tool_assignment"}
+            # Initialize tool manager with servers, mock flag, and assignment rules
+            self.tool_manager = ToolManager(
+                mcp_servers,
+                mock_mode=mock_mode,
+                tool_assignment_rules=tool_assignment
+            )
+            
+            if mock_mode:
+                print(f"[{self.name}] Initialized ToolManager in mock mode")
+        except ImportError:
+            print(f"Warning: Could not import ToolManager. MCP tools will not be available.")
+            self.tool_manager = None
+
+    def _apply_tool_integration(self):
+        """
+        Auto-distribute MCP tools to sub-agents or wrap run_agent for tool usage.
+        """
+        if not self.tool_manager:
+            return
+        try:
+            from benchmark.src.tools.tool_selector import ToolSelector
+        except ImportError:
+            return
+        selector = ToolSelector(self.tool_manager.get_tools())
+        # For multi-agent systems with _create_agents
+        if hasattr(self, "_create_agents"):
+            AgentCls = self.__class__
+            orig_create = self._create_agents
+            def wrapped_create_agents(self, problem: str, feedback: str = None):
+                result = orig_create(problem, feedback)
+                workers = result.get("workers", []) or []
+                # Partition tools evenly among workers
+                partitions = selector.select_tools(
+                    problem,
+                    num_agents=len(workers),
+                    overlap=False
+                )
+                for idx, worker in enumerate(workers):
+                    setattr(worker, 'tools', partitions[idx])
+                return result
+            # Bind to instance
+            setattr(self, '_create_agents', wrapped_create_agents.__get__(self, AgentCls))
+        else:
+            # Fallback: wrap run_agent to select tools per task
+            orig_run = self.run_agent
+            def run_with_tools(self, problem: Dict[str, Any], **kwargs):
+                prompt = problem.get('problem', '')
+                selected = selector.select_for_task(prompt)
+                setattr(self, 'tools', selected)
+                return orig_run(problem, **kwargs)
+            setattr(self, 'run_agent', run_with_tools.__get__(self, self.__class__))
+
 
 class AgentSystemRegistry:
     """Registry for agent systems available in the benchmark"""
@@ -832,4 +908,20 @@ def create_agent_system(name: str, config: Dict[str, Any] = None) -> Optional[Ag
     Returns:
         An instance of the requested agent system
     """
-    return AgentSystemRegistry.get(name, config)
+    inst = AgentSystemRegistry.get(name, config)
+    
+    # If the config specifies using MCP tools, wrap the agent system
+    if inst and config and config.get("use_mcp_tools"):
+        try:
+            from ..tools.tool_integration import ToolIntegrationWrapper
+            mcp_servers = config.get("mcp_servers", {})
+            mock_mode = config.get("mock_mcp", False)
+            return ToolIntegrationWrapper(inst, mcp_servers, mock_mode)
+        except ImportError as e:
+            print(f"Warning: Could not import ToolIntegrationWrapper: {e}")
+            print(f"Continuing without tool integration.")
+            # Remove tool related configs to avoid unexpected behavior
+            if hasattr(inst.config, "use_mcp_tools"):
+                del inst.config["use_mcp_tools"]
+    
+    return inst

@@ -165,6 +165,14 @@ class BenchmarkRunner:
             
         # Add evaluator name to configuration
         agent_config["evaluator"] = benchmark_name
+        
+        # Set mock_mcp flag if using mcp_config_file with "mock" in the name
+        if agent_config.get("use_mcp_tools") and agent_config.get("mcp_config_file"):
+            config_file = agent_config.get("mcp_config_file", "")
+            if "mock" in config_file.lower():
+                agent_config["mock_mcp"] = True
+                if verbose:
+                    print(f"Using mock MCP tools (config: {config_file})")
 
         # Create agent system
         agent = create_agent_system(agent_system, agent_config)
