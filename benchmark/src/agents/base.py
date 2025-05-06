@@ -813,7 +813,7 @@ class AgentSystem(abc.ABC):
             orig_run = self.run_agent
             def run_with_tools(self, problem: Dict[str, Any], **kwargs):
                 prompt = problem.get('problem', '')
-                selected = selector.select_for_task(prompt)
+                selected = selector.select_tools(prompt)
                 setattr(self, 'tools', selected)
                 return orig_run(problem, **kwargs)
             setattr(self, 'run_agent', run_with_tools.__get__(self, self.__class__))
