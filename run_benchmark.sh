@@ -1,11 +1,12 @@
 #!/bin/bash
 # Benchmark Runner Script
-# Usage: ./run_benchmark.sh [benchmark_name] [agent_system] [limit]
+# Usage: ./run_benchmark.sh [benchmark_name] [agent_system] [limit] [mcp_config_file]
 
 # Default values
 BENCHMARK=${1:-math}
-AGENT_SYSTEM=${2:-swarm} # single_agent, supervisor_mas, swarm
-LIMIT=${3:-10}
+AGENT_SYSTEM=${2:-agentverse} # single_agent, supervisor_mas, swarm, agentverse
+LIMIT=${3:-2}
+MCP_CONFIG=${4:-}
 
 # Create necessary directories
 mkdir -p results metrics
@@ -17,12 +18,32 @@ echo "====================================================="
 echo "Benchmark: $BENCHMARK"
 echo "Agent System: $AGENT_SYSTEM"
 echo "Limit: $LIMIT"
+if [ -n "$MCP_CONFIG" ]; then
+  echo "MCP Config File: $MCP_CONFIG"
+  echo "Using MCP tools: yes"
+else
+  echo "Using MCP tools: no"
+fi
 echo "====================================================="
 
+# Activate virtual environment if exists
+if [ -d ".venv" ]; then
+  source .venv/bin/activate
+fi
+
+# Build MCP flags if config provided
+if [ -n "$MCP_CONFIG" ]; then
+  MCP_FLAGS="--use-mcp-tools --mcp-config-file $MCP_CONFIG"
+else
+  MCP_FLAGS=""
+fi
+
 # Run the benchmark
-# venv
-source .venv/bin/activate
-python main.py --benchmark $BENCHMARK --agent-system $AGENT_SYSTEM --limit $LIMIT
+python main.py \
+  --benchmark "$BENCHMARK" \
+  --agent-system "$AGENT_SYSTEM" \
+  --limit "$LIMIT" \
+  $MCP_FLAGS
 
 # Exit with the same status as the Python script
 exit $? 

@@ -1,0 +1,17 @@
+{
+  "math": {
+    "command": "python",
+    "args": ["benchmark/mcp_servers/mock_math_server.py"],
+    "transport": "stdio"
+  },
+  "search": {
+    "command": "python", 
+    "args": ["benchmark/mcp_servers/mock_search_server.py"],
+    "transport": "stdio"
+  },
+  "tool_assignment": {
+    "MathAgent": ["mock_add", "mock_subtract", "mock_math_solve"],
+    "SearchAgent": ["mock_search"],
+    "ReasoningAgent": ["mock_reason"]
+  }
+}
