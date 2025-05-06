@@ -37,6 +37,7 @@ python main.py --benchmark math --agent-system supervisor_mas --limit 10
 
 # Run with swarm-based agent system
 python main.py --benchmark math --agent-system swarm --limit 5
+
 ```
 
 You can also use the runner scripts for more options:
@@ -59,21 +60,6 @@ The framework provides interactive visualizations for agent interactions and ben
 python benchmark/src/visualization/visualize_benchmark.py visualize --summary results/math_swarm_20250423_170316_summary.json
 ```
 
-## Available Agent Systems
-
-1. **Single Agent**: A single LLM solving problems directly
-2. **Supervisor MAS**: A supervisor coordinating specialized worker agents
-3. **Swarm**: Multiple independent agents solving the same problem with aggregation
-
-## Available Benchmarks
-
-- **math**: Mathematical problems of varying difficulty
-- **drop**: Reading comprehension with numerical reasoning
-- **gsm8k**: Grade school math word problems
-- **hotpotqa**: Multi-hop question answering
-- **humaneval**: Code generation problems
-- **mbpp**: Python programming problems
-
 ## Project Structure
 
 ```
@@ -85,8 +71,12 @@ project_multi_agents_benchmark/
 │   │   ├── evaluators/     # Task-specific evaluation modules
 │   │   ├── metrics/        # Performance metrics collection
 │   │   └── instrumentation/ # Instrumentation for system metrics
+│   │   └── tools/          # Tool integration system
+│   │   └── visualization/  # Visualization for benchmark results
 │   └── benchmark_runner.py # Simplified interface for running benchmarks
-│   └── README.md           # Documentation for the benchmark
+├── docs/                   # Documentation for the project
+│   ├── architecture/       # Architecture documentation
+│   └── tools/              # Tool integration documentation
 ├── main.py                 # Main entry point for running benchmarks
 ├── run_benchmark.sh        # Bash runner script
 ├── analyze_results.py      # Results analysis tool
@@ -95,51 +85,10 @@ project_multi_agents_benchmark/
 ```
 
 
-## Logic of the benchmark
-Agent System → Instrumentation → Metrics
-(What to test) → (How to monitor) → (What to measure)
+## System Overview
 
-1. Agent System generates realistic test scenarios and agent tasks
-2. Instrumentation captures system behavior and events
-3. Metrics processes and structures the captured data
+Check out the [System Overview](docs/architecture/system_overview.md) for a detailed overview of the project.
 
-
-### Agent System
-The Agent System module serves as the foundation for generating realistic and reproducible testing scenarios for multi-agent systems. 
-
-### Instrumentation
-The Instrumentation module provides non-intrusive mechanisms to monitor and track multi-agent system behavior without significantly altering performance characteristics. It serves as the sensing layer of the benchmark framework, capturing relevant events and measurements across different components.
-
-* **Graph Instrumentation**: Specialized instrumentation for **graph-based agent workflows** like LangGraph, tracking message passing, node execution, and graph traversal patterns. Captures the structural dynamics of agent interactions.
-* **LLM Instrumentation**: Monitors LLM-related operations, including prompt construction, token usage, and response processing. Provides hooks for timing API calls and capturing cost metrics while preserving the context of agent operations.
-* **Tool Instrumentation**: Tracks agent tool usage, including invocation patterns, parameter distributions, and execution outcomes. Enables analysis of tool effectiveness and agent decision-making.
-* **Memory Instrumentation**: Monitors memory operations across agent systems, tracking retrieval patterns, storage efficiency, and memory growth over time. Essential for understanding the long-term performance of agents with memory components.
-The Instrumentation module uses strategic interceptors and wrappers that maintain the semantic equivalence of instrumented and non-instrumented code, ensuring that measurements accurately reflect natural system behavior while providing comprehensive visibility into operations.
-
-### Metrics
-The Metrics module defines the data collection, processing, and storage infrastructure for capturing multi-agent system performance data. It establishes a uniform metrics model that enables cross-system comparisons while accommodating domain-specific measurements.
-
-* **System Metrics**: Collects system-level performance indicators including throughput, latency distributions, resource utilization, and overall system stability. Provides a macroscopic view of multi-agent performance.
-* **Agent Metrics**: Focuses on individual agent performance metrics such as token usage, tool utilization patterns, decision-making efficiency, and memory operations. Enables fine-grained analysis of agent behavior and optimization opportunities.
-* **Inter-Agent Metrics**: Captures communication patterns, coordination overhead, and interaction dynamics between agents. Essential for understanding emergent behaviors in multi-agent systems and identifying collaboration bottlenecks.
-* **Collectors**: Implements the core collection infrastructure with efficient, thread-safe mechanisms for gathering, buffering, and processing metrics. Includes configurable sampling strategies to balance measurement accuracy and overhead.
-The Metrics module employs queue-based processing with configurable batch sizes and sampling rates to efficiently handle high volumes of metrics data while minimizing impact on the measured system. 
-
-## Command Line Options
-
-The `main.py` script supports the following options:
-
-```
---benchmark BENCHMARK     Benchmark to run (default: math)
-                          Choices: math, drop, gsm8k, hotpotqa, humaneval, mbpp
---agent-system SYSTEM     Agent system to use (default: single_agent)
-                          Choices: single_agent, supervisor_mas, swarm
---limit LIMIT             Maximum number of problems to process (default: 10)
---data PATH               Path to benchmark data (optional)
---results-dir DIR         Directory to store results (default: results)
---metrics-dir DIR         Directory to store metrics (default: metrics)
---verbose                 Print progress information (default: True)
-```
 
 ## Development
 
@@ -150,30 +99,6 @@ For code formatting and linting:
 ```bash
 ruff check
 ruff format
-```
-
-### Agent System Format
-
-The agent system format is a JSON object to be evaluated by the UnifiedEvaluator.
-```
-{
-  "agent_system_name": {
-    "system_type": "single_agent"|"mas"|"swarm",
-    "accuracy": float,  // Performance accuracy (0.0-1.0)
-    "throughput": float, // number of tasks per second
-    "latency": float, // ttft on average for all tasks
-    "model": [
-      {
-        "model_name": string,  // Name of the LLM used
-        "latency": int,        // ttft
-        "input_token_count": int,  // Number of input tokens
-        "output_token_count": int, // Number of output tokens
-      },
-      // Additional models for multi-agent systems
-    ]
-  },
-  // Additional agent systems
-}
 ```
 
 ### Extending the Framework
@@ -190,3 +115,27 @@ The agent system format is a JSON object to be evaluated by the UnifiedEvaluator
 1. Add your dataset to `results/`
 2. Create a corresponding evaluator in `benchmark/src/evaluators/`
 3. Update the available choices in `main.py`
+
+## Tool Integration
+
+Use the `--use-mcp-tools` and `--mcp-config-file` flags when running benchmarks:
+```bash
+./run_benchmark.sh math mock_triple_agent 1 mock_mcp_config.json
+
+>>> Output:
+[ToolIntegration] Worker 'MathAgent' received 3 tools: mock_add, mock_subtract, mock_math_solve
+[ToolIntegration] Worker 'SearchAgent' received 1 tools: mock_search
+[ToolIntegration] Worker 'ReasoningAgent' received 1 tools: mock_reason
+```
+
+### Tool Selection and Distribution
+- You can override the default tool selection and distribution by implementing your own `ToolSelector` and `ToolIntegrationWrapper`.
+- Check out the [Tool Integration](docs/tools/tool_integration.md) for a detailed overview of the tool integration system.
+
+
+### TODOs for Real MCP Integration
+
+- [ ] Provide a real `mcp_config.json` pointing to your MCP servers (URLs + API keys).  
+- [ ] Remove or replace the in-process mock tools in `ToolManager._create_mock_tools()`.  
+- [ ] Validate and test against live MCP endpoints for each tool.  
+
