@@ -125,6 +125,7 @@ class ToolIntegrationWrapper(AgentSystem):
                 else:
                     # Fallback to unified selection method
                     parts = wrapper_self.select_tools_for_problem(problem_input, num_agents=len(workers))
+                    
                 # Assign tools to each worker
                 for i, worker in enumerate(workers):
                     if i < len(parts):
@@ -133,7 +134,9 @@ class ToolIntegrationWrapper(AgentSystem):
                         worker_name = getattr(worker, "name", f"worker_{i}")
                         print(f"[ToolIntegration] Worker '{worker_name}' received {len(tool_objs)} tools: {', '.join([t.get('name') for t in worker_tools])}")
                         setattr(worker, "tools", worker_tools)
+                        print(f"[ToolIntegration] Worker '{worker_name}' has attributes llm: {hasattr(worker, 'llm')}")
                         if hasattr(worker, "llm") and hasattr(worker.llm, "bind_tools"):
+                            print(f"[ToolIntegration] Binding tools <{tool_objs}> to worker '{worker_name}'")
                             worker.llm = worker.llm.bind_tools(tool_objs)
             
             return result

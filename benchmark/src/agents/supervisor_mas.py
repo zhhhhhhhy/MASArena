@@ -6,7 +6,7 @@ agent coordinates the work of specialized agents.
 """
 
 import os
-from typing import Literal, Dict, TypedDict, Any
+from typing import Literal, Dict, TypedDict, Any, Optional, List
 import time
 import uuid
 
@@ -14,7 +14,7 @@ from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, START, END, MessagesState
 from langgraph.types import Command
 from langgraph.prebuilt import create_react_agent
-from langsmith import traceable, RunTree
+from langsmith import traceable
 from langgraph.checkpoint.memory import InMemorySaver
 from dotenv import load_dotenv
 import dotenv
@@ -34,9 +34,9 @@ class Router(TypedDict):
 
 
 @traceable
-def create_supervisor():
+def create_supervisor(model_name: str):
     model = ChatOpenAI(
-        model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+        model=model_name,
     )
     members = ["researcher", "coder"]
 
@@ -57,7 +57,7 @@ def create_supervisor():
 
         response = model.with_structured_output(Router).invoke(messages)
 
-        goto = response["next"]
+        goto = response.get("next", "FINISH")
 
         if goto == "FINISH":
             goto = END
@@ -67,65 +67,39 @@ def create_supervisor():
     return supervisor_node
 
 
-@traceable
-def create_research_node():
-    model = ChatOpenAI(
-        model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-    )
-    research_agent = create_react_agent(model, tools=[])
+class AgentNode:
+    def __init__(self, name: str, model_name: str):
+        self.name = name
+        self.model_name = model_name
+        self.llm = ChatOpenAI(model=os.getenv("MODEL_NAME", self.model_name))
+        self.agent = None
 
-    def research_node(state: State) -> Command[Literal["supervisor"]]:
-        result = research_agent.invoke(state)
+    def _create_and_get_agent(self):
+        if not hasattr(self, "tools") or not self.tools:
+            effective_tool_objects = []
+        else:
+            effective_tool_objects = [t.get("tool_object") for t in self.tools if t.get("tool_object")]
 
-        ai_message = result["messages"][-1]
-        ai_message.name = "researcher"
-        return Command(
-            update={
-                "messages": [ai_message],
-            },
-            goto="supervisor",
-        )
+        self.agent = create_react_agent(self.llm, tools=effective_tool_objects)
+        return self.agent
 
-    return research_node
+    @traceable
+    def __call__(self, state: State) -> Command[Literal["supervisor"]]:
+        if self.agent is None:
+            current_agent = self._create_and_get_agent()
+        else:
+            current_agent = self.agent
+        
+        agent_input = {"messages": state["messages"]}
 
-
-@traceable
-def create_code_node():
-    model = ChatOpenAI(
-        model=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-    )
-
-    coder_agent = create_react_agent(
-        model,
-        tools=[],
-    )
-
-    def code_node(state: State) -> Command[Literal["supervisor"]]:
-        result = coder_agent.invoke(state)
+        result = current_agent.invoke(agent_input)
 
         ai_message = result["messages"][-1]
-        ai_message.name = "coder"
+        ai_message.name = self.name
         return Command(
-            update={
-                "messages": [ai_message],
-            },
+            update={"messages": [ai_message]},
             goto="supervisor",
         )
-
-    return code_node
-
-
-def create_mas_graph():
-    """Create the multi-agent system graph"""
-    builder = StateGraph(State)
-    checkpointer = InMemorySaver()
-
-    builder.add_edge(START, "supervisor")
-    builder.add_node("supervisor", create_supervisor())
-    builder.add_node("researcher", create_research_node())
-    builder.add_node("coder", create_code_node())
-
-    return builder.compile(checkpointer=checkpointer)
 
 
 class SupervisorMAS(AgentSystem):
@@ -138,36 +112,81 @@ class SupervisorMAS(AgentSystem):
 
     def __init__(self, name: str = "supervisor_mas", config: Dict[str, Any] = None):
         """Initialize the Supervisor MAS"""
-        super().__init__(name, config)
+        super().__init__(name, config if config else {})
+        
+        self.graph = None
+        self.workers: Optional[Dict[str, AgentNode]] = None
         
         # Initialize evaluator and metrics collector through base class methods
         self._initialize_evaluator()
         self._initialize_metrics_collector()
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """
-        Run the agent system on a problem without evaluation.
+    def _create_agents(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None) -> Dict[str, List[AgentNode]]:
+        default_model = os.getenv("MODEL_NAME", "gpt-4o-mini")
+        researcher_model = self.config.get("researcher_model_name", self.config.get("model_name", default_model))
+        coder_model = self.config.get("coder_model_name", self.config.get("model_name", default_model))
+
+        researcher = AgentNode(name="researcher", model_name=researcher_model)
+        coder = AgentNode(name="coder", model_name=coder_model)
         
-        This method focuses on running the agent system and collecting basic metrics.
-        
-        Args:
-            problem: Dictionary containing the problem data
-            
-        Returns:
-            Dictionary with run results (messages)
-        """
-        # Create graph
-        graph = create_mas_graph()
-        
-        # Create initial state
-        initial_state = {
-            "messages": [("user", problem["problem"])],
+        self.workers = {"researcher": researcher, "coder": coder}
+        return {
+            "workers": [researcher, coder]
         }
 
-        # Run the graph
-        run_result = graph.invoke(initial_state, config={"configurable": {"thread_id": "1"}})
+    def _init_graph_if_needed(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None):
+        if self.graph is not None:
+            return
+
+        if self.workers is None:
+            self._create_agents(problem_input=problem_input, feedback=feedback)
+
+        if not self.workers:
+            raise RuntimeError("Workers not initialized in SupervisorMAS.")
+
+        research_node_obj = self.workers["researcher"]
+        coder_node_obj = self.workers["coder"]
+
+        builder = StateGraph(State)
+        checkpointer = InMemorySaver()
+
+        supervisor_model = self.config.get("supervisor_model_name", self.config.get("model_name", os.getenv("MODEL_NAME", "gpt-4o-mini")))
+        builder.add_node("supervisor", create_supervisor(model_name=supervisor_model))
         
-        # Return results directly
+        builder.add_node("researcher", research_node_obj)
+        builder.add_node("coder", coder_node_obj)
+
+        builder.add_edge(START, "supervisor")
+        
+        builder.add_conditional_edges(
+            "supervisor",
+            lambda x: x["next"],
+            {"researcher": "researcher", "coder": "coder", END: END},
+        )
+        
+        builder.add_edge("researcher", "supervisor")
+        builder.add_edge("coder", "supervisor")
+
+        self.graph = builder.compile(checkpointer=checkpointer)
+
+
+    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Run the agent system on a problem.
+        """
+        problem_content = problem.get("problem", "")
+        self._init_graph_if_needed(problem_input=problem_content)
+        
+        initial_state = {
+            "messages": [("user", problem_content)],
+        }
+
+        thread_id = str(uuid.uuid4())
+        if self.graph is None:
+             raise RuntimeError("Graph not compiled before run_agent call.")
+
+        run_result = self.graph.invoke(initial_state, config={"configurable": {"thread_id": thread_id}})
+        
         return {
             "messages": run_result.get("messages", []),
         }
