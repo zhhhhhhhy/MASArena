@@ -3,11 +3,24 @@
 import time
 import json
 import os
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, TypedDict
 from dataclasses import dataclass
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
+
+# 定义结构化输出类，使用TypedDict代替Pydantic
+class AgentResponse(TypedDict):
+    """智能体响应的结构化输出"""
+    analysis: str  # 问题分析
+    solution: str  # 解决方案
+    confidence: int  # 解答信心程度，范围1-5
+
+class EvaluatorResponse(TypedDict):
+    """评估器的结构化输出"""
+    final_answer: str  # 最终答案
+    reasoning: str  # 推理过程
+    answer_boxed: str  # 用\boxed{}格式输出的答案
 
 @dataclass
 class Agent:
@@ -20,7 +33,11 @@ class Agent:
     
     def __post_init__(self):
         self.chat_history = []
-        self.llm = ChatOpenAI(model=self.model_name)
+        self.llm = ChatOpenAI(
+            model=self.model_name,
+            base_url=os.getenv("BASE_URL"),
+            api_key=os.getenv("OPENAI_API_KEY")
+        )
 
     def generate_response(self, context: str) -> Any:
         """生成代理响应"""
@@ -32,20 +49,61 @@ class Agent:
             HumanMessage(content=context)
         ]
         
-        response = self.llm.invoke(messages)
-        # 设置AI消息的名字
-        response.name = self.name
-        
-        self.chat_history.append({
-            "role": "human",
-            "human": context
-        })
-        self.chat_history.append({
-            "role": "ai",
-            "ai": response.content
-        })
-        # 返回完整的响应对象，而不仅仅是内容
-        return response
+        # 使用结构化输出
+        try:
+            llm_with_schema = self.llm.with_structured_output(schema=AgentResponse, include_raw=True)
+            response = llm_with_schema.invoke(messages)
+            
+            # 获取结构化数据和原始响应
+            structured_data = response["parsed"]
+            raw_response = response["raw"]
+            
+            # 确保structured_data是字典而不是对象
+            if hasattr(structured_data, "dict"):
+                structured_data = structured_data.dict()
+            elif hasattr(structured_data, "model_dump"):
+                structured_data = structured_data.model_dump()
+            
+            # 设置AI消息的名字
+            raw_response.name = self.name
+            
+            # 更新聊天历史
+            self.chat_history.append({
+                "role": "human",
+                "human": context
+            })
+            self.chat_history.append({
+                "role": "ai",
+                "ai": raw_response.content
+            })
+            
+            # 返回原始响应对象，保留usage_metadata
+            return {
+                "message": raw_response,
+                "structured_solution": structured_data,
+                "solution": raw_response.content
+            }
+            
+        except Exception as e:
+            print(f"结构化输出失败: {str(e)}，回退到标准输出")
+            
+            # 回退到标准输出
+            response = self.llm.invoke(messages)
+            response.name = self.name
+            
+            self.chat_history.append({
+                "role": "human",
+                "human": context
+            })
+            self.chat_history.append({
+                "role": "ai",
+                "ai": response.content
+            })
+            
+            return {
+                "message": response,
+                "solution": response.content
+            }
 
 class ResultExtractor:
     """从对话历史中提取最终结果"""
@@ -54,7 +112,7 @@ class ResultExtractor:
         self.llm = ChatOpenAI(model=self.model_name)
         self.name = "result_extractor"
         
-    def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> str:
+    def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> Dict[str, Any]:
         """
         从所有代理的对话历史中提取最终答案
         """
@@ -69,7 +127,8 @@ class ResultExtractor:
         Please analyze the above discussions and provide a final answer. Requirements:
         1. Synthesize all agents' viewpoints
         2. Choose the most reasonable solution
-        3. Output the answer in standard mathematical format: \\boxed{{answer}}
+        3. Provide detailed reasoning for your answer
+        4. Output the answer in standard mathematical format: \\boxed{{answer}}
         """
         
         messages = [
@@ -77,8 +136,46 @@ class ResultExtractor:
             HumanMessage(content=prompt)
         ]
         
-        response = self.llm.invoke(messages)
-        return response.content
+        try:
+            # 使用结构化输出
+            llm_with_schema = self.llm.with_structured_output(schema=EvaluatorResponse, include_raw=True)
+            response = llm_with_schema.invoke(messages)
+            
+            # 获取结构化数据和原始响应
+            structured_data = response["parsed"]
+            raw_response = response["raw"]
+            
+            # 确保structured_data是字典而不是对象
+            if hasattr(structured_data, "dict"):
+                structured_data = structured_data.dict()
+            elif hasattr(structured_data, "model_dump"):
+                structured_data = structured_data.model_dump()
+            
+            # 设置名称
+            raw_response.name = "evaluator"
+            
+            # 返回结构化数据和原始响应
+            return {
+                "final_answer": structured_data.get("final_answer", ""),
+                "extracted_answer": structured_data.get("answer_boxed", ""),
+                "message": raw_response
+            }
+            
+        except Exception as e:
+            print(f"结构化输出失败: {str(e)}，回退到标准输出")
+            
+            # 回退到标准输出
+            response = self.llm.invoke(messages)
+            response.name = "evaluator"
+            
+            # 尝试提取boxed答案
+            extracted_answer = self._extract_boxed_answer(response.content)
+            
+            return {
+                "final_answer": response.content,
+                "extracted_answer": extracted_answer,
+                "message": response
+            }
 
     def _format_histories(self, all_histories: List[List[Dict[str, str]]]) -> str:
         """格式化所有对话历史"""
@@ -92,6 +189,12 @@ class ResultExtractor:
                 else:
                     formatted.append(f"Answer: {msg['ai']}")
         return "\n".join(formatted)
+        
+    def _extract_boxed_answer(self, text: str) -> str:
+        """从文本中提取 \boxed{} 中的答案"""
+        import re
+        match = re.search(r'\\boxed{(.*?)}', text)
+        return match.group(1) if match else text
 
 class ChatEval(AgentSystem):
     """基于迭代辩论的多智能体评估系统"""
@@ -175,7 +278,8 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
         start_time = time.time()
         
         # 存储所有LLM响应对象
-        all_responses = []
+        all_messages = []
+        agent_histories = []
         
         # 迭代讨论过程
         agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
@@ -183,31 +287,41 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
             for n, agent in enumerate(self.agents):
                 # 生成当前代理的响应
                 context = self._build_context(problem_text, n, t)
-                response = agent.generate_response(context)
+                response_data = agent.generate_response(context)
                 
                 # 保存响应对象
-                all_responses.append(response)
+                if "message" in response_data:
+                    all_messages.append(response_data["message"])
                 
                 # 将响应添加到后续代理的上下文
+                solution_text = response_data.get("solution", "")
                 for m in range(n + 1, len(self.agents)):
                     self.agents[m].chat_history.append({
                         "role": "human",
-                        "human": f"{agent_names[n]}'s response: {response.content}"
+                        "human": f"{agent_names[n]}'s response: {solution_text}"
                     })
         
+        # 提取所有代理的聊天历史
+        agent_histories = [agent.chat_history for agent in self.agents]
+        
         # 提取最终答案
-        all_histories = [agent.chat_history for agent in self.agents]
-        final_answer = self.extractor.extract(all_histories, problem_text)
+        extractor_result = self.extractor.extract(agent_histories, problem_text)
+        final_answer = extractor_result.get("final_answer", "")
+        extracted_answer = extractor_result.get("extracted_answer", "")
+        
+        # 添加评估器消息
+        if "message" in extractor_result:
+            all_messages.append(extractor_result["message"])
         
         end_time = time.time()
         duration_ms = (end_time - start_time) * 1000
         
         return {
             "final_answer": final_answer,
-            "extracted_answer": self._extract_boxed_answer(final_answer),
-            "agent_discussions": all_histories,
+            "extracted_answer": extracted_answer,
+            "agent_discussions": agent_histories,
             "execution_time_ms": duration_ms,
-            "messages": all_responses  # 添加messages字段，包含所有LLM响应对象
+            "messages": all_messages  # 包含所有LLM响应对象
         }
 
     def _build_context(self, problem: str, agent_index: int, round_num: int) -> str:
@@ -228,12 +342,6 @@ Please provide your insights based on previous discussions. You can:
 3. Point out potential issues with previous solutions
 4. Provide new ideas or methods
 5. Do not overly expand to other problems"""
-
-    def _extract_boxed_answer(self, text: str) -> str:
-        """从文本中提取 \boxed{} 中的答案"""
-        import re
-        match = re.search(r'\\boxed{(.*?)}', text)
-        return match.group(1) if match else text
 
 # 注册代理系统
 AgentSystemRegistry.register(
