@@ -10,8 +10,7 @@
     "transport": "stdio"
   },
   "tool_assignment": {
-    "MathAgent": ["mock_add", "mock_subtract", "mock_math_solve"],
-    "SearchAgent": ["mock_search"],
-    "ReasoningAgent": ["mock_reason"]
+    "researcher": ["mock_add", "mock_subtract", "mock_math_solve"],
+    "coder": ["mock_search", "mock_reason"]
   }
 }

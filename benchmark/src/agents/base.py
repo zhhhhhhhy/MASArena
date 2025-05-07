@@ -17,7 +17,18 @@ import glob
 
 
 class AgentSystem(abc.ABC):
-    """Base class for all agent systems in the benchmark framework"""
+    """Base class for all agent systems in the benchmark framework
+    
+    To ensure compatibility with MCP Tool Integration (via ToolIntegrationWrapper):
+    - If your agent system (or its sub-agents/workers) uses an LLM that needs
+      tools bound to it, expose the LLM instance via an attribute named `llm`.
+      For example, `self.llm = ChatOpenAI(...)` or `worker.llm = ChatOpenAI(...)`.
+    - For multi-agent systems, if you implement a `_create_agents` method,
+      it should return a dictionary like: `{"workers": [worker1, worker2, ...]}`.
+      Each `worker` object in the list should:
+        - Have a `name` attribute (e.g., `worker.name = "researcher"`).
+        - Have an `llm` attribute if it's intended to use tools bound to an LLM.
+    """
 
     def __init__(self, name: str = None, config: Dict[str, Any] = None):
         """
@@ -50,8 +61,8 @@ class AgentSystem(abc.ABC):
             # mcp_servers may be empty dict
             mcp_servers = self.config.get("mcp_servers", {})
             self.init_tool_manager(mcp_servers)
-            # Auto-integrate tools for multi-agent or single-agent systems
-            self._apply_tool_integration()
+            # ToolIntegrationWrapper, if used (see create_agent_system factory),
+            # will handle patching for tool integration.
         
     def _initialize_evaluator(self, evaluator_type: Type = None):
         """
@@ -778,45 +789,6 @@ class AgentSystem(abc.ABC):
         except ImportError:
             print(f"Warning: Could not import ToolManager. MCP tools will not be available.")
             self.tool_manager = None
-
-    def _apply_tool_integration(self):
-        """
-        Auto-distribute MCP tools to sub-agents or wrap run_agent for tool usage.
-        """
-        if not self.tool_manager:
-            return
-        try:
-            from benchmark.src.tools.tool_selector import ToolSelector
-        except ImportError:
-            return
-        selector = ToolSelector(self.tool_manager.get_tools())
-        # For multi-agent systems with _create_agents
-        if hasattr(self, "_create_agents"):
-            AgentCls = self.__class__
-            orig_create = self._create_agents
-            def wrapped_create_agents(self, problem: str, feedback: str = None):
-                result = orig_create(problem, feedback)
-                workers = result.get("workers", []) or []
-                # Partition tools evenly among workers
-                partitions = selector.select_tools(
-                    problem,
-                    num_agents=len(workers),
-                    overlap=False
-                )
-                for idx, worker in enumerate(workers):
-                    setattr(worker, 'tools', partitions[idx])
-                return result
-            # Bind to instance
-            setattr(self, '_create_agents', wrapped_create_agents.__get__(self, AgentCls))
-        else:
-            # Fallback: wrap run_agent to select tools per task
-            orig_run = self.run_agent
-            def run_with_tools(self, problem: Dict[str, Any], **kwargs):
-                prompt = problem.get('problem', '')
-                selected = selector.select_tools(prompt)
-                setattr(self, 'tools', selected)
-                return orig_run(problem, **kwargs)
-            setattr(self, 'run_agent', run_with_tools.__get__(self, self.__class__))
 
 
 class AgentSystemRegistry:

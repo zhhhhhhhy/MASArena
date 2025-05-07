@@ -121,7 +121,13 @@ class SupervisorMAS(AgentSystem):
         self._initialize_evaluator()
         self._initialize_metrics_collector()
 
-    def _create_agents(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None) -> Dict[str, List[AgentNode]]:
+    def _create_agents(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None) -> Dict[str, AgentNode]:
+        # This method will be called by ToolIntegrationWrapper if this system is wrapped.
+        # It now returns a dictionary mapping names to AgentNode instances.
+        # ToolIntegrationWrapper will find the AgentNode instances from the dict values,
+        # modify them (set .tools, rebind .llm), and the patched _create_agents
+        # will return this same dictionary structure with modified nodes.
+        
         default_model = os.getenv("MODEL_NAME", "gpt-4o-mini")
         researcher_model = self.config.get("researcher_model_name", self.config.get("model_name", default_model))
         coder_model = self.config.get("coder_model_name", self.config.get("model_name", default_model))
@@ -129,23 +135,24 @@ class SupervisorMAS(AgentSystem):
         researcher = AgentNode(name="researcher", model_name=researcher_model)
         coder = AgentNode(name="coder", model_name=coder_model)
         
-        self.workers = {"researcher": researcher, "coder": coder}
         return {
-            "workers": [researcher, coder]
+            "researcher": researcher,
+            "coder": coder
         }
 
     def _init_graph_if_needed(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None):
         if self.graph is not None:
             return
 
-        if self.workers is None:
-            self._create_agents(problem_input=problem_input, feedback=feedback)
+        # _create_agents now returns a dict {"researcher": researcher_node, "coder": coder_node}
+        # If wrapped by ToolIntegrationWrapper, the nodes will have been modified in-place.
+        worker_nodes_map = self._create_agents(problem_input=problem_input, feedback=feedback)
 
-        if not self.workers:
-            raise RuntimeError("Workers not initialized in SupervisorMAS.")
-
-        research_node_obj = self.workers["researcher"]
-        coder_node_obj = self.workers["coder"]
+        research_node_obj = worker_nodes_map.get("researcher")
+        coder_node_obj = worker_nodes_map.get("coder")
+        
+        if not research_node_obj or not coder_node_obj:
+            raise RuntimeError("Could not find researcher or coder agent nodes from _create_agents dictionary.")
 
         builder = StateGraph(State)
         checkpointer = InMemorySaver()

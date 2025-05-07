@@ -3,7 +3,7 @@ import json
 import os
 import asyncio
 from typing import Dict, List, Any, Optional, Tuple, TypedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
@@ -55,6 +55,7 @@ class Agent:
     role: str
     system_prompt: str
     memory: Dict[str, Any] = None
+    llm: Any = field(init=False, repr=False)
     
     def __post_init__(self):
         if self.memory is None:
@@ -64,6 +65,9 @@ class Agent:
                 "tasks": [],
                 "completed_tasks": []
             }
+        self.llm = ChatOpenAI(
+            model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
+        )
     
     def add_to_memory(self, key: str, value: Any):
         """Add information to agent's memory"""
@@ -101,9 +105,11 @@ class MetaGPT(AgentSystem):
         """
         super().__init__(name, config)
         
-        # Initialize agents
-        self.agents = self._initialize_agents()
-        
+        # Initialize agents by calling _create_agents
+        create_agents_result = self._create_agents()
+        # self.agents is now set within _create_agents.
+        # The 'workers' key in create_agents_result is for ToolIntegrationWrapper.
+
         # Initialize message queue
         self.message_queue = []
         
@@ -115,23 +121,21 @@ class MetaGPT(AgentSystem):
             "max_iterations": self.config.get("max_iterations", 3)
         }
         
-        # Initialize LLM
+        # Initialize LLM for MetaGPT (e.g., for summarization or tasks not tied to a specific role's LLM)
+        # This LLM is distinct from the LLMs within each Agent.
         self.llm = ChatOpenAI(
             model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY"),
-            temperature=0.7
         )
         
         # Initialize message history
         self.message_history = []
     
-    def _initialize_agents(self) -> Dict[str, Agent]:
-        """Initialize all agents in the system"""
-        agents = {}
+    def _create_agents(self) -> Dict[str, List[Agent]]:
+        """Initialize all agents in the system and return them for TIW."""
+        agents_dict = {}
         
         # Product Manager
-        agents["product_manager"] = Agent(
+        agents_dict["product_manager"] = Agent(
             name="Product Manager",
             description="Responsible for requirement analysis, market research, writing PRD, and defining product goals and user stories.",
             goals=[
@@ -164,7 +168,7 @@ Your output should be well-structured for other roles to understand and execute.
         )
         
         # Architect
-        agents["architect"] = Agent(
+        agents_dict["architect"] = Agent(
             name="Architect",
             description="Responsible for system design, including technology selection, system architecture diagram creation, and interface definition.",
             goals=[
@@ -197,7 +201,7 @@ Your output should be well-structured for other roles to understand and execute.
         )
         
         # Project Manager
-        agents["project_manager"] = Agent(
+        agents_dict["project_manager"] = Agent(
             name="Project Manager",
             description="Responsible for project management and task breakdown, breaking complex tasks into smaller subtasks and assigning them to engineers.",
             goals=[
@@ -230,7 +234,7 @@ Your output should be well-structured for other roles to understand and execute.
         )
         
         # Engineer
-        agents["engineer"] = Agent(
+        agents_dict["engineer"] = Agent(
             name="Engineer",
             description="Responsible for code writing and implementation, developing according to architect's design and project manager's task assignments.",
             goals=[
@@ -263,7 +267,7 @@ Your output should be well-structured for other roles to understand and execute.
         )
         
         # QA Engineer
-        agents["qa_engineer"] = Agent(
+        agents_dict["qa_engineer"] = Agent(
             name="QA Engineer",
             description="Responsible for testing and quality assurance, ensuring code correctness and stability.",
             goals=[
@@ -295,7 +299,8 @@ Please ensure your output includes:
 Your output should be well-structured for other roles to understand and execute."""
         )
         
-        return agents
+        self.agents = agents_dict
+        return {"workers": list(agents_dict.values())}
     
     def _publish_message(self, from_agent: str, to_agent: str, message_type: str, content: Any):
         """Publish message to message queue"""
@@ -330,37 +335,21 @@ Your output should be well-structured for other roles to understand and execute.
             HumanMessage(content=f"Task information: {json.dumps(task, ensure_ascii=False)}")
         ]
         
-        # Run LLM directly
-        # Choose schema based on agent type
-        schema_map = {
-            "product_manager": PRD,
-            "architect": ArchitectureDesign,
-            "project_manager": TaskBreakdown,
-            "engineer": CodeImplementation,
-            "qa_engineer": TestResults
-        }
-        
         # Get corresponding schema
         schema = schema_map.get(agent_name)
         
+        # Use the agent's own LLM instance
+        agent_llm = agent.llm
+        
         # Initialize LLM, use schema if agent needs structured output
         if schema:
-            llm = ChatOpenAI(
-                model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-                base_url=os.getenv("BASE_URL"),
-                api_key=os.getenv("OPENAI_API_KEY"),
-                temperature=0.7
-            ).with_structured_output(schema=schema, include_raw=True)
+            # Bind structured output to the agent's LLM for this call
+            invokable_llm = agent_llm.with_structured_output(schema=schema, include_raw=True)
         else:
-            llm = ChatOpenAI(
-                model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
-                base_url=os.getenv("BASE_URL"),
-                api_key=os.getenv("OPENAI_API_KEY"),
-                temperature=0.7
-            )
+            invokable_llm = agent_llm
         
         # Run LLM
-        response = llm.invoke(messages)
+        response = invokable_llm.invoke(messages)
         
         if schema:
             # For structured output

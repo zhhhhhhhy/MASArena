@@ -52,17 +52,16 @@ class Agent:
     chat_history: List[Dict[str, str]] = field(default_factory=list)
     score: float = 0.0
     result: Dict[str, Any] = field(default_factory=dict)
+    llm: Any = field(init=False, repr=False)
+    
+    def __post_init__(self):
+        """Initialize LLM after dataclass init."""
+        self.llm = ChatOpenAI(model=self.model_name)
     
     async def solve(self, problem: str) -> Dict[str, Any]:
         """解决给定问题并返回结果"""
         # 创建回调处理器来收集token使用情况
         callback_handler = OpenAICallbackHandler()
-        callback_manager = AsyncCallbackManager([callback_handler])
-        
-        llm = ChatOpenAI(
-            model=self.model_name,
-            callback_manager=callback_manager
-        )
         
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -70,7 +69,7 @@ class Agent:
         ]
         
         start_time = time.time()
-        response = await llm.ainvoke(messages)
+        response = await self.llm.ainvoke(messages, callbacks=[callback_handler])
         end_time = time.time()
         
         execution_time_ms = (end_time - start_time) * 1000

@@ -52,6 +52,7 @@ class ResultExtractor:
     def __init__(self, model_name: str = None):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.llm = ChatOpenAI(model=self.model_name)
+        self.name = "result_extractor"
         
     def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> str:
         """
@@ -102,13 +103,22 @@ class ChatEval(AgentSystem):
         self.num_rounds = self.config.get("num_rounds", 2)
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         
-        # 初始化代理
-        self.agents = self._create_agents()
-        self.extractor = ResultExtractor(self.model_name)
+        # 初始化代理 and extractor via _create_agents
+        # self.agents and self.extractor will be set by _create_agents
+        agent_components = self._create_agents()
+        self.agents = [w for w in agent_components["workers"] if isinstance(w, Agent)]
+        extractors = [w for w in agent_components["workers"] if isinstance(w, ResultExtractor)]
+        if not extractors:
+            raise ValueError("ResultExtractor not found in components created by _create_agents.")
+        self.extractor = extractors[0]
 
     def _create_agents(self) -> List[Agent]:
-        """创建多个代理实例"""
-        agents = []
+        """创建多个代理实例和结果提取器"""
+        # This method will be patched by ToolIntegrationWrapper if this system is wrapped.
+        # The wrapper expects a dictionary: {"workers": [worker1, worker2, ...]}
+        # Each worker should have a .name and .llm attribute.
+        
+        debate_agents = []
         agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         for i in range(self.num_agents):
             agent = Agent(
@@ -117,8 +127,16 @@ class ChatEval(AgentSystem):
                 model_name=self.model_name,
                 system_prompt=self._get_agent_prompt(i)
             )
-            agents.append(agent)
-        return agents
+            debate_agents.append(agent)
+        
+        # Create and assign the extractor here
+        extractor = ResultExtractor(self.model_name)
+        # self.extractor = extractor # Assign to self if needed elsewhere before run_agent completes,
+                                 # but __init__ already handles setting self.extractor.
+
+        return {
+            "workers": debate_agents + [extractor]
+        }
 
     def _get_agent_prompt(self, agent_index: int) -> str:
         """为每个代理生成特定的系统提示"""

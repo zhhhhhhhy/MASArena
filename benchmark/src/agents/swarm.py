@@ -42,6 +42,7 @@ class SwarmAgent:
             or "You are an intelligent AI assistant specialized in solving problems carefully and step by step."
         )
         self.llm = ChatOpenAI(model=self.model_name)
+        self.name = agent_id
 
     def solve(self, problem: str) -> Dict[str, Any]:
         """
@@ -99,6 +100,7 @@ class Aggregator:
         """
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.llm = ChatOpenAI(model=self.model_name)
+        self.name = "aggregator"
 
     def aggregate(self, problem: str, solutions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -140,7 +142,7 @@ Make sure your final answer is clearly formatted and precise.
 
         ai_message = response
         ai_message.id = f"aggregator_{uuid.uuid4()}"
-        ai_message.name = "aggregator"
+        ai_message.name = self.name
 
 
         return {
@@ -173,10 +175,25 @@ class SwarmSystem(AgentSystem):
 
     def _create_agents(self) -> List[SwarmAgent]:
         """Create the swarm agents"""
-        return [
-            SwarmAgent(agent_id=f"agent_{i + 1}", model_name=self.model_name, system_prompt=self._get_system_prompt(i))
+        # This method will be patched by ToolIntegrationWrapper if this system is wrapped.
+        # The wrapper expects a dictionary: {"workers": [worker1, worker2, ...]}
+        # Each worker should have a .name and .llm attribute.
+
+        swarm_agents = [
+            SwarmAgent(
+                agent_id=f"agent_{i + 1}", 
+                model_name=self.model_name, 
+                system_prompt=self._get_system_prompt(i)
+            )
             for i in range(self.num_agents)
         ]
+        
+        # Also create the aggregator here if it's to be managed for tools
+        aggregator = Aggregator(model_name=self.model_name)
+        
+        return {
+            "workers": swarm_agents + [aggregator]
+        }
 
     def _get_system_prompt(self, agent_index: int) -> str:
         """Get system prompt for an agent based on its index"""
@@ -216,8 +233,23 @@ class SwarmSystem(AgentSystem):
         problem_text = problem["problem"]
         problem_id = problem.get("id", f"problem_{hash(problem_text)}")
         
-        # Create swarm agents
-        agents = self._create_agents()
+        # Create swarm agents and aggregator
+        # _create_agents now returns a dict, extract workers
+        agent_components_dict = self._create_agents()
+        all_workers = agent_components_dict.get("workers", [])
+        
+        agents = [w for w in all_workers if isinstance(w, SwarmAgent)]
+        # Find the aggregator instance; assumes only one.
+        aggregators = [w for w in all_workers if isinstance(w, Aggregator)]
+        if not aggregators:
+            # Fallback if aggregator wasn't part of _create_agents (e.g. if not wrapped)
+            # This part might need adjustment if _create_agents is *always* expected
+            # to be the sole source of the aggregator.
+            # For now, assume if ToolIntegrationWrapper runs, aggregator is in workers.
+            # If not wrapped, create it as before.
+            # However, the goal is for _create_agents to be the source.
+            raise ValueError("Aggregator not found among workers created by _create_agents.")
+        aggregator = aggregators[0]
 
         # Collect agent solutions and messages
         agent_solutions = []
@@ -248,7 +280,6 @@ class SwarmSystem(AgentSystem):
             all_messages.append(solution["message"])
 
         # Aggregate solutions
-        aggregator = Aggregator(model_name=self.model_name)
         aggregated = aggregator.aggregate(problem_text, agent_solutions)
         all_messages.append(aggregated["message"])
 
