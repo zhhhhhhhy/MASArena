@@ -19,7 +19,7 @@ def main():
         "--benchmark",
         type=str,
         default="math",
-        choices=["math", "drop", "gsm8k", "hotpotqa", "humaneval", "mbpp"],
+        choices=["math", "drop", "gsm8k", "hotpotqa", "humaneval", "mbpp", "swebench"],
         help="Benchmark to run (default: math)",
     )
 

@@ -47,6 +47,7 @@ class BenchmarkRunner:
         self.metrics_dir = metrics_dir
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.results = []
+        self.agent_config = None  # Store agent configuration
 
         # Create directories
         os.makedirs(results_dir, exist_ok=True)
@@ -85,6 +86,19 @@ class BenchmarkRunner:
                     "log_path": f"benchmark/data/results/{benchmark_name.upper()}"
                 }
             )
+        elif benchmark_name.lower() == "swebench":
+            from benchmark.src.evaluators.swebench_evaluator import SWEBenchEvaluator
+            return SWEBenchEvaluator(
+                name=benchmark_name,
+                config={
+                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
+                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}",
+                    "repos_path": "benchmark/data/repos",
+                    "use_mcp": True if "use_mcp_tools" in (self.agent_config or {}) else False,
+                    "mcp_executable": "benchmark/mcp_servers",
+                    "verbose": True
+                }
+            )
         else:
             # Default to math evaluator for now
             # In the future, we would add more evaluator types based on benchmark_name
@@ -121,6 +135,9 @@ class BenchmarkRunner:
         """
         if verbose:
             print(f"Available agent systems: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
+
+        # Store agent configuration for later use
+        self.agent_config = agent_config or {}
 
         # Determine data path
         if data_path is None:
