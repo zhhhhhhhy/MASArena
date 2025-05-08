@@ -1,0 +1,42 @@
+{
+  "servers": {
+    "git_server": {
+      "executable": "benchmark/mcp_servers/git_server.py",
+      "type": "stdio",
+      "description": "Git操作服务，用于克隆代码仓库和应用补丁"
+    },
+    "filesystem_server": {
+      "executable": "benchmark/mcp_servers/filesystem_server.py",
+      "type": "stdio",
+      "description": "文件系统操作服务，用于读写文件"
+    },
+    "process_server": {
+      "executable": "benchmark/mcp_servers/process_server.py",
+      "type": "stdio",
+      "description": "进程执行服务，用于运行命令和测试"
+    },
+    "environment_server": {
+      "executable": "benchmark/mcp_servers/environment_server.py",
+      "type": "stdio",
+      "description": "环境管理服务，用于设置和管理虚拟环境"
+    },
+    "evaluator_server": {
+      "executable": "benchmark/mcp_servers/evaluator_server.py",
+      "type": "stdio",
+      "description": "评估服务，用于评估补丁是否修复了问题"
+    }
+  },
+  "tool_mapping": {
+    "git": "git_server",
+    "fs": "filesystem_server",
+    "process": "process_server",
+    "env": "environment_server",
+    "evaluator": "evaluator_server"
+  },
+  "default_timeout": 600,
+  "logging": {
+    "level": "info",
+    "file": "logs/swebench_mcp.log"
+  },
+  "mode": "production"
+} 
