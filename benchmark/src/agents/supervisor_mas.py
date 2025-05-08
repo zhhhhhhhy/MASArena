@@ -181,7 +181,20 @@ class SupervisorMAS(AgentSystem):
         """
         Run the agent system on a problem.
         """
-        problem_content = problem.get("problem", "")
+        # Get problem content based on evaluator type
+        if self.evaluator_name == "math":
+            problem_content = problem.get("problem", "")
+        elif self.evaluator_name in ["humaneval", "mbpp"]:
+            problem_content = problem.get("prompt", "")
+        elif self.evaluator_name in ["gsm8k", "hotpotqa"]:
+            problem_content = problem.get("question", "")
+        elif self.evaluator_name == "drop":
+            problem_content = problem.get("context", "")
+        elif self.evaluator_name == "ifeval":
+            problem_content = problem.get("prompt", "")
+        else:
+            problem_content = problem.get("problem", "")  # default fallback
+
         self._init_graph_if_needed(problem_input=problem_content)
         
         initial_state = {
