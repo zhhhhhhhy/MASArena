@@ -1,0 +1,81 @@
+"""
+AIME Evaluator
+
+Standalone evaluator for AIME-style math problems.
+"""
+
+import re
+import time
+from typing import Dict, Any, Tuple
+from pathlib import Path
+from langsmith.evaluation import RunEvaluator
+from langsmith.schemas import Run
+
+class AIMEEvaluator:
+    """
+    Evaluator for AIME-style math problems.
+    Extracts answers and compares with expected answers (numeric/string match).
+    """
+    def __init__(self, name: str = "aime", config: Dict[str, Any] = None):
+        self.name = name
+        self.config = config or {}
+        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
+        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
+        Path(self.log_path).mkdir(parents=True, exist_ok=True)
+        self.run_evaluator = RunEvaluator()
+
+    def extract_answer(self, text: str) -> str:
+        """
+        Extract the answer from model output text (last number or string).
+        """
+        # Try to extract the last number (int/float)
+        matches = re.findall(r"[-+]?\d+(?:,\d{3})*(?:\.\d+)?|\d+\.\d+", str(text))
+        if matches:
+            return matches[-1].replace(",", "").strip()
+        # Fallback: last non-empty line
+        lines = [l.strip() for l in str(text).splitlines() if l.strip()]
+        return lines[-1] if lines else str(text).strip()
+
+    def calculate_score(self, expected_output: str, prediction: str) -> Tuple[int, str]:
+        expected = self.extract_answer(expected_output)
+        pred = self.extract_answer(prediction)
+        # Try numeric comparison
+        try:
+            if float(pred) == float(expected):
+                return 1, pred
+        except Exception:
+            pass
+        # Fallback: string match (ignore whitespace)
+        if str(pred).strip() == str(expected).strip():
+            return 1, pred
+        return 0, pred
+
+    def create_run(self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: int) -> Run:
+        import uuid
+        return Run(
+            id=str(uuid.uuid4()),
+            name=f"{self.name.upper()}_Evaluation",
+            inputs={"question": problem["question"]},
+            outputs={
+                "prediction": final_answer,
+                "extracted_answer": extracted_answer,
+                "expected": problem["answer"],
+                "score": score,
+                "passed": score == 1,
+            },
+            run_type="evaluation",
+            start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            trace_id=str(uuid.uuid4()),
+        )
+
+    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
+        final_answer = run_result.get("final_answer", "")
+        score, extracted_answer = self.calculate_score(problem["answer"], final_answer)
+        run = self.create_run(problem, final_answer, extracted_answer, score)
+        run_evaluation = self.run_evaluator.evaluate_run(run=run)
+        return {
+            "final_answer": final_answer,
+            "extracted_answer": extracted_answer,
+            "score": score,
+            "run_evaluation": run_evaluation,
+        } 

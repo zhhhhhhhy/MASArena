@@ -11,5 +11,7 @@ from benchmark.src.evaluators.gsm8k_evaluator import GSM8KEvaluator
 from benchmark.src.evaluators.drop_evaluator import DROPEvaluator
 from benchmark.src.evaluators.hotpotqa_evaluator import HotpotQAEvaluator
 from benchmark.src.evaluators.swebench_evaluator import SWEBenchEvaluator
+from benchmark.src.evaluators.aime_evaluator import AIMEEvaluator
+from benchmark.src.evaluators.ifeval_evaluator import IFEvalEvaluator
 
-__all__ = ["MathEvaluator", "HumanEvalEvaluator", "MBPPEvaluator", "GSM8KEvaluator", "DROPEvaluator", "HotpotQAEvaluator", "SWEBenchEvaluator"]
+__all__ = ["MathEvaluator", "HumanEvalEvaluator", "MBPPEvaluator", "GSM8KEvaluator", "DROPEvaluator", "HotpotQAEvaluator", "SWEBenchEvaluator", "AIMEEvaluator", "IFEvalEvaluator"]
