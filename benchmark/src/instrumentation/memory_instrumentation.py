@@ -29,6 +29,7 @@ Collected Metrics:
 """
 
 from benchmark.data.model_data import MODEL_DATA
+from benchmark.src.instrumentation.utils import calculate_kv_cache_size, DTY_TYPE_SIZES
 
 class MemoryInstrumenter:
     """
@@ -158,7 +159,8 @@ class MemoryInstrumenter:
             model_info = MODEL_DATA[model_name]
             parameter_size_b = model_info["parameter_size_b"]
             activated_size_b = model_info["activated_size_b"]
-            bytes_per_parameter = model_info["bytes_per_parameter"]
+            dtype = model_info["dtype"]
+            bytes_per_parameter = DTY_TYPE_SIZES[dtype]
         else:
             raise ValueError(f"Model {model_name} not found in MODEL_DATA")
         
@@ -166,11 +168,9 @@ class MemoryInstrumenter:
         parameter_memory_bytes = parameter_size_b * 1e9 * bytes_per_parameter
         activated_memory_bytes = activated_size_b * 1e9 * bytes_per_parameter
         
-        # KV cache scales with context length (input + output tokens)
-        # Each token typically uses ~8-12 bytes per layer per attention head
+        # Calculate KV cache size using the new function
         context_length = input_token_count + output_token_count
-        bytes_per_token_in_kv_cache = 8 * (parameter_size_b / 6)  # todo: review this
-        kv_cache_bytes = context_length * bytes_per_token_in_kv_cache
+        kv_cache_bytes = calculate_kv_cache_size(model_name, context_length, dtype)
         
         # Total memory usage
         total_memory_bytes = parameter_memory_bytes + activated_memory_bytes + kv_cache_bytes
