@@ -153,31 +153,50 @@ class MemoryInstrumenter:
         Returns:
             dict: Memory usage breakdown in bytes with keys:
                   'parameter_memory', 'activated_memory', 'kv_cache', 'total'
+                  Returns None if calculation fails
         """
-        # Get model data or raise error for unknown models
-        if model_name in MODEL_DATA:
-            model_info = MODEL_DATA[model_name]
-            parameter_size_b = model_info["parameter_size_b"]
-            activated_size_b = model_info["activated_size_b"]
-            dtype = model_info["dtype"]
-            bytes_per_parameter = DTY_TYPE_SIZES[dtype]
-        else:
-            raise ValueError(f"Model {model_name} not found in MODEL_DATA")
-        
-        # Convert billions of parameters to bytes using model-specific format
-        parameter_memory_bytes = parameter_size_b * 1e9 * bytes_per_parameter
-        activated_memory_bytes = activated_size_b * 1e9 * bytes_per_parameter
-        
-        # Calculate KV cache size using the new function
-        context_length = input_token_count + output_token_count
-        kv_cache_bytes = calculate_kv_cache_size(model_name, context_length, dtype)
-        
-        # Total memory usage
-        total_memory_bytes = parameter_memory_bytes + activated_memory_bytes + kv_cache_bytes
-        
-        return {
-            "parameter_memory": parameter_memory_bytes,
-            "activated_memory": activated_memory_bytes, 
-            "kv_cache": kv_cache_bytes,
-            "total": total_memory_bytes
-        }
+        try:
+            # Validate inputs
+            if not model_name or not isinstance(input_token_count, (int, float)) or not isinstance(output_token_count, (int, float)):
+                print("Invalid input parameters")
+                return None
+                
+            if input_token_count < 0 or output_token_count < 0:
+                print("Token counts cannot be negative")
+                return None
+            
+            # Get model data or raise error for unknown models
+            if model_name in MODEL_DATA:
+                model_info = MODEL_DATA[model_name]
+                parameter_size_b = model_info["parameter_size_b"]
+                activated_size_b = model_info["activated_size_b"]
+                dtype = model_info.get("dtype", "float16").lower()
+                bytes_per_parameter = DTY_TYPE_SIZES.get(dtype, 2)  # Default to float16 if unknown
+            else:
+                print(f"Model {model_name} not found in MODEL_DATA (not opensource or not supported)")
+                return None
+            
+            # Convert billions of parameters to bytes using model-specific format
+            parameter_memory_bytes = parameter_size_b * 1e9 * bytes_per_parameter
+            activated_memory_bytes = activated_size_b * 1e9 * bytes_per_parameter
+            
+            # Calculate KV cache size using the new function
+            context_length = input_token_count + output_token_count
+            kv_cache_bytes = calculate_kv_cache_size(model_name, context_length, dtype)
+            if kv_cache_bytes is None:
+                print(f"Could not calculate KV cache size for model {model_name}")
+                return None
+            
+            # Total memory usage
+            total_memory_bytes = parameter_memory_bytes + activated_memory_bytes + kv_cache_bytes
+            
+            return {
+                "parameter_memory": parameter_memory_bytes,
+                "activated_memory": activated_memory_bytes, 
+                "kv_cache": kv_cache_bytes,
+                "total": total_memory_bytes
+            }
+            
+        except Exception as e:
+            print(f"Error estimating memory cost for model {model_name}: {str(e)}")
+            return None
