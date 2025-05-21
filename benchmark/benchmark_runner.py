@@ -99,7 +99,7 @@ class BenchmarkRunner:
                     "verbose": True
                 }
             )
-         elif benchmark_name.lower() == "aime":
+        elif benchmark_name.lower() == "aime":
             return AIMEEvaluator(
                 name=benchmark_name,
                 config={

@@ -64,7 +64,7 @@ class AgentSystem(abc.ABC):
             # ToolIntegrationWrapper, if used (see create_agent_system factory),
             # will handle patching for tool integration.
         
-    if evaluator_type is None:
+        if evaluator_type is None:
             # Import here to avoid circular imports
             try:
                 from benchmark.src.evaluators import MathEvaluator, MMLU_ProEvaluator, AIMEEvaluator
