@@ -1,0 +1,310 @@
+#!/usr/bin/env python3
+"""
+MMLU Professional Evaluator
+
+This module provides an evaluator for the MMLU Professional benchmark.
+It evaluates agent performance by exact matching of answers.
+"""
+
+import os
+import json
+import logging
+from pathlib import Path
+import numpy as np
+from typing import Dict, Any, List, Tuple, Optional, Union
+import warnings
+import re
+
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+
+
+class MMLU_ProEvaluator(BaseEvaluator):
+    """
+    Evaluator for the MMLU Professional benchmark.
+    
+    This evaluator assesses agent performance on the MMLU_pro dataset
+    using exact matching of answers (A, B, C, etc.).
+    """
+    
+    def __init__(self, name="mmlu_pro", config=None):
+        """
+        Initialize the MMLU Professional evaluator.
+        
+        Args:
+            name: Name of the evaluator
+            config: Configuration dictionary containing:
+                - data_path: Path to the MMLU_pro dataset
+                - log_path: Path to save evaluation logs
+        """
+        super().__init__(name, config or {})
+        
+        # Set up configuration with defaults
+        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
+        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
+        
+        # Weight for exact match score is always 1.0 as it's the only metric
+        self.exact_match_weight = 1.0
+        
+        # Set up logging
+        os.makedirs(self.log_path, exist_ok=True)
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(message)s",
+            handlers=[
+                logging.FileHandler(f"{self.log_path}/mmlu_pro_eval.log"),
+                logging.StreamHandler()
+            ]
+        )
+        self.logger = logging.getLogger("MMLU_ProEvaluator")
+        
+        # Load the dataset
+        self._load_dataset()
+    
+    def _load_dataset(self):
+        """Load the MMLU_pro dataset."""
+        try:
+            with open(self.data_path, "r", encoding="utf-8") as f:
+                self.dataset = [json.loads(line) for line in f]
+            self.logger.info(f"Loaded {len(self.dataset)} problems from {self.data_path}")
+        except Exception as e:
+            self.logger.error(f"Failed to load dataset: {e}")
+            self.dataset = []
+    
+    def check_exact_match(self, reference: str, candidate: str) -> float:
+        """
+        Check if the candidate exactly matches the reference (case-insensitive).
+        
+        Args:
+            reference: Reference answer (e.g., 'A', 'B', 'C', etc.)
+            candidate: Candidate answer
+            
+        Returns:
+            1.0 if exact match, 0.0 otherwise
+        """
+        # Clean and normalize both answers
+        ref_clean = reference.strip().upper()
+        cand_clean = candidate.strip().upper()
+        
+        # Check for exact match
+        if cand_clean == ref_clean:
+            return 1.0
+        
+        # Check if candidate is an index (e.g., "1", "2", "3") converted to letter
+        try:
+            if cand_clean.isdigit():
+                cand_index = int(cand_clean) - 1
+                cand_letter = chr(ord('A') + cand_index)
+                if cand_letter == ref_clean:
+                    return 1.0
+        except:
+            pass
+            
+        return 0.0
+    
+    def get_correct_answer_text(self, problem: Dict[str, Any]) -> str:
+        """
+        Get the correct answer text from the problem.
+        
+        Args:
+            problem: Problem dictionary
+            
+        Returns:
+            Correct answer text
+        """
+        options = problem.get("options", [])
+        answer_index = problem.get("answer_index")
+        answer_letter = problem.get("answer")
+        
+        # If options are available and there's a valid answer index
+        if options and isinstance(answer_index, int) and 0 <= answer_index < len(options):
+            return options[answer_index]
+        
+        # If answer letter and options are available
+        if answer_letter and options:
+            try:
+                # Convert letter to index (A=0, B=1, etc.)
+                idx = ord(answer_letter.upper()) - ord('A')
+                if 0 <= idx < len(options):
+                    return options[idx]
+            except:
+                pass
+        
+        # If we can't get the answer text, just return the answer letter/index
+        return str(answer_letter if answer_letter else answer_index)
+    
+    def extract_answer_from_response(self, response: str) -> str:
+        """
+        从agent响应中提取答案。
+        
+        Args:
+            response: agent的完整响应文本
+            
+        Returns:
+            提取出的答案字母
+        """
+        # 尝试从<answer>标签中提取答案
+        match = re.search(r'<answer>([A-Za-z])</answer>', response)
+        if match:
+            return match.group(1)
+        
+        # 如果没有找到标签，返回原始响应
+        return response.strip()
+    
+    def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """
+        Evaluate an agent's solution to a MMLU_pro problem.
+        
+        Args:
+            problem: Problem dictionary containing:
+                - question: Problem text
+                - options: List of options
+                - answer: Correct answer (letter)
+                - answer_index: Index of correct answer
+                - response: Agent's response
+            
+        Returns:
+            Evaluation results
+        """
+        metrics_registry = kwargs.get("metrics_registry", None)
+        start_time = kwargs.get("start_time", None)
+        
+        problem_id = problem.get("id", problem.get("question_id", "unknown"))
+        problem_text = problem.get("problem", problem.get("question", ""))
+        reference_letter = problem.get("solution", problem.get("answer", ""))
+        
+        # Get the full text of the correct answer
+        reference_text = self.get_correct_answer_text(problem)
+        
+        # Get the agent's response and extract the answer
+        raw_response = problem.get("response", "")
+        agent_response = self.extract_answer_from_response(raw_response)
+        
+        # Calculate exact match score (letter-based)
+        exact_match = self.check_exact_match(reference_letter, agent_response)
+        
+        # Record evaluation results
+        results = {
+            "problem_id": problem_id,
+            "exact_match": exact_match,
+            "combined_score": exact_match,  # Combined score is just the exact match
+            "extracted_answer": agent_response,
+            "reference_answer": reference_letter,
+            "reference_text": reference_text,
+            "execution_time_ms": 0,  # Will be updated by the benchmark runner
+            "math_score": 1.0 if exact_match >= 0.9 else 0.0  # For compatibility with benchmark runner
+        }
+        
+        # Log the results
+        self.logger.info(f"Problem {problem_id}: Exact={exact_match:.1f}, Combined={exact_match:.4f}")
+        
+        return results
+    
+    def verify_answer(self, prediction: str, reference: Dict[str, Any]) -> bool:
+        """
+        Verify if the prediction is correct according to the reference.
+        For MMLU_pro, we consider an exact match on the answer letter as correct.
+        
+        Args:
+            prediction: Predicted answer
+            reference: Reference answer dictionary or string
+            
+        Returns:
+            True if the answer is correct, False otherwise
+        """
+        if isinstance(reference, dict):
+            reference_letter = reference.get("answer", "")
+        else:
+            reference_letter = str(reference)
+        
+        exact_match = self.check_exact_match(reference_letter, prediction)
+        return exact_match >= 0.9
+    
+    def batch_evaluate(self, problems: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Evaluate a batch of problems.
+        
+        Args:
+            problems: List of problem dictionaries
+            
+        Returns:
+            List of evaluation results
+        """
+        results = []
+        
+        # Evaluate each problem individually
+        for i, problem in enumerate(problems):
+            problem_id = problem.get("id", problem.get("question_id", f"unknown_{i}"))
+            reference_letter = problem.get("solution", problem.get("answer", ""))
+            reference_text = self.get_correct_answer_text(problem)
+            response = problem.get("response", "")
+            
+            # Calculate exact match score
+            exact_match = self.check_exact_match(reference_letter, response)
+            
+            # Record results
+            result = {
+                "problem_id": problem_id,
+                "exact_match": exact_match,
+                "combined_score": exact_match,  # Combined score is just the exact match
+                "extracted_answer": response,
+                "reference_answer": reference_letter,
+                "reference_text": reference_text,
+                "execution_time_ms": 0,  # Will be updated by the benchmark runner
+                "math_score": 1.0 if exact_match >= 0.9 else 0.0  # For compatibility with benchmark runner
+            }
+            
+            results.append(result)
+            
+            # Log the results
+            self.logger.info(f"Problem {problem_id}: Exact={exact_match:.1f}, Combined={exact_match:.4f}")
+        
+        return results
+    
+    def format_options(self, options: List[str]) -> str:
+        """
+        Format options list into a readable string.
+        
+        Args:
+            options: List of options
+            
+        Returns:
+            Formatted options string
+        """
+        if not options:
+            return ""
+        
+        formatted = []
+        for i, option in enumerate(options):
+            letter = chr(ord('A') + i)
+            formatted.append(f"{letter}. {option}")
+        
+        return "\n".join(formatted)
+
+
+if __name__ == "__main__":
+    # Test the evaluator with a simple example
+    evaluator = MMLU_ProEvaluator()
+    
+    test_problem = {
+        "question_id": 70,
+        "question": "Typical advertising regulatory bodies suggest, for example that adverts must not: encourage _________, cause unnecessary ________ or _____, and must not cause _______ offence.",
+        "options": [
+            "Safe practices, Fear, Jealousy, Trivial",
+            "Unsafe practices, Distress, Joy, Trivial",
+            "Safe practices, Wants, Jealousy, Trivial",
+            "Safe practices, Distress, Fear, Trivial",
+            "Unsafe practices, Wants, Jealousy, Serious",
+            "Safe practices, Distress, Jealousy, Serious",
+            "Safe practices, Wants, Fear, Serious",
+            "Unsafe practices, Wants, Fear, Trivial",
+            "Unsafe practices, Distress, Fear, Serious"
+        ],
+        "answer": "I",
+        "answer_index": 8,
+        "response": "I"
+    }
+    
+    result = evaluator.evaluate(test_problem)
+    print(test_problem)
+    print(result)
+    print(json.dumps(result, indent=2))

@@ -22,7 +22,7 @@ from benchmark.src.metrics import (
 )
 from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
-from benchmark.src.evaluators import MathEvaluator
+from benchmark.src.evaluators import MathEvaluator, AIMEEvaluator, MMLU_ProEvaluator
 
 
 class BenchmarkRunner:
@@ -99,6 +99,25 @@ class BenchmarkRunner:
                     "verbose": True
                 }
             )
+         elif benchmark_name.lower() == "aime":
+            return AIMEEvaluator(
+                name=benchmark_name,
+                config={
+                    "data_path": data_path or f"benchmark/data/{benchmark_name}_aime2025-i_test.jsonl",
+                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}"
+                }
+            )
+        elif benchmark_name.lower() == "mmlu_pro":
+            return MMLU_ProEvaluator(
+                name=benchmark_name,
+                config={
+                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
+                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}",
+                    "exact_match_weight": 0.4,
+                    "bleu_weight": 0.3,
+                    "bert_weight": 0.3
+                }
+            )
         else:
             # Default to math evaluator for now
             # In the future, we would add more evaluator types based on benchmark_name
@@ -141,7 +160,10 @@ class BenchmarkRunner:
 
         # Determine data path
         if data_path is None:
-            data_path = f"benchmark/data/{benchmark_name}_test.jsonl"
+            if benchmark_name.lower() == "aime":
+                data_path = f"benchmark/data/{benchmark_name}_aime2025-i_test.jsonl"
+            else:
+                data_path = f"benchmark/data/{benchmark_name}_test.jsonl"
 
         output_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}.json"
         metrics_output = Path(self.metrics_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}"
