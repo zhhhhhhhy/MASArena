@@ -96,6 +96,16 @@ MODEL_DATA = {
         "num_key_value_heads": 2,
         "dtype": "float16"
     },
+        "Qwen/Qwen2.5-32B": {
+        "parameter_size_b": 32.5,
+        "activated_size_b": 0, 
+        "bytes_per_parameter": 2,
+        "hidden_size": 5120,
+        "num_attention_heads": 40,
+        "num_hidden_layers": 64,
+        "num_key_value_heads": 8,
+        "dtype": "float16"
+    },   
     "Qwen/Qwen3-4B": {
         "parameter_size_b": 4.0,
         "activated_size_b": 0, 
@@ -136,6 +146,16 @@ MODEL_DATA = {
         "num_key_value_heads": 8,
         "dtype": "float16"
     },
+    "Qwen/QwQ-32B-Preview": {
+        "parameter_size_b": 32.5,
+        "activated_size_b": 0, 
+        "bytes_per_parameter": 2,
+        "hidden_size": 5120,
+        "num_attention_heads": 40,
+        "num_hidden_layers": 64,
+        "num_key_value_heads": 8,
+        "dtype": "float16"
+    },    
     "deepseek-ai/DeepSeek-R1": {
         "parameter_size_b": 671,
         "activated_size_b": 37,  # Utilizes 1 shared expert and 256 routed experts, with 37B parameters activated per token
