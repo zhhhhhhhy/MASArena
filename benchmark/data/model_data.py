@@ -96,6 +96,16 @@ MODEL_DATA = {
         "num_key_value_heads": 2,
         "dtype": "float16"
     },
+    "Qwen/Qwen2.5-14B": {  
+        "parameter_size_b": 14.0,
+        "activated_size_b": 0, 
+        "bytes_per_parameter": 2,
+        "hidden_size": 5120,
+        "num_attention_heads": 40,
+        "num_hidden_layers": 48,
+        "num_key_value_heads": 8,
+        "dtype": "float16"
+    },
         "Qwen/Qwen2.5-32B": {
         "parameter_size_b": 32.5,
         "activated_size_b": 0, 
@@ -176,6 +186,36 @@ MODEL_DATA = {
         "num_key_value_heads": 128,
         "dtype": "float16"
     },
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": {
+        "parameter_size_b": 32.5,
+        "activated_size_b": 0, 
+        "bytes_per_parameter": 2,
+        "hidden_size": 5120,
+        "num_attention_heads": 40,
+        "num_hidden_layers": 64,
+        "num_key_value_heads": 8,
+        "dtype": "float16"
+    },
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B": {
+        "parameter_size_b": 14.0,
+        "activated_size_b": 0, 
+        "bytes_per_parameter": 2,
+        "hidden_size": 5120,
+        "num_attention_heads": 40,
+        "num_hidden_layers": 48,
+        "num_key_value_heads": 8,
+        "dtype": "float16" 
+    },
+    "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": {
+        "parameter_size_b": 7.0,
+        "activated_size_b": 0, 
+        "bytes_per_parameter": 2,
+        "hidden_size": 3584,
+        "num_attention_heads": 28,
+        "num_hidden_layers": 28,
+        "num_key_value_heads": 4,
+        "dtype": "float16"
+    }, 
     "lmsys/longchat-7b-16k": {
         "parameter_size_b": 7.0,
         "activated_size_b": 0, 
