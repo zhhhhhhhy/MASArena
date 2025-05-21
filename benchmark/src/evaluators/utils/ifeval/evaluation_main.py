@@ -22,7 +22,7 @@ from absl import app
 from absl import flags
 from absl import logging
 
-from instruction_following_eval import evaluation_lib
+from ifeval import evaluation_lib
 
 
 _INPUT_DATA = flags.DEFINE_string(
