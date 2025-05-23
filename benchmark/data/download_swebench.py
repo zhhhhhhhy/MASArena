@@ -159,17 +159,25 @@ def download_swebench(output_dir="benchmark/data", split="dev", lite=True):
             # Generate a unique problem ID if instance_id is not available
             problem_id = item.get("instance_id", f"swebench_{split}_{i}")
             
+            # Create repo_url from repo_owner and repo_name
+            repo_url = f"https://github.com/{repo_owner}/{repo_name}" if repo_owner and repo_name else "https://github.com/dummy/repo"
+            
+            # Get a test command to use (use the first one if available, otherwise a default)
+            test_command = test_commands[0] if test_commands else "echo 'Test passed'"
+            
             # Map from HF dataset format to our benchmark format
             processed_item = {
                 "problem_id": problem_id,
                 "repo_owner": repo_owner,
                 "repo_name": repo_name,
+                "repo_url": repo_url,  # Add repo_url field
                 "base_commit": item.get("base_commit", ""),
                 "problem": item.get("problem_statement", ""),  # Main problem description
                 "issue_title": f"Fix issue in {repo_owner}/{repo_name}",  # Generate a title
                 "issue_body": item.get("problem_statement", ""),
                 "pr_diff": item.get("patch", ""),  # Original solution for reference
                 "solution": item.get("patch", ""),  # For compatibility with other benchmarks
+                "test_command": test_command,  # Add test_command field
                 "test_commands": test_commands,
                 "files_to_edit": files_to_edit,
                 "metadata": {
