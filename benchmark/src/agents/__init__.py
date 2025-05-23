@@ -22,6 +22,7 @@ AVAILABLE_AGENT_SYSTEMS = {
     "evoagent": "An evolutionary agent system that improves over generations using LLM-based operations",
     "mock_triple_agent": "A mock multi-agent system that uses a triple agent to solve problems with mock tools",
     "metagpt": "A multi-agent system that uses SOPs to generate codes",
+    "jarvis": "A multi-agent system that uses linear task planning and execution process",
 }
 
 __all__ = [
@@ -36,5 +37,6 @@ __all__ = [
     "EvoAgent",
     "MockTripleAgentSystem",
     "MetaGPT",
+    "jarvis",
     "AVAILABLE_AGENT_SYSTEMS",
 ]

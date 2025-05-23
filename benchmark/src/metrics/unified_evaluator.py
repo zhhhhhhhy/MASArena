@@ -595,6 +595,16 @@ class UnifiedEvaluator:
                         output_token_count=completion_tokens
                     )
                     
+                    # Handle None case gracefully
+                    if inference_metrics is None:
+                        print(f"Could not estimate inference metrics for model {model_name}")
+                        inference_metrics = {
+                            "parameter_memory": 0,
+                            "activated_memory": 0,
+                            "kv_cache": 0,
+                            "total": 0
+                        }
+                    
                     ttft_sum += inference_metrics.get('ttft_seconds', 0) * 1000  # Convert to ms
                     total_memory += inference_metrics.get('memory_usage_bytes', 0)
                     

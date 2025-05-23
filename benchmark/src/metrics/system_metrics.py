@@ -577,6 +577,8 @@ class SystemMetricsCollector(BaseMetricsCollector):
         """
         Estimate inference metrics like TTFT, throughput, and memory usage based on model and hardware parameters.
         
+        None is returned if the model is not found in MODEL_DATA (not opensource or not supported)
+        
         Uses the formula:
         TTFT ≈ T_prefill = (2 × Parameters × N_input)/(Effective FLOPS) + (Activation Memory)/(Memory Bandwidth)
         
@@ -596,21 +598,32 @@ class SystemMetricsCollector(BaseMetricsCollector):
                 'tokens_per_second': Estimated token generation rate
                 'memory_usage_bytes': Total memory usage in bytes
         """
-        # Get hardware configuration or use defaults
+        # parameter count
+        from benchmark.data.model_data import MODEL_DATA 
+        if model_name not in MODEL_DATA:
+            print(f"Model {model_name} not found in MODEL_DATA (not opensource or not supported)")
+            return None
+        
+        model_info = MODEL_DATA[model_name]
+        parameter_count = model_info["parameter_size_b"] * 1e9
+        dtype = model_info.get("dtype", "float16").lower()
+        
         hw_config = hardware_config or {}
+
         gpu_flops = hw_config.get('gpu_flops', self.config.default_gpu_flops)  # Operations/second
         memory_bandwidth = hw_config.get('memory_bandwidth', self.config.default_memory_bandwidth)  # Bytes/second
         hardware_efficiency = hw_config.get('hardware_efficiency', 0.4)  # 40% of theoretical peak is typical
-        
+
         # Use MemoryInstrumenter to get model memory estimates
         memory_instrumentation = MemoryInstrumenter()
         memory_estimates = memory_instrumentation.estimate_model_memory_cost(
             model_name, input_token_count, output_token_count
         )
         
-        # parameter count
-        from benchmark.data.model_data import MODEL_DATA
-        parameter_count = MODEL_DATA[model_name]["parameter_size_b"] * 1e9
+        if memory_estimates is None:
+            print(f"Could not estimate memory cost for model {model_name}")
+            return None
+
         activation_memory = memory_estimates['activated_memory']  # In bytes
         
         # Calculate TTFT based on the formula
