@@ -777,14 +777,10 @@ class AgentSystem(abc.ABC):
         if evaluator_type is None:
             # Import here to avoid circular imports
             try:
-                from benchmark.src.evaluators import MathEvaluator, MMLU_ProEvaluator, AIMEEvaluator
+                from benchmark.src.evaluators import AVAILABLE_EVALUATORS
                 # Select evaluator_type based on evaluator_name
-                if evaluator_name.lower() == "mmlu_pro":
-                    evaluator_type = MMLU_ProEvaluator
-                elif evaluator_name.lower() == "aime":
-                    evaluator_type = AIMEEvaluator
-                else:
-                    evaluator_type = MathEvaluator
+                evaluator_type = AVAILABLE_EVALUATORS[evaluator_name]
+               
             except ImportError:
                 raise ImportError("Could not import evaluator. Please provide evaluator_type.")
         

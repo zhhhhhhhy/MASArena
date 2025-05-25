@@ -22,7 +22,6 @@ from benchmark.src.metrics import (
 )
 from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
-from benchmark.src.evaluators import MathEvaluator, AIMEEvaluator, MMLU_ProEvaluator
 
 
 class BenchmarkRunner:
@@ -67,68 +66,6 @@ class BenchmarkRunner:
         registry.register_collector("inter_agent", InterAgentMetricsCollector())
         return registry
     
-    def _get_evaluator(self, benchmark_name, data_path=None):
-        """
-        Get the appropriate evaluator for the benchmark.
-        
-        Args:
-            benchmark_name: Name of the benchmark
-            data_path: Custom path to data file
-            
-        Returns:
-            An initialized evaluator
-        """
-        if benchmark_name.lower() == "math":
-            return MathEvaluator(
-                name=benchmark_name,
-                config={
-                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
-                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}"
-                }
-            )
-        elif benchmark_name.lower() == "swebench":
-            from benchmark.src.evaluators.swebench_evaluator import SWEBenchEvaluator
-            return SWEBenchEvaluator(
-                name=benchmark_name,
-                config={
-                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
-                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}",
-                    "repos_path": "benchmark/data/repos",
-                    "use_mcp": True if "use_mcp_tools" in (self.agent_config or {}) else False,
-                    "mcp_executable": "benchmark/mcp_servers",
-                    "verbose": True
-                }
-            )
-        elif benchmark_name.lower() == "aime":
-            return AIMEEvaluator(
-                name=benchmark_name,
-                config={
-                    "data_path": data_path or f"benchmark/data/{benchmark_name}_aime2025-i_test.jsonl",
-                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}"
-                }
-            )
-        elif benchmark_name.lower() == "mmlu_pro":
-            return MMLU_ProEvaluator(
-                name=benchmark_name,
-                config={
-                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
-                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}",
-                    "exact_match_weight": 0.4,
-                    "bleu_weight": 0.3,
-                    "bert_weight": 0.3
-                }
-            )
-        else:
-            # Default to math evaluator for now
-            # In the future, we would add more evaluator types based on benchmark_name
-            return MathEvaluator(
-                name=benchmark_name,
-                config={
-                    "data_path": data_path or f"benchmark/data/{benchmark_name}_test.jsonl",
-                    "log_path": f"benchmark/data/results/{benchmark_name.upper()}"
-                }
-            )
-
     def run(
         self,
         benchmark_name="math",

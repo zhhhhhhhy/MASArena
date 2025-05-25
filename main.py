@@ -14,12 +14,12 @@ def main():
 
     # Import available agent systems
     from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
-
+    from benchmark.src.evaluators import AVAILABLE_EVALUATORS
     parser.add_argument(
         "--benchmark",
         type=str,
         default="math",
-        choices=["math", "drop", "gsm8k", "hotpotqa", "humaneval", "mbpp", "swebench_lite","mmlu_pro"],
+        choices=list(AVAILABLE_EVALUATORS.keys()),
         help="Benchmark to run (default: math)",
     )
 
