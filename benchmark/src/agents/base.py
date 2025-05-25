@@ -63,7 +63,36 @@ class AgentSystem(abc.ABC):
             self.init_tool_manager(mcp_servers)
             # ToolIntegrationWrapper, if used (see create_agent_system factory),
             # will handle patching for tool integration.
+
+    def _initialize_evaluator(self):
+        # 从配置获取evaluator_name
+        evaluator_name = self.config.get("evaluator", "math")
+        evaluator_type = None
         
+        if evaluator_type is None:
+            # Import here to avoid circular imports
+            try:
+                from benchmark.src.evaluators import MathEvaluator, MMLU_ProEvaluator, AIMEEvaluator
+                
+                # 根据evaluator_name选择合适的evaluator_type
+                if evaluator_name.lower() == "mmlu_pro":
+                    evaluator_type = MMLU_ProEvaluator
+                elif evaluator_name.lower() == "aime":
+                    evaluator_type = AIMEEvaluator
+                else:
+                    evaluator_type = MathEvaluator
+                    
+            except ImportError:
+                raise ImportError("Could not import evaluator. Please provide evaluator_type.")
+        
+        # Create evaluator instance
+        self.evaluator = evaluator_type(
+            name=evaluator_name,
+            config={
+                "data_path": self.config.get("data_path", f"benchmark/data/{evaluator_name}_test.jsonl"),
+                "log_path": self.config.get("log_path", f"benchmark/data/results/{evaluator_name.upper()}")
+            }
+        )
 
     def _initialize_metrics_collector(self):
         """Initialize the metrics collector"""
@@ -412,7 +441,7 @@ class AgentSystem(abc.ABC):
             
         return file_path
 
-    def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def evaluate(self, problem: Dict[str, Any], problem_type: str, **kwargs) -> Dict[str, Any]:
         """
         Evaluate the agent system on a given problem.
         
@@ -441,7 +470,8 @@ class AgentSystem(abc.ABC):
             self.metrics_collector.set_metrics_registry(self.metrics_registry)
             
             # Generate a stable problem ID if not present
-            problem_id = problem.get("id", f"problem_{hash(problem['problem'])}")
+            problem_text = problem.get("problem", problem.get("question", ""))
+            problem_id = problem.get("id", f"problem_{hash(problem_text)}")
             
             # Record problem metadata
             self.metrics_collector.record_metric(
@@ -468,7 +498,7 @@ class AgentSystem(abc.ABC):
         
         try:
             # Run the agent system
-            run_result = self.run_agent(problem, **kwargs)
+            run_result = self.run_agent(problem, problem_type, **kwargs)
             
             # Record execution time
             execution_time_ms = 0
@@ -758,40 +788,6 @@ class AgentSystem(abc.ABC):
         except ImportError:
             print(f"Warning: Could not import ToolManager. MCP tools will not be available.")
             self.tool_manager = None
-
-    def _initialize_evaluator(self, evaluator_type: Type = None):
-        """
-        Initialize the appropriate evaluator based on configuration.
-        
-        Args:
-            evaluator_type: Optional evaluator class to use
-        """
-        if self.evaluator is not None:
-            return
-        
-        # Get evaluator name from config
-        evaluator_name = self.config.get("evaluator", None)
-        if evaluator_name is None:
-            raise ValueError("Evaluator name is not set in the configuration.")
-        
-        if evaluator_type is None:
-            # Import here to avoid circular imports
-            try:
-                from benchmark.src.evaluators import AVAILABLE_EVALUATORS
-                # Select evaluator_type based on evaluator_name
-                evaluator_type = AVAILABLE_EVALUATORS[evaluator_name]
-               
-            except ImportError:
-                raise ImportError("Could not import evaluator. Please provide evaluator_type.")
-        
-        # Create evaluator instance
-        self.evaluator = evaluator_type(
-            name=evaluator_name,
-            config={
-                "data_path": self.config.get("data_path", f"benchmark/data/{evaluator_name}_test.jsonl"),
-                "log_path": self.config.get("log_path", f"benchmark/data/results/{evaluator_name.upper()}")
-            }
-        )
 
 
 class AgentSystemRegistry:
