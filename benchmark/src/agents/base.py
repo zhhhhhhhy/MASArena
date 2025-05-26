@@ -64,24 +64,28 @@ class AgentSystem(abc.ABC):
             # ToolIntegrationWrapper, if used (see create_agent_system factory),
             # will handle patching for tool integration.
 
-    def _initialize_evaluator(self):
-        # 从配置获取evaluator_name
-        evaluator_name = self.config.get("evaluator", "math")
-        evaluator_type = None
+    def _initialize_evaluator(self, evaluator_type: Type = None):
+        """
+        Initialize the appropriate evaluator based on configuration.
+        
+        Args:
+            evaluator_type: Optional evaluator class to use
+        """
+        if self.evaluator is not None:
+            return
+        
+        # Get evaluator name from config
+        evaluator_name = self.config.get("evaluator", None)
+        if evaluator_name is None:
+            raise ValueError("Evaluator name is not set in the configuration.")
         
         if evaluator_type is None:
             # Import here to avoid circular imports
             try:
-                from benchmark.src.evaluators import MathEvaluator, MMLU_ProEvaluator, AIMEEvaluator
-                
-                # 根据evaluator_name选择合适的evaluator_type
-                if evaluator_name.lower() == "mmlu_pro":
-                    evaluator_type = MMLU_ProEvaluator
-                elif evaluator_name.lower() == "aime":
-                    evaluator_type = AIMEEvaluator
-                else:
-                    evaluator_type = MathEvaluator
-                    
+                from benchmark.src.evaluators import AVAILABLE_EVALUATORS
+                # Select evaluator_type based on evaluator_name
+                evaluator_type = AVAILABLE_EVALUATORS[evaluator_name]
+               
             except ImportError:
                 raise ImportError("Could not import evaluator. Please provide evaluator_type.")
         
@@ -93,6 +97,7 @@ class AgentSystem(abc.ABC):
                 "log_path": self.config.get("log_path", f"benchmark/data/results/{evaluator_name.upper()}")
             }
         )
+
 
     def _initialize_metrics_collector(self):
         """Initialize the metrics collector"""
