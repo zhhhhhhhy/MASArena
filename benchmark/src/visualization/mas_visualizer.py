@@ -721,7 +721,7 @@ class BenchmarkVisualizer:
             output_file = self.output_dir / f"benchmark_{agent_system}_{benchmark_name}_{timestamp}.html"
             
         # Save HTML file
-        with open(output_file, 'w') as f:
+        with open(output_file, 'w', encoding='utf-8') as f:
             f.write(html)
             
         # Open in browser

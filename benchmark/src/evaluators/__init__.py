@@ -14,6 +14,7 @@ from benchmark.src.evaluators.swebench_evaluator import SWEBenchEvaluator
 from benchmark.src.evaluators.aime_evaluator import AIMEEvaluator
 from benchmark.src.evaluators.ifeval_evaluator import IFEvalEvaluator
 from benchmark.src.evaluators.MMLU_pro_evaluater import MMLU_ProEvaluator
+from benchmark.src.evaluators.bbh_evaluator import BBHEvaluator
 
 AVAILABLE_EVALUATORS = {
     "math": MathEvaluator,
@@ -26,7 +27,8 @@ AVAILABLE_EVALUATORS = {
     "mmlu_pro": MMLU_ProEvaluator,
     "ifeval": IFEvalEvaluator,
     "aime": AIMEEvaluator,
+    "bbh": BBHEvaluator,
 }
 
-__all__ = ["MathEvaluator", "HumanEvalEvaluator", "MBPPEvaluator", "GSM8KEvaluator", "DROPEvaluator", "HotpotQAEvaluator", "SWEBenchEvaluator", "AIMEEvaluator", "IFEvalEvaluator", "MMLU_ProEvaluator"]
+__all__ = ["MathEvaluator", "HumanEvalEvaluator", "MBPPEvaluator", "GSM8KEvaluator", "DROPEvaluator", "HotpotQAEvaluator", "SWEBenchEvaluator", "AIMEEvaluator", "IFEvalEvaluator", "MMLU_ProEvaluator", "BBHEvaluator"]
 

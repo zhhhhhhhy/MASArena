@@ -7,6 +7,7 @@ This module provides a standalone evaluator for HumanEval problems.
 import time
 from typing import Dict, Any, Tuple
 from pathlib import Path
+import re
 import traceback
 from threading import Thread
 
@@ -72,13 +73,44 @@ class HumanEvalEvaluator:
                 traceback.print_exc()
             return False
             
+    # def extract_code(self, text: str) -> str:
+    #     """Extract code from text"""
+    #     # First try to extract using sanitize
+    #     try:
+    #         return sanitize(text)
+    #     except:  # noqa: E722
+    #         # Fallback to code_extract
+    #         return code_extract(text)
+
     def extract_code(self, text: str) -> str:
-        """Extract code from text"""
-        # First try to extract using sanitize
+        """
+        Extract python code fenced by ```python ... ```.
+
+        Priority:
+        1. Block that appears under a heading containing 'Final Code'
+        2. First python block
+        3. Fallback to sanitize / code_extract
+        """
+        # 1) 找到所有 ```python ... ``` 代码块
+        blocks = re.findall(r"```python\\s*([\\s\\S]*?)```", text, re.IGNORECASE)
+
+        if blocks:
+            # 尝试定位 'Final Code' 区块
+            final_block = None
+            # split text by headings
+            for block in blocks:
+                # 通过查看 block 前面的 100 字符是否包含 'Final Code'
+                idx = text.find(block)
+                prefix = text[max(0, idx-100):idx].lower()
+                if "final code" in prefix:
+                    final_block = block
+                    break
+            return (final_block or blocks[0]).strip()
+
+        # 2) fallback – 保持向后兼容
         try:
             return sanitize(text)
-        except:  # noqa: E722
-            # Fallback to code_extract
+        except Exception:  # noqa: E722
             return code_extract(text)
             
     def calculate_score(self, expected_output: str, prediction: str) -> Tuple[float, str]:
@@ -93,7 +125,7 @@ class HumanEvalEvaluator:
         return Run(
             id=str(uuid.uuid4()),
             name=f"{self.name.upper()}_Evaluation",
-            inputs={"problem": problem["prompt"]},
+            inputs={"problem": problem["problem"]},
             outputs={
                 "prediction": final_answer,
                 "extracted_answer": extracted_answer,

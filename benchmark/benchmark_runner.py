@@ -11,6 +11,7 @@ import time
 from pathlib import Path
 from datetime import datetime
 import matplotlib.pyplot as plt
+from typing import Optional, Dict, Any, List
 import numpy as np
 
 from benchmark.src.metrics import (
@@ -23,6 +24,41 @@ from benchmark.src.metrics import (
 from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
 
+# Define benchmark key mappings for extensibility
+BENCHMARK_KEY_MAPPINGS = {
+    "humaneval": {
+        "id": "task_id",
+        "problem": "prompt",
+        "solution": "canonical_solution",
+        "test": "test",
+        "entry_point": "entry_point",
+        "test_imports": None
+    },
+    "mbpp": {
+        "id": "task_id",
+        "problem": "prompt",
+        "solution": "code",
+        "test": "test",
+        "entry_point": "entry_point",
+        "test_imports": "test_imports"
+    },
+    "math": {
+        "id": "id",
+        "problem": "problem",
+        "solution": "solution",
+        "test": None,
+        "entry_point": None,
+        "test_imports": None
+    },
+    "bbh": {
+        "id": "task_id",
+        "problem": "input",
+        "solution": "target",
+        "test": None,
+        "entry_point": None,
+        "test_imports": None
+    },
+}
 
 class BenchmarkRunner:
     """
@@ -47,6 +83,8 @@ class BenchmarkRunner:
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.results = []
         self.agent_config = None  # Store agent configuration
+        self.metrics_registry = None
+        self.metrics_collector = None
 
         # Create directories
         os.makedirs(results_dir, exist_ok=True)
@@ -65,7 +103,7 @@ class BenchmarkRunner:
         registry.register_collector("agent", AgentMetricsCollector())
         registry.register_collector("inter_agent", InterAgentMetricsCollector())
         return registry
-    
+
     def run(
         self,
         benchmark_name="math",
@@ -161,8 +199,11 @@ class BenchmarkRunner:
         agent.set_metrics_registry(self.metrics_registry)
 
         # Load problems
-        with open(data_path, "r") as f:
-            problems = [json.loads(line) for line in f]
+        try:
+            with open(data_path, "r") as f:
+                problems = [json.loads(line) for line in f]
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Data file not found: {data_path}")
 
         # Limit problems
         problems = problems[:limit]
@@ -177,6 +218,11 @@ class BenchmarkRunner:
             }
         )
 
+        # Get key mapping for the benchmark
+        key_mapping = BENCHMARK_KEY_MAPPINGS.get(benchmark_name)
+        if key_mapping is None:
+            raise ValueError(f"Unknown benchmark: {benchmark_name}. Supported: {', '.join(BENCHMARK_KEY_MAPPINGS.keys())}")
+
         # Process problems
         all_results = []
         correct_count = 0
@@ -184,11 +230,18 @@ class BenchmarkRunner:
         total_duration = 0
 
         for i, problem in enumerate(problems):
-            # Add problem ID if not present
-            if "id" not in problem:
-                problem["id"] = f"problem_{i + 1}"
+            # Normalize problem dictionary
+            normalized_problem = {
+                "id": problem.get(key_mapping["id"], f"problem_{i + 1}"),
+                "problem": problem.get(key_mapping["problem"], ""),
+                "solution": problem.get(key_mapping["solution"], ""),
+                "test": problem.get(key_mapping["test"], ""),
+                "entry_point": problem.get(key_mapping["entry_point"], ""),
+            }
+            if key_mapping["test_imports"] is not None:
+                normalized_problem["test_imports"] = problem.get(key_mapping["test_imports"], [])
 
-            problem_id = problem["id"]
+            problem_id = normalized_problem["id"]
 
             if verbose:
                 print(f"\nProblem {i + 1}/{len(problems)}: {problem_id}")
@@ -206,13 +259,13 @@ class BenchmarkRunner:
 
             try:
                 # Evaluate the problem using the agent system
-                results = agent.evaluate(problem, metrics_registry=self.metrics_registry)
+                results = agent.evaluate(normalized_problem, benchmark_name,metrics_registry=self.metrics_registry)
 
                 # Stop problem timer
                 problem_duration_ms = self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
                 
                 duration_ms = results.get("execution_time_ms", problem_duration_ms)
-                score = results.get("math_score", 0)
+                score = results.get("score", 0)
                 is_correct = score == 1
                 
                 # Update statistics
@@ -236,8 +289,8 @@ class BenchmarkRunner:
                 # Create result entry
                 result_entry = {
                     "problem_id": problem_id,
-                    "problem": problem["problem"],
-                    "expected": problem["solution"],
+                    "problem": normalized_problem["problem"],
+                    "expected": normalized_problem["solution"],
                     "prediction": results.get("extracted_answer", ""),
                     "score": score,
                     "duration_ms": duration_ms,
@@ -255,6 +308,8 @@ class BenchmarkRunner:
 
                 if verbose:
                     print(f"Result: {'✓' if is_correct else '✗'} ({duration_ms:.0f}ms)")
+                    print(f"Expected: {normalized_problem['solution']}")
+                    print(f"Predicted: {results.get('extracted_answer', '')}")
 
             except Exception as e:
                 # Stop problem timer
@@ -274,12 +329,13 @@ class BenchmarkRunner:
                 )
 
                 if verbose:
-                    print(f"Error: {e}")
+                    # print(f"Error: {e}")
+                    print(f"Error processing problem {problem_id} in benchmark {benchmark_name}: {e}")
 
                 all_results.append(
                     {
                         "problem_id": problem_id,
-                        "problem": problem["problem"],
+                        "problem": normalized_problem["problem"],
                         "error": str(e),
                         "duration_ms": 0,
                         "agent_system": agent_system,

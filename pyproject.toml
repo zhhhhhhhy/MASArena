@@ -28,6 +28,7 @@ dependencies = [
     "immutabledict>=4.2.1",
     "absl-py>=2.2.2",
     "langdetect>=1.0.9",
+    "antlr4-python3-runtime>=4.13.2",
 ]
 
 [tool.ruff]

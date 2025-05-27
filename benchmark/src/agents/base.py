@@ -72,13 +72,19 @@ class AgentSystem(abc.ABC):
         if evaluator_type is None:
             # Import here to avoid circular imports
             try:
-                from benchmark.src.evaluators import MathEvaluator, MMLU_ProEvaluator, AIMEEvaluator
+                from benchmark.src.evaluators import MathEvaluator, MMLU_ProEvaluator, AIMEEvaluator, BBHEvaluator, HumanEvalEvaluator,MBPPEvaluator
                 
                 # 根据evaluator_name选择合适的evaluator_type
                 if evaluator_name.lower() == "mmlu_pro":
                     evaluator_type = MMLU_ProEvaluator
                 elif evaluator_name.lower() == "aime":
                     evaluator_type = AIMEEvaluator
+                elif evaluator_name.lower() == "bbh":
+                    evaluator_type = BBHEvaluator
+                elif evaluator_name.lower() == "humaneval":
+                    evaluator_type = HumanEvalEvaluator
+                elif evaluator_name.lower() == "mbpp":
+                    evaluator_type = MBPPEvaluator
                 else:
                     evaluator_type = MathEvaluator
                     
@@ -538,7 +544,7 @@ class AgentSystem(abc.ABC):
                 
                 # Record evaluation metrics
                 if self.metrics_collector:
-                    score = evaluation_results.get("math_score", 0)
+                    score = evaluation_results.get("score", 0)
                     self.metrics_collector.record_evaluation_result(
                         problem_id=problem_id,
                         score=score,
