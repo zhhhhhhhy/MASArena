@@ -173,7 +173,6 @@ class MemoryInstrumenter:
                 dtype = model_info.get("dtype", "float16").lower()
                 bytes_per_parameter = DTY_TYPE_SIZES.get(dtype, 2)  # Default to float16 if unknown
             else:
-                print(f"Model {model_name} not found in MODEL_DATA (not opensource or not supported)")
                 return None
             
             # Convert billions of parameters to bytes using model-specific format
@@ -184,7 +183,6 @@ class MemoryInstrumenter:
             context_length = input_token_count + output_token_count
             kv_cache_bytes = calculate_kv_cache_size(model_name, context_length, dtype)
             if kv_cache_bytes is None:
-                print(f"Could not calculate KV cache size for model {model_name}")
                 return None
             
             # Total memory usage
