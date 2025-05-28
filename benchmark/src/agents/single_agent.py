@@ -35,9 +35,9 @@ class SingleAgent(AgentSystem):
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")  # Use qwen-plus
         self.system_prompt = (
             self.config.get("system_prompt")
-            or "You are an intelligent AI assistant specialized in solving complex problems step by step."
+            or self.format_prompt()
         )
-        
+                
         # Initialize evaluator and metrics collector through base class methods
         self._initialize_evaluator()
         self._initialize_metrics_collector()
@@ -64,7 +64,6 @@ class SingleAgent(AgentSystem):
         # Prepare messages
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content":self.format_prompt()},
             {"role": "user", "content": f"Problem: {problem_text}"},
         ]
 
