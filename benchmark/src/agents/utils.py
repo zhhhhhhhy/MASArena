@@ -22,3 +22,14 @@ Your response must follow this format:
 [Your final answer here]
 </answer>
 """
+
+
+MMLU_PROMPT = """
+
+"""
+
+
+MATH_PROMPT = """
+
+"""
+

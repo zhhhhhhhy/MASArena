@@ -74,12 +74,12 @@ class AgentSystem(abc.ABC):
         """
         Format the prompt for different benchmarks. 
         """
-        if benchmark == "bbh":
+        if self.evaluator_name == "bbh":
             return BBH_FORMAT_PROMPT
-        if benchmark == "mmlu_pro":
-            return MMLU_prompt
+        if self.evaluator_name == "mmlu_pro":
+            return MMLU_PROMPT
         else:
-            return math_prompt
+            return MATH_PROMPT
 
  
 
