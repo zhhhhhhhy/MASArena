@@ -64,7 +64,7 @@ class SingleAgent(AgentSystem):
         # Prepare messages
         messages = [
             {"role": "system", "content": self.system_prompt},
-            {"role": "user", "content":self.format_prompt(benchmark=self.evaluator_name)},
+            {"role": "user", "content":self.format_prompt()},
             {"role": "user", "content": f"Problem: {problem_text}"},
         ]
 
