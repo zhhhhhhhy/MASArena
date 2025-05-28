@@ -446,7 +446,7 @@ class AgentSystem(abc.ABC):
             
         return file_path
 
-    def evaluate(self, problem: Dict[str, Any], problem_type: str, **kwargs) -> Dict[str, Any]:
+    def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Evaluate the agent system on a given problem.
         
@@ -503,7 +503,7 @@ class AgentSystem(abc.ABC):
         
         try:
             # Run the agent system
-            run_result = self.run_agent(problem, problem_type, **kwargs)
+            run_result = self.run_agent(problem, **kwargs)
             
             # Record execution time
             execution_time_ms = 0
@@ -556,7 +556,7 @@ class AgentSystem(abc.ABC):
                         tags={
                             "agent_system": self.name,
                             "evaluator": self.evaluator.name,
-                            "problem_type": self.evaluator.name,
+                            # "problem_type": self.evaluator.name,
                             "run_id": run_id
                         }
                     )
