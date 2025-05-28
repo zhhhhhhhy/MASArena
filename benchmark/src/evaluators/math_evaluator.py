@@ -214,7 +214,7 @@ class MathEvaluator:
                 "prediction": final_answer,
                 "extracted_answer": extracted_answer,
                 "expected": problem["solution"],
-                "math_score": score,
+                "score": score,
                 "passed": score == 1,
             },
             run_type="evaluation",
@@ -247,7 +247,7 @@ class MathEvaluator:
         # Return evaluation results
         return {
             "final_answer": final_answer,
-            "math_score": score,
+            "score": score,
             "run_evaluation": run_evaluation,
             "extracted_answer": extracted_answer,
         } 

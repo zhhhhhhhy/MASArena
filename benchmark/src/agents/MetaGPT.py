@@ -134,171 +134,175 @@ class MetaGPT(AgentSystem):
         """Initialize all agents in the system and return them for TIW."""
         agents_dict = {}
         
-        # Product Manager
+        # Product Manager (PM)
         agents_dict["product_manager"] = Agent(
-            name="Product Manager",
-            description="Responsible for requirement analysis, market research, writing PRD, and defining product goals and user stories.",
-            goals=[
-                "Analyze user requirements",
-                "Conduct market research",
-                "Write Product Requirements Document (PRD)",
-                "Define product goals and user stories"
-            ],
-            constraints=[
-                "Must consider actual user needs",
-                "Must consider market feasibility",
-                "Must clarify core product value"
-            ],
-            role="product_manager",
-            system_prompt="""You are a professional Product Manager responsible for requirement analysis, market research, writing PRD, and defining product goals and user stories.
-Your workflow is:
-1. Receive user requirements
-2. Conduct requirement analysis
-3. Perform market research
-4. Write Product Requirements Document (PRD)
-5. Define product goals and user stories
+    name="Product Manager",
+    description="Responsible for analysing the HumanEval prompt, defining requirements and acceptance criteria.",
+    goals=[
+        "Clarify user story", "Define acceptance criteria", "Produce task list"
+    ],
+    constraints=[
+        "Keep requirements concise", "Avoid technical implementation details"
+    ],
+    role="product_manager",
+    system_prompt=(
+        "You are **Product Manager**.\n\n"
+        "### Workflow\n"
+        "1. Read the HumanEval problem statement.\n"
+        "2. Summarise the *user story* in one sentence.\n"
+        "3. List *acceptance criteria* that the final code must satisfy.\n"
+        "4. Break work into *tasks* for Architect / Engineer / QA.\n\n"
+        "### Output Markdown Template  \n"
+        "```\n"
+        "## User Story\n"
+        "- …\n\n"
+        "## Acceptance Criteria\n"
+        "- …\n"
+        "- …\n\n"
+        "## Task List\n"
+        "- A1 Architect: …\n"
+        "- E1 Engineer: …\n"
+        "- QA1 QA Engineer: …\n"
+        "```\n"
+        "Use exactly these headings; do **not** output JSON."
+    )
+)
 
-Please ensure your output includes:
-1. Requirement analysis results
-2. Market research results
-3. Product Requirements Document (PRD)
-4. Product goals and user stories
-
-Your output should be well-structured for other roles to understand and execute."""
-        )
-        
-        # Architect
+# Architect
         agents_dict["architect"] = Agent(
-            name="Architect",
-            description="Responsible for system design, including technology selection, system architecture diagram creation, and interface definition.",
-            goals=[
-                "Design system architecture",
-                "Select technology stack",
-                "Create system architecture diagram",
-                "Define interface specifications"
-            ],
-            constraints=[
-                "Must consider system scalability",
-                "Must consider system maintainability",
-                "Must consider system performance"
-            ],
-            role="architect",
-            system_prompt="""You are a professional Architect responsible for system design, including technology selection, system architecture diagram creation, and interface definition.
-Your workflow is:
-1. Receive Product Requirements Document (PRD)
-2. Design system architecture
-3. Select technology stack
-4. Create system architecture diagram
-5. Define interface specifications
+    name="Architect",
+    description="Responsible for high-level design and defining module interfaces.",
+    goals=[
+        "Provide architecture diagram", "Define module interfaces", "Choose data structures"
+    ],
+    constraints=[
+        "Follow PM requirements", "Design for readability & efficiency"
+    ],
+    role="architect",
+    system_prompt=(
+        "You are **Architect**.\n\n"
+        "### Workflow\n"
+        "1. Receive requirements & tasks from Product Manager.\n"
+        "2. Outline the solution architecture.\n"
+        "3. Specify *function signatures* and key data structures.\n"
+        "4. Recommend algorithms / complexity.\n\n"
+        "### Output Markdown Template  \n"
+        "```\n"
+        "## High-Level Design\n"
+        "- …\n\n"
+        "## Module Interfaces\n"
+        "```python\n"
+        "# function stubs / interfaces here\n"
+        "```\n\n"
+        "## Design Rationale\n"
+        "- Time / space complexity: …\n"
+        "- Trade-offs: …\n"
+        "```\n"
+        "Everything that must be coded later goes in the python block under *Module Interfaces*."
+    )
+)
 
-Please ensure your output includes:
-1. System architecture design
-2. Technology stack selection results
-3. System architecture diagram
-4. Interface specifications
-
-Your output should be well-structured for other roles to understand and execute."""
-        )
-        
-        # Project Manager
+# Project Manager (PMgr)
         agents_dict["project_manager"] = Agent(
-            name="Project Manager",
-            description="Responsible for project management and task breakdown, breaking complex tasks into smaller subtasks and assigning them to engineers.",
-            goals=[
-                "Break down tasks",
-                "Assign tasks",
-                "Track task progress",
-                "Coordinate team members"
-            ],
-            constraints=[
-                "Must ensure reasonable task allocation",
-                "Must ensure task feasibility",
-                "Must ensure task priority"
-            ],
-            role="project_manager",
-            system_prompt="""You are a professional Project Manager responsible for project management and task breakdown, breaking complex tasks into smaller subtasks and assigning them to engineers.
-Your workflow is:
-1. Receive PRD and system architecture design
-2. Break down tasks
-3. Assign tasks
-4. Track task progress
-5. Coordinate team members
-
-Please ensure your output includes:
-1. Task breakdown results
-2. Task assignment results
-3. Task progress tracking
-4. Team coordination results
-
-Your output should be well-structured for other roles to understand and execute."""
-        )
-        
+    name="Project Manager",
+    description="Responsible for planning, scheduling and risk management.",
+    goals=[
+        "Create timeline", "Track progress", "Mitigate risks"
+    ],
+    constraints=[
+        "Timeline must be short (<=10 steps)", "Highlight critical path"
+    ],
+    role="project_manager",
+    system_prompt=(
+        "You are **Project Manager**.\n\n"
+        "### Workflow\n"
+        "1. Collect task list from Product Manager.\n"
+        "2. Produce a concise timeline (max 10 steps).\n"
+        "3. Identify risks and mitigation strategies.\n"
+        "4. Assign owners.\n\n"
+        "### Output Markdown Template  \n"
+        "```\n"
+        "## Timeline\n"
+        "| Step | Owner | Description |\n"
+        "|------|-------|-------------|\n"
+        "| 1 | Architect | … |\n"
+        "| 2 | Engineer  | … |\n"
+        "| … | … | … |\n\n"
+        "## Risks & Mitigations\n"
+        "- *Risk*: …  \n"
+        "  *Mitigation*: …\n"
+        "- *Risk*: …  \n"
+        "  *Mitigation*: …\n"
+        "```\n"
+        "Stick to the table format for the timeline; it makes parsing easy."
+    )
+)
         # Engineer
         agents_dict["engineer"] = Agent(
-            name="Engineer",
-            description="Responsible for code writing and implementation, developing according to architect's design and project manager's task assignments.",
-            goals=[
-                "Write code",
-                "Implement features",
-                "Fix bugs",
-                "Optimize performance"
-            ],
-            constraints=[
-                "Must follow architecture design",
-                "Must follow coding standards",
-                "Must ensure code quality"
-            ],
-            role="engineer",
-            system_prompt="""You are a professional Engineer responsible for code writing and implementation, developing according to architect's design and project manager's task assignments.
-Your workflow is:
-1. Receive task assignments
-2. Write code
-3. Implement features
-4. Fix bugs
-5. Optimize performance
+    name="Engineer",
+    description="Responsible for coding and implementation according to architect design and PM tasks.",
+    goals=[
+        "Write code", "Implement features", "Fix bugs", "Optimize performance"
+    ],
+    constraints=[
+        "Follow architecture", "Follow PEP-8", "Write unit-test-ready code"
+    ],
+    role="engineer",
+    system_prompt=(
+        "You are **Engineer**.\n\n"
+        "### Workflow\n"
+        "1. Pick up the task description (HumanEval prompt).\n"
+        "2. Provide a *concise* explanation of your approach.\n"
+        "3. Write Python code **inside a fenced block** exactly once.\n"
+        "4. List any bug-fixes or optimisations you applied.\n\n"
+        "### Output Markdown Template  \n"
+        "```\n"
+        "## Explanation\n"
+        "- …\n\n"
+        "## Code\n"
+        "```python\n"
+        "# your solution here\n"
+        "```\n\n"
+        "## Bug Fixes & Optimisations\n"
+        "- …\n"
+        "```\n"
+        "Use this template verbatim so the evaluator can locate the ```python code block```."
+    )
+)
 
-Please ensure your output includes:
-1. Code implementation
-2. Feature description
-3. Fixed bugs
-4. Performance optimization results
-
-Your output should be well-structured for other roles to understand and execute."""
-        )
-        
-        # QA Engineer
+# QA Engineer
         agents_dict["qa_engineer"] = Agent(
-            name="QA Engineer",
-            description="Responsible for testing and quality assurance, ensuring code correctness and stability.",
-            goals=[
-                "Design test cases",
-                "Execute tests",
-                "Find bugs",
-                "Provide improvement suggestions"
-            ],
-            constraints=[
-                "Must ensure comprehensive testing",
-                "Must ensure test accuracy",
-                "Must ensure test reproducibility"
-            ],
-            role="qa_engineer",
-            system_prompt="""You are a professional QA Engineer responsible for testing and quality assurance, ensuring code correctness and stability.
-Your workflow is:
-1. Receive code implementation
-2. Design test cases
-3. Execute tests
-4. Find bugs
-5. Provide improvement suggestions
+    name="QA Engineer",
+    description="Responsible for testing and delivering the final validated code.",
+    goals=[
+        "Design tests", "Run tests", "Report bugs", "Return final code"
+    ],
+    constraints=[
+        "Tests must cover edge cases", "Return final working code block"
+    ],
+    role="qa_engineer",
+    system_prompt=(
+        "You are **QA Engineer**.\n\n"
+        "### Workflow\n"
+        "1. Receive candidate code from Engineer.\n"
+        "2. Write additional tests inline if needed.\n"
+        "3. Fix any discovered issues (light edits only).\n"
+        "4. **Return the final, tested code in a single ```python block** under `## Final Code`.\n\n"
+        "### Output Markdown Template  \n"
+        "```\n"
+        "## Test Report\n"
+        "- Passed cases: …\n"
+        "- Failed cases: … / None\n\n"
+        "## Final Code\n"
+        "```python\n"
+        "# final solution here (will be executed by evaluator)\n"
+        "```\n"
+        "```\n"
+        "Evaluator will run ONLY the code in `## Final Code`."
+    )
+)
 
-Please ensure your output includes:
-1. Test case design
-2. Test execution results
-3. Found bugs
-4. Improvement suggestions
 
-Your output should be well-structured for other roles to understand and execute."""
-        )
-        
         self.agents = agents_dict
         return {"workers": list(agents_dict.values())}
     
@@ -334,7 +338,15 @@ Your output should be well-structured for other roles to understand and execute.
             SystemMessage(content=agent.system_prompt),
             HumanMessage(content=f"Task information: {json.dumps(task, ensure_ascii=False)}")
         ]
-        
+
+        # Get corresponding schema
+        schema_map = {
+        "product_manager": None,
+        "architect": None,
+        "project_manager": None,
+        "engineer": None,
+        "qa_engineer": None
+        }
         # Get corresponding schema
         schema = schema_map.get(agent_name)
         
@@ -441,7 +453,7 @@ Your output should be well-structured for other roles to understand and execute.
         
         return result
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def run_agent(self, problem: Dict[str, Any], problem_type: str, **kwargs) -> Dict[str, Any]:
         """
         Run MAS system
         

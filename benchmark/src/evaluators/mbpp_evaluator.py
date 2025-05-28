@@ -129,7 +129,7 @@ class MBPPEvaluator:
         return Run(
             id=str(uuid.uuid4()),
             name=f"{self.name.upper()}_Evaluation",
-            inputs={"problem": problem["prompt"]},
+            inputs={"problem": problem["problem"]},
             outputs={
                 "prediction": final_answer,
                 "extracted_answer": extracted_answer,

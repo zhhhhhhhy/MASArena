@@ -543,7 +543,7 @@ class AgentSystem(abc.ABC):
                 
                 # Record evaluation metrics
                 if self.metrics_collector:
-                    score = evaluation_results.get("math_score", 0)
+                    score = evaluation_results.get("score", 0)
                     self.metrics_collector.record_evaluation_result(
                         problem_id=problem_id,
                         score=score,
