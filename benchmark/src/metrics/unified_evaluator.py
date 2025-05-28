@@ -555,7 +555,7 @@ class UnifiedEvaluator:
         """
         results = {}
         system_metrics_collector = SystemMetricsCollector() # Instantiate once
-
+        
         for file_path in result_files:
             with open(file_path, 'r') as f:
                 data = json.load(f)
@@ -568,7 +568,7 @@ class UnifiedEvaluator:
                 results[agent_system_name] = {
                     'accuracy': 0,
                     'throughput_tasks_per_sec': 0,
-                    'latency_ms': 0,
+                    'latency_ttft_ms': 0,
                     'estimated_memory_mb': 0,
                     'throughput_estimated_tokens_per_sec': 0,
                     'model': [],
@@ -595,7 +595,7 @@ class UnifiedEvaluator:
                     prompt_tokens = agent_call.get('prompt_tokens', 0)
                     completion_tokens = agent_call.get('completion_tokens', 0)
                     observed_latency_ms = agent_call.get('latency_ms', 0)
-
+                    
                     estimated_metrics = system_metrics_collector.estimate_inference_metrics(
                         model_name=model_name,
                         input_token_count=prompt_tokens,
@@ -611,7 +611,7 @@ class UnifiedEvaluator:
                     })
 
             # Aggregate metrics
-            sum_latency_contributions_ms = 0
+            sum_latency_ttft_contributions_ms = 0
             sum_estimated_memory_bytes = 0
             sum_estimated_output_tokens = 0
             sum_estimated_generation_time_seconds = 0
@@ -619,7 +619,7 @@ class UnifiedEvaluator:
 
             for call_detail in all_agent_calls_details:
                 if call_detail['estimated_metrics']: # Open-source / estimable
-                    sum_latency_contributions_ms += call_detail['estimated_metrics'].get('ttft_seconds', 0) * 1000
+                    sum_latency_ttft_contributions_ms += call_detail['estimated_metrics'].get('ttft_seconds', 0) * 1000
                     sum_estimated_memory_bytes += call_detail['estimated_metrics'].get('memory_usage_bytes', 0)
                     
                     tokens_per_sec = call_detail['estimated_metrics'].get('tokens_per_second', 0)
@@ -627,9 +627,9 @@ class UnifiedEvaluator:
                         sum_estimated_output_tokens += call_detail['completion_tokens']
                         sum_estimated_generation_time_seconds += call_detail['completion_tokens'] / tokens_per_sec
                 else: # Closed-source / not estimable
-                    sum_latency_contributions_ms += call_detail['observed_latency_ms']
+                    sum_latency_ttft_contributions_ms += call_detail['observed_latency_ms']
 
-            avg_overall_latency_ms = sum_latency_contributions_ms / num_agent_invocations if num_agent_invocations > 0 else 0
+            avg_overall_latency_ttft_ms = sum_latency_ttft_contributions_ms / num_agent_invocations if num_agent_invocations > 0 else 0
             overall_estimated_memory_mb = sum_estimated_memory_bytes / (1024 * 1024)
             
             overall_throughput_estimated_tokens_per_sec = 0
@@ -649,14 +649,14 @@ class UnifiedEvaluator:
                         'invocations': len(calls_for_this_model),
                         'total_prompt_tokens': sum(cd['prompt_tokens'] for cd in calls_for_this_model),
                         'total_completion_tokens': sum(cd['completion_tokens'] for cd in calls_for_this_model)
-                    }
-
+                        }
+            
                     # Check if this model type is estimable (based on the first call, assuming consistency)
                     first_call_estimable = calls_for_this_model[0]['estimated_metrics'] is not None
 
                     if first_call_estimable:
-                        estimable_latencies = [cd['estimated_metrics']['ttft_seconds'] * 1000 for cd in calls_for_this_model if cd['estimated_metrics']]
-                        model_info_entry['latency_ms'] = sum(estimable_latencies) / len(estimable_latencies) if estimable_latencies else 0
+                        estimable_ttfts_ms = [cd['estimated_metrics']['ttft_seconds'] * 1000 for cd in calls_for_this_model if cd['estimated_metrics']]
+                        model_info_entry['latency_ttft_ms'] = sum(estimable_ttfts_ms) / len(estimable_ttfts_ms) if estimable_ttfts_ms else 0
                         
                         estimable_tps = [cd['estimated_metrics']['tokens_per_second'] for cd in calls_for_this_model if cd['estimated_metrics'] and cd['estimated_metrics'].get('tokens_per_second', 0) > 0]
                         model_info_entry['tokens_per_second'] = sum(estimable_tps) / len(estimable_tps) if estimable_tps else 0
@@ -665,14 +665,14 @@ class UnifiedEvaluator:
                         model_info_entry['estimated_memory_mb'] = estimable_memory_bytes / (1024 * 1024)
                     else:
                         observed_latencies = [cd['observed_latency_ms'] for cd in calls_for_this_model]
-                        model_info_entry['latency_ms'] = sum(observed_latencies) / len(observed_latencies) if observed_latencies else 0
+                        model_info_entry['latency_ttft_ms'] = sum(observed_latencies) / len(observed_latencies) if observed_latencies else 0
                     
                     final_models_info.append(model_info_entry)
             
             results[agent_system_name] = {
                 'accuracy': accuracy,
                 'throughput_tasks_per_sec': throughput_tasks_per_sec,
-                'latency_ms': avg_overall_latency_ms,
+                'latency_ttft_ms': avg_overall_latency_ttft_ms,
                 'estimated_memory_mb': overall_estimated_memory_mb, # Memory contributed by estimable (open-source) models
                 'throughput_estimated_tokens_per_sec': overall_throughput_estimated_tokens_per_sec, # Throughput for estimable models
                 'model': final_models_info
