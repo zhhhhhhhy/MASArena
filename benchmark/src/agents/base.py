@@ -68,13 +68,13 @@ class AgentSystem(abc.ABC):
             # ToolIntegrationWrapper, if used (see create_agent_system factory),
             # will handle patching for tool integration.
 
-    def format_prompt(self, benchmark: str) -> str:
+    def format_prompt(self) -> str:
         # todo: format prompts for different benchmarks
 
         """
         Format the prompt for different benchmarks. 
         """
-        if benchmark == "bbh":
+        if self.evaluator_name == "bbh":
             return BBH_FORMAT_PROMPT
         else:
             return ""
