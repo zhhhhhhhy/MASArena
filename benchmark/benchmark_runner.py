@@ -23,42 +23,7 @@ from benchmark.src.metrics import (
 )
 from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
-
-# Define benchmark key mappings for extensibility
-BENCHMARK_KEY_MAPPINGS = {
-    "humaneval": {
-        "id": "task_id",
-        "problem": "prompt",
-        "solution": "canonical_solution",
-        "test": "test",
-        "entry_point": "entry_point",
-        "test_imports": None
-    },
-    "mbpp": {
-        "id": "task_id",
-        "problem": "prompt",
-        "solution": "code",
-        "test": "test",
-        "entry_point": "entry_point",
-        "test_imports": "test_imports"
-    },
-    "math": {
-        "id": "id",
-        "problem": "problem",
-        "solution": "solution",
-        "test": None,
-        "entry_point": None,
-        "test_imports": None
-    },
-    "bbh": {
-        "id": "task_id",
-        "problem": "input",
-        "solution": "target",
-        "test": None,
-        "entry_point": None,
-        "test_imports": None
-    },
-}
+from benchmark.src.evaluators.utils.normalization import normalize_problem_keys
 
 class BenchmarkRunner:
     """
@@ -218,11 +183,6 @@ class BenchmarkRunner:
             }
         )
 
-        # Get key mapping for the benchmark
-        key_mapping = BENCHMARK_KEY_MAPPINGS.get(benchmark_name)
-        if key_mapping is None:
-            raise ValueError(f"Unknown benchmark: {benchmark_name}. Supported: {', '.join(BENCHMARK_KEY_MAPPINGS.keys())}")
-
         # Process problems
         all_results = []
         correct_count = 0
@@ -231,15 +191,7 @@ class BenchmarkRunner:
 
         for i, problem in enumerate(problems):
             # Normalize problem dictionary
-            normalized_problem = {
-                "id": problem.get(key_mapping["id"], f"problem_{i + 1}"),
-                "problem": problem.get(key_mapping["problem"], ""),
-                "solution": problem.get(key_mapping["solution"], ""),
-                "test": problem.get(key_mapping["test"], ""),
-                "entry_point": problem.get(key_mapping["entry_point"], ""),
-            }
-            if key_mapping["test_imports"] is not None:
-                normalized_problem["test_imports"] = problem.get(key_mapping["test_imports"], [])
+            normalized_problem = normalize_problem_keys(problem, benchmark_name, i)
 
             problem_id = normalized_problem["id"]
 
@@ -259,7 +211,7 @@ class BenchmarkRunner:
 
             try:
                 # Evaluate the problem using the agent system
-                results = agent.evaluate(normalized_problem, benchmark_name,metrics_registry=self.metrics_registry)
+                results = agent.evaluate(normalized_problem, metrics_registry=self.metrics_registry)
 
                 # Stop problem timer
                 problem_duration_ms = self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
