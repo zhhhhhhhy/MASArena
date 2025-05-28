@@ -386,13 +386,13 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
     def _need_iteration(self, qa_content: str) -> bool:
         return bool(self._extract_bugs(qa_content) or self._extract_suggestions(qa_content))
 
-    def run_agent(self, question: Dict, problem_type: str, **kwargs) -> Dict[str, Any]:
+    def run_agent(self, question: Dict, **kwargs) -> Dict[str, Any]:
         start_time = time.time()
         
         try:
             self.message_history = []
             
-            if problem_type.lower() == "humaneval":
+            if self.evaluator_name.lower() == "humaneval":
                 # Parse the prompt to extract requirements, constraints, and examples
                 prompt = question.get("problem", "")
                 task_id = question.get("id", "unknown")
@@ -509,7 +509,7 @@ if __name__ == "__main__":
     # Run test
     try:
         print("Starting MetaGPT system test...")
-        result = metagpt.run_agent(test_problem, problem_type="code_generation")
+        result = metagpt.run_agent(test_problem)
         
         print("\nTest Results:")
         print("-" * 50)

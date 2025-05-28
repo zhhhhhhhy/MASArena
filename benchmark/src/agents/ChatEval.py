@@ -116,12 +116,12 @@ class ResultExtractor:
         )
         self.name = "result_extractor"
         
-    def extract(self, all_histories: List[List[Dict[str, str]]], problem: str, problem_type: str = "math", options: str = None) -> Dict[str, Any]:
+    def extract(self, all_histories: List[List[Dict[str, str]]], problem: str, options: str = None) -> Dict[str, Any]:
         """
         从所有代理的对话历史中提取最终答案
         """
         # 根据问题类型选择不同的提示
-        if problem_type.lower() == "mmlu_pro":
+        if self.evaluator_name.lower() == "mmlu_pro" and options:
             prompt = f"""Original problem: {problem}
 
 Options:
@@ -264,14 +264,14 @@ You are the Logic Expert, focused on providing logical perspective analysis."""
 
 You are the Critical Thinking Expert, focused on providing multi-angle perspective analysis."""
 
-    def run_agent(self, problem: Dict[str, Any], problem_type: str = "math", **kwargs) -> Dict[str, Any]:
+    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """运行迭代辩论过程"""
         problem_text = problem["problem"]
         start_time = time.time()
         
         # 获取选项（如果是 MMLU_pro 类型）
         options = None
-        if problem_type.lower() == "mmlu_pro":
+        if self.evaluator_name.lower() == "mmlu_pro":
             options = problem.get("options", None)
             if options and isinstance(options, list):
                 options_text = ""
@@ -289,7 +289,7 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
         for t in range(self.num_rounds):
             for n, agent in enumerate(self.agents):
                 # 生成当前代理的响应
-                context = self._build_context(problem_text, n, t, problem_type, options)
+                context = self._build_context(problem_text, n, t, options)
                 response_data = agent.generate_response(context)
                 
                 # 保存响应对象
@@ -308,7 +308,7 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
         agent_histories = [agent.chat_history for agent in self.agents]
         
         # 提取最终答案
-        extractor_result = self.extractor.extract(agent_histories, problem_text, problem_type, options)
+        extractor_result = self.extractor.extract(agent_histories, problem_text, options)
         
         # 添加评估器消息
         if "message" in extractor_result and extractor_result["message"]:
@@ -322,13 +322,13 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
             "execution_time_ms": duration_ms
         }
 
-    def _build_context(self, problem: str, agent_index: int, round_num: int, problem_type: str = "math", options: Optional[str] = None) -> str:
+    def _build_context(self, problem: str, agent_index: int, round_num: int, options: Optional[str] = None) -> str:
         """构建当前代理的上下文"""
         agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         agent_name = agent_names[agent_index]
         
         problem_statement = f"Original problem: {problem}"
-        if problem_type.lower() == "mmlu_pro" and options:
+        if self.evaluator_name.lower() == "mmlu_pro" and options:
             problem_statement += f"\n\nOptions:\n{options}"
 
         if round_num == 0 and agent_index == 0:
