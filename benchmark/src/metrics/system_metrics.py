@@ -598,8 +598,10 @@ class SystemMetricsCollector(BaseMetricsCollector):
                 'tokens_per_second': Estimated token generation rate
                 'memory_usage_bytes': Total memory usage in bytes
         """
+        # parameter count
         from benchmark.data.model_data import MODEL_DATA 
         if model_name not in MODEL_DATA:
+            print(f"Model {model_name} not found in MODEL_DATA (not opensource or not supported)")
             return None
         
         model_info = MODEL_DATA[model_name]
@@ -619,6 +621,7 @@ class SystemMetricsCollector(BaseMetricsCollector):
         )
         
         if memory_estimates is None:
+            print(f"Could not estimate memory cost for model {model_name}")
             return None
 
         activation_memory = memory_estimates['activated_memory']  # In bytes

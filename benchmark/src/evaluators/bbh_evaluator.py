@@ -241,7 +241,7 @@ class BBHEvaluator:
                 problem = json.loads(line.strip())
                 try:
                     # Run agent on problem
-                    agent_response = agent.run_agent(problem)
+                    agent_response = agent.run_agent(problem, problem_type="bbh")
                     # Evaluate
                     result = self.evaluate(problem, agent_response)
                     results.append(result)

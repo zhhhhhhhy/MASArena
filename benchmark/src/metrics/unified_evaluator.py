@@ -543,139 +543,94 @@ class UnifiedEvaluator:
         """
         Evaluate inference metrics from benchmark result files.
         
-        For open-source models (estimable via SystemMetricsCollector), TTFT, throughput (tokens/sec),
-        and memory usage are derived from estimations.
-        For closed-source models, observed latency is used, and estimated memory/throughput are not applicable from these functions.
-        
         Args:
             result_files: List of paths to benchmark result files
             
         Returns:
-            Dictionary mapping agent system names to metrics including estimated values for open models.
+            Dictionary mapping agent system names to metrics
         """
         results = {}
-        system_metrics_collector = SystemMetricsCollector() # Instantiate once
         
         for file_path in result_files:
+            # Load the results file
             with open(file_path, 'r') as f:
                 data = json.load(f)
             
+            # Extract agent system name from file name
             file_name = os.path.basename(file_path)
             parts = file_name.split('_')
-            agent_system_name = parts[1]
-
-            if not data:
-                results[agent_system_name] = {
-                    'accuracy': 0,
-                    'throughput_tasks_per_sec': 0,
-                    'latency_ttft_ms': 0,
-                    'estimated_memory_mb': 0,
-                    'throughput_estimated_tokens_per_sec': 0,
-                    'model': [],
-                    'error': 'No data in result file'
-                }
-                continue
-
+            agent_system_name = parts[1]  # Assuming format math_<system>_date.json
+            
+            # Initialize metrics
             total_problems = len(data)
             correct = sum(1 for item in data if item.get('score', 0) == 1)
             accuracy = correct / total_problems if total_problems > 0 else 0
             
-            total_duration_ms_observed = sum(item.get('duration_ms', 0) for item in data)
-            avg_problem_duration_ms = total_duration_ms_observed / total_problems if total_problems > 0 else 0
-            throughput_tasks_per_sec = 1000.0 / avg_problem_duration_ms if avg_problem_duration_ms > 0 else 0
-
-            all_agent_calls_details = []
+            # Calculate average throughput and latency
+            total_duration_ms = sum(item.get('duration_ms', 0) for item in data)
+            avg_duration_ms = total_duration_ms / total_problems if total_problems > 0 else 0
+            throughput = 1000.0 / avg_duration_ms if avg_duration_ms > 0 else 0  # Tasks per second
+            
+            # Process model metrics
+            models_info = []
+            total_memory = 0
+            ttft_sum = 0
+            model_metrics = {}
             
             for item in data:
                 llm_usage = item.get('llm_usage', {})
                 agent_usage = llm_usage.get('agent_usage', [])
                 
-                for agent_call in agent_usage:
-                    model_name = agent_call.get('model_name', 'unknown_model')
-                    prompt_tokens = agent_call.get('prompt_tokens', 0)
-                    completion_tokens = agent_call.get('completion_tokens', 0)
-                    observed_latency_ms = agent_call.get('latency_ms', 0)
+                for agent in agent_usage:
+                    model_name = agent.get('model_name', '')
+                    prompt_tokens = agent.get('prompt_tokens', 0)
+                    completion_tokens = agent.get('completion_tokens', 0)
+                    latency_ms = agent.get('latency_ms', 0)
                     
-                    estimated_metrics = system_metrics_collector.estimate_inference_metrics(
+                    # Use estimate_inference_metrics from SystemMetricsCollector
+                    system_metrics = SystemMetricsCollector()
+                    inference_metrics = system_metrics.estimate_inference_metrics(
                         model_name=model_name,
                         input_token_count=prompt_tokens,
                         output_token_count=completion_tokens
                     )
                     
-                    all_agent_calls_details.append({
-                        'model_name': model_name,
-                        'prompt_tokens': prompt_tokens,
-                        'completion_tokens': completion_tokens,
-                        'observed_latency_ms': observed_latency_ms,
-                        'estimated_metrics': estimated_metrics # Store the whole dict or None
-                    })
-
-            # Aggregate metrics
-            sum_latency_ttft_contributions_ms = 0
-            sum_estimated_memory_bytes = 0
-            sum_estimated_output_tokens = 0
-            sum_estimated_generation_time_seconds = 0
-            num_agent_invocations = len(all_agent_calls_details)
-
-            for call_detail in all_agent_calls_details:
-                if call_detail['estimated_metrics']: # Open-source / estimable
-                    sum_latency_ttft_contributions_ms += call_detail['estimated_metrics'].get('ttft_seconds', 0) * 1000
-                    sum_estimated_memory_bytes += call_detail['estimated_metrics'].get('memory_usage_bytes', 0)
+                    # Handle None case gracefully
+                    if inference_metrics is None:
+                        print(f"Could not estimate inference metrics for model {model_name}")
+                        inference_metrics = {
+                            "parameter_memory": 0,
+                            "activated_memory": 0,
+                            "kv_cache": 0,
+                            "total": 0
+                        }
                     
-                    tokens_per_sec = call_detail['estimated_metrics'].get('tokens_per_second', 0)
-                    if tokens_per_sec > 0:
-                        sum_estimated_output_tokens += call_detail['completion_tokens']
-                        sum_estimated_generation_time_seconds += call_detail['completion_tokens'] / tokens_per_sec
-                else: # Closed-source / not estimable
-                    sum_latency_ttft_contributions_ms += call_detail['observed_latency_ms']
-
-            avg_overall_latency_ttft_ms = sum_latency_ttft_contributions_ms / num_agent_invocations if num_agent_invocations > 0 else 0
-            overall_estimated_memory_mb = sum_estimated_memory_bytes / (1024 * 1024)
-            
-            overall_throughput_estimated_tokens_per_sec = 0
-            if sum_estimated_generation_time_seconds > 0:
-                overall_throughput_estimated_tokens_per_sec = sum_estimated_output_tokens / sum_estimated_generation_time_seconds
-
-            # Process unique model information for the 'model' list
-            final_models_info = []
-            if all_agent_calls_details:
-                unique_model_names = sorted(list(set(cd['model_name'] for cd in all_agent_calls_details)))
-                
-                for uname in unique_model_names:
-                    calls_for_this_model = [cd for cd in all_agent_calls_details if cd['model_name'] == uname]
+                    ttft_sum += inference_metrics.get('ttft_seconds', 0) * 1000  # Convert to ms
+                    total_memory += inference_metrics.get('memory_usage_bytes', 0)
                     
-                    model_info_entry = {
-                        'model_name': uname,
-                        'invocations': len(calls_for_this_model),
-                        'total_prompt_tokens': sum(cd['prompt_tokens'] for cd in calls_for_this_model),
-                        'total_completion_tokens': sum(cd['completion_tokens'] for cd in calls_for_this_model)
+                    # Track model information if not already tracked
+                    if model_name not in model_metrics:
+                        model_metrics[model_name] = {
+                            'model_name': model_name,
+                            'latency': inference_metrics.get('ttft_seconds', 0) * 1000,  # Convert to ms
+                            'input_token_count': prompt_tokens,
+                            'output_token_count': completion_tokens,
                         }
             
-                    # Check if this model type is estimable (based on the first call, assuming consistency)
-                    first_call_estimable = calls_for_this_model[0]['estimated_metrics'] is not None
-
-                    if first_call_estimable:
-                        estimable_ttfts_ms = [cd['estimated_metrics']['ttft_seconds'] * 1000 for cd in calls_for_this_model if cd['estimated_metrics']]
-                        model_info_entry['latency_ttft_ms'] = sum(estimable_ttfts_ms) / len(estimable_ttfts_ms) if estimable_ttfts_ms else 0
-                        
-                        estimable_tps = [cd['estimated_metrics']['tokens_per_second'] for cd in calls_for_this_model if cd['estimated_metrics'] and cd['estimated_metrics'].get('tokens_per_second', 0) > 0]
-                        model_info_entry['tokens_per_second'] = sum(estimable_tps) / len(estimable_tps) if estimable_tps else 0
-                        
-                        estimable_memory_bytes = sum(cd['estimated_metrics']['memory_usage_bytes'] for cd in calls_for_this_model if cd['estimated_metrics'])
-                        model_info_entry['estimated_memory_mb'] = estimable_memory_bytes / (1024 * 1024)
-                    else:
-                        observed_latencies = [cd['observed_latency_ms'] for cd in calls_for_this_model]
-                        model_info_entry['latency_ttft_ms'] = sum(observed_latencies) / len(observed_latencies) if observed_latencies else 0
-                    
-                    final_models_info.append(model_info_entry)
+            # Convert model_metrics dictionary to list
+            models_info = list(model_metrics.values())
             
+            # Calculate average TTFT
+            total_agents = sum(len(item.get('llm_usage', {}).get('agent_usage', [])) for item in data)
+            avg_ttft = ttft_sum / total_agents if total_agents else 0
+            
+            # Create results entry
             results[agent_system_name] = {
                 'accuracy': accuracy,
-                'throughput_tasks_per_sec': throughput_tasks_per_sec,
-                'latency_ttft_ms': avg_overall_latency_ttft_ms,
-                'estimated_memory_mb': overall_estimated_memory_mb, # Memory contributed by estimable (open-source) models
-                'throughput_estimated_tokens_per_sec': overall_throughput_estimated_tokens_per_sec, # Throughput for estimable models
-                'model': final_models_info
+                'throughput': throughput,
+                'latency': avg_ttft,
+                'memory': total_memory / (1024 * 1024),  # Convert to MB
+                'model': models_info
             }
         
         return results

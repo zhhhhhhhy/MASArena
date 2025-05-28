@@ -1,53 +1,15 @@
 import time
-import json
 import os
-import asyncio
-from typing import Dict, List, Any, Optional, Tuple, TypedDict
+import re
+import json
+from typing import Dict, List, Any
 from dataclasses import dataclass, field
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
-from typing import TypedDict, List, Dict, Any
-
-class PRD(TypedDict):
-    """Product Requirements Document"""
-    title: str
-    description: str
-    features: List[str]
-    requirements: List[str]
-
-class ArchitectureDesign(TypedDict):
-    """System Architecture Design"""
-    system_architecture: str
-    technology_stack: List[str]
-    architecture_diagram: str
-    interface_specifications: Dict[str, Any]
-
-class TaskBreakdown(TypedDict):
-    """Task Breakdown"""
-    tasks: List[Dict[str, Any]]
-    task_assignments: Dict[str, List[str]]
-    task_priorities: Dict[str, int]
-    task_dependencies: Dict[str, List[str]]
-
-class CodeImplementation(TypedDict):
-    """Code Implementation"""
-    code: str
-    implementation_details: str
-    bug_fixes: List[str]
-    performance_optimizations: List[str]
-
-class TestResults(TypedDict):
-    """Test Results"""
-    test_cases: List[Dict[str, Any]]
-    test_execution_results: Dict[str, bool]
-    bugs_found: List[str]
-    improvement_suggestions: List[str] 
-
 
 @dataclass
 class Agent:
-    """Base Agent class containing key attributes such as name, profile, goals, constraints and description"""
     name: str
     description: str
     goals: List[str]
@@ -70,17 +32,14 @@ class Agent:
         )
     
     def add_to_memory(self, key: str, value: Any):
-        """Add information to agent's memory"""
         if key not in self.memory:
             self.memory[key] = []
         self.memory[key].append(value)
     
     def get_from_memory(self, key: str) -> Any:
-        """Retrieve information from agent's memory"""
         return self.memory.get(key, [])
     
     def clear_memory(self, key: str = None):
-        """Clear agent's memory"""
         if key:
             self.memory[key] = []
         else:
@@ -91,223 +50,232 @@ class Agent:
                 "completed_tasks": []
             }
 
-
 class MetaGPT(AgentSystem):
-    """Multi-agent system based on Standard Operating Procedures (SOP)"""
-    
     def __init__(self, name: str = None, config: Dict[str, Any] = None):
-        """
-        Initialize SOPMAS system
-        
-        Args:
-            name: System name
-            config: Configuration parameters
-        """
         super().__init__(name, config)
-        
-        # Initialize agents by calling _create_agents
         create_agents_result = self._create_agents()
-        # self.agents is now set within _create_agents.
-        # The 'workers' key in create_agents_result is for ToolIntegrationWrapper.
-
-        # Initialize message queue
         self.message_queue = []
-        
-        # Initialize task status
         self.task_status = {
             "current_task": None,
             "task_history": [],
             "iteration_count": 0,
             "max_iterations": self.config.get("max_iterations", 3)
         }
-        
-        # Initialize LLM for MetaGPT (e.g., for summarization or tasks not tied to a specific role's LLM)
-        # This LLM is distinct from the LLMs within each Agent.
         self.llm = ChatOpenAI(
             model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
         )
-        
-        # Initialize message history
         self.message_history = []
     
     def _create_agents(self) -> Dict[str, List[Agent]]:
-        """Initialize all agents in the system and return them for TIW."""
         agents_dict = {}
         
-        # Product Manager (PM)
+        # Product Manager
         agents_dict["product_manager"] = Agent(
-    name="Product Manager",
-    description="Responsible for analysing the HumanEval prompt, defining requirements and acceptance criteria.",
-    goals=[
-        "Clarify user story", "Define acceptance criteria", "Produce task list"
-    ],
-    constraints=[
-        "Keep requirements concise", "Avoid technical implementation details"
-    ],
-    role="product_manager",
-    system_prompt=(
-        "You are **Product Manager**.\n\n"
-        "### Workflow\n"
-        "1. Read the HumanEval problem statement.\n"
-        "2. Summarise the *user story* in one sentence.\n"
-        "3. List *acceptance criteria* that the final code must satisfy.\n"
-        "4. Break work into *tasks* for Architect / Engineer / QA.\n\n"
-        "### Output Markdown Template  \n"
-        "```\n"
-        "## User Story\n"
-        "- …\n\n"
-        "## Acceptance Criteria\n"
-        "- …\n"
-        "- …\n\n"
-        "## Task List\n"
-        "- A1 Architect: …\n"
-        "- E1 Engineer: …\n"
-        "- QA1 QA Engineer: …\n"
-        "```\n"
-        "Use exactly these headings; do **not** output JSON."
-    )
-)
+            name="Product Manager",
+            description="Analyzes requirements for code generation tasks.",
+            goals=["Extract functional requirements", "Define task scope", "Parse constraints and examples"],
+            constraints=["Must align with problem prompt", "Ensure clarity"],
+            role="product_manager",
+            system_prompt="""You are a Product Manager for code generation tasks. Your task is to analyze the problem prompt and extract functional requirements, constraints, and examples from the docstring.
 
-# Architect
+<plan>
+1. Read the problem prompt, including the function signature and docstring.
+2. Extract the function signature (name, parameters, return type).
+3. Parse the docstring to identify input/output requirements, constraints, and examples.
+4. List functional requirements (e.g., input types, output format, edge cases).
+5. Define the task scope clearly, including any constraints or specific behaviors.
+</plan>
+
+For HumanEval problems, the prompt includes a function signature and docstring with examples and constraints. Extract:
+- Function name and parameters
+- Input constraints (e.g., value ranges, types)
+- Output format (e.g., string, integer, float)
+- Example inputs and outputs
+
+Output in plain text with markdown formatting, wrapped in <answer> tags:
+
+<answer>
+## Task Title
+{task_id}
+
+## Function Signature
+{Function name, parameters, and return type}
+
+## Description
+{Problem description from docstring}
+
+## Requirements
+- {Requirement 1}
+- {Requirement 2}
+
+## Constraints
+- {Constraint 1}
+- {Constraint 2}
+
+## Examples
+- Input: {Example input 1}, Output: {Example output 1}
+- Input: {Example input 2}, Output: {Example output 2}
+
+## Scope
+- {Scope description}
+</answer>
+"""
+        )
+        
+        # Architect
         agents_dict["architect"] = Agent(
-    name="Architect",
-    description="Responsible for high-level design and defining module interfaces.",
-    goals=[
-        "Provide architecture diagram", "Define module interfaces", "Choose data structures"
-    ],
-    constraints=[
-        "Follow PM requirements", "Design for readability & efficiency"
-    ],
-    role="architect",
-    system_prompt=(
-        "You are **Architect**.\n\n"
-        "### Workflow\n"
-        "1. Receive requirements & tasks from Product Manager.\n"
-        "2. Outline the solution architecture.\n"
-        "3. Specify *function signatures* and key data structures.\n"
-        "4. Recommend algorithms / complexity.\n\n"
-        "### Output Markdown Template  \n"
-        "```\n"
-        "## High-Level Design\n"
-        "- …\n\n"
-        "## Module Interfaces\n"
-        "```python\n"
-        "# function stubs / interfaces here\n"
-        "```\n\n"
-        "## Design Rationale\n"
-        "- Time / space complexity: …\n"
-        "- Trade-offs: …\n"
-        "```\n"
-        "Everything that must be coded later goes in the python block under *Module Interfaces*."
-    )
-)
+            name="Architect",
+            description="Designs implementation approach for code generation.",
+            goals=["Define implementation strategy", "Outline solution structure"],
+            constraints=["Must use Python", "Keep solution simple and maintainable"],
+            role="architect",
+            system_prompt="""You are an Architect for code generation tasks. Your task is to design the implementation approach based on the Product Manager's requirements.
 
-# Project Manager (PMgr)
+<plan>
+1. Review the Product Manager's requirements, constraints, examples, and scope.
+2. Select Python as the technology stack.
+3. Outline the function's logic in pseudocode, addressing all requirements and examples.
+4. Define the solution structure (e.g., functions, data structures) to handle inputs and produce the expected output.
+</plan>
+
+Output in plain text with markdown formatting, wrapped in <answer> tags:
+
+<answer>
+## Implementation Strategy
+{Pseudocode or logic description addressing requirements and examples}
+
+## Solution Structure
+- {Structure point 1}
+- {Structure point 2}
+
+## Technology Stack
+- Python
+</answer>
+"""
+        )
+        
+        # Project Manager
         agents_dict["project_manager"] = Agent(
-    name="Project Manager",
-    description="Responsible for planning, scheduling and risk management.",
-    goals=[
-        "Create timeline", "Track progress", "Mitigate risks"
-    ],
-    constraints=[
-        "Timeline must be short (<=10 steps)", "Highlight critical path"
-    ],
-    role="project_manager",
-    system_prompt=(
-        "You are **Project Manager**.\n\n"
-        "### Workflow\n"
-        "1. Collect task list from Product Manager.\n"
-        "2. Produce a concise timeline (max 10 steps).\n"
-        "3. Identify risks and mitigation strategies.\n"
-        "4. Assign owners.\n\n"
-        "### Output Markdown Template  \n"
-        "```\n"
-        "## Timeline\n"
-        "| Step | Owner | Description |\n"
-        "|------|-------|-------------|\n"
-        "| 1 | Architect | … |\n"
-        "| 2 | Engineer  | … |\n"
-        "| … | … | … |\n\n"
-        "## Risks & Mitigations\n"
-        "- *Risk*: …  \n"
-        "  *Mitigation*: …\n"
-        "- *Risk*: …  \n"
-        "  *Mitigation*: …\n"
-        "```\n"
-        "Stick to the table format for the timeline; it makes parsing easy."
-    )
-)
+            name="Project Manager",
+            description="Breaks down code generation tasks and assigns them.",
+            goals=["Assign coding task", "Ensure task clarity"],
+            constraints=["Single task for Engineer", "Align with architecture"],
+            role="project_manager",
+            system_prompt="""You are a Project Manager for code generation tasks. Your task is to assign the coding task to the Engineer based on requirements and architecture.
+
+<plan>
+1. Review Product Manager's requirements, constraints, examples, and Architect's design.
+2. Define a single, clear task for the Engineer to implement the function, including the function signature and expected behavior.
+3. Ensure the task aligns with the architecture, requirements, and examples.
+</plan>
+
+Output in plain text with markdown formatting, wrapped in <answer> tags:
+
+<answer>
+## Task Assignment
+- Task ID: code_function
+- Description: {Implement the function description}
+- Assigned to: Engineer
+- Function Signature: {Function signature}
+- Requirements: {List key requirements}
+- Constraints: {List key constraints}
+- Examples: {List key examples}
+- Architecture Notes: {Key architecture points}
+</answer>
+"""
+        )
+        
         # Engineer
         agents_dict["engineer"] = Agent(
-    name="Engineer",
-    description="Responsible for coding and implementation according to architect design and PM tasks.",
-    goals=[
-        "Write code", "Implement features", "Fix bugs", "Optimize performance"
-    ],
-    constraints=[
-        "Follow architecture", "Follow PEP-8", "Write unit-test-ready code"
-    ],
-    role="engineer",
-    system_prompt=(
-        "You are **Engineer**.\n\n"
-        "### Workflow\n"
-        "1. Pick up the task description (HumanEval prompt).\n"
-        "2. Provide a *concise* explanation of your approach.\n"
-        "3. Write Python code **inside a fenced block** exactly once.\n"
-        "4. List any bug-fixes or optimisations you applied.\n\n"
-        "### Output Markdown Template  \n"
-        "```\n"
-        "## Explanation\n"
-        "- …\n\n"
-        "## Code\n"
-        "```python\n"
-        "# your solution here\n"
-        "```\n\n"
-        "## Bug Fixes & Optimisations\n"
-        "- …\n"
-        "```\n"
-        "Use this template verbatim so the evaluator can locate the ```python code block```."
-    )
-)
+            name="Engineer",
+            description="Responsible for code writing and implementation, developing according to architect's design and project manager's task assignments.",
+            goals=[
+                "Write correct Python code",
+                "Implement features",
+                "Fix bugs",
+                "Optimize performance"
+            ],
+            constraints=[
+                "Must follow architecture design",
+                "Must match function signature",
+                "Use markdown code block"
+            ],
+            role="engineer",
+            system_prompt="""You are a professional Engineer responsible for code writing and implementation, developing according to the Architect's design and Project Manager's task assignments.
 
-# QA Engineer
+<plan>
+1. Review Product Manager's requirements, Architect's design, and Project Manager's task assignment, including function signature, constraints, and examples.
+2. Write Python code matching the function signature in the prompt.
+3. Implement all required features, handle edge cases, and ensure the code produces outputs matching the examples.
+4. Optimize code for performance and readability.
+5. Provide a clear explanation of the code logic.
+</plan>
+
+Output in plain text with markdown formatting, wrapped in <answer> tags:
+
+<answer>
+## Code
+```python
+{Python code here}
+```
+
+## Implementation Details
+- {Explanation point 1}
+- {Explanation point 2}
+
+## Features Implemented
+- {Feature 1}
+- {Feature 2}
+
+## Optimizations
+- {Optimization 1 or "None"}
+</answer>
+"""
+        )
+        
+        # QA Engineer
         agents_dict["qa_engineer"] = Agent(
-    name="QA Engineer",
-    description="Responsible for testing and delivering the final validated code.",
-    goals=[
-        "Design tests", "Run tests", "Report bugs", "Return final code"
-    ],
-    constraints=[
-        "Tests must cover edge cases", "Return final working code block"
-    ],
-    role="qa_engineer",
-    system_prompt=(
-        "You are **QA Engineer**.\n\n"
-        "### Workflow\n"
-        "1. Receive candidate code from Engineer.\n"
-        "2. Write additional tests inline if needed.\n"
-        "3. Fix any discovered issues (light edits only).\n"
-        "4. **Return the final, tested code in a single ```python block** under `## Final Code`.\n\n"
-        "### Output Markdown Template  \n"
-        "```\n"
-        "## Test Report\n"
-        "- Passed cases: …\n"
-        "- Failed cases: … / None\n\n"
-        "## Final Code\n"
-        "```python\n"
-        "# final solution here (will be executed by evaluator)\n"
-        "```\n"
-        "```\n"
-        "Evaluator will run ONLY the code in `## Final Code`."
-    )
-)
+            name="QA Engineer",
+            description="Tests and validates Python code, ensuring correctness and compliance with requirements.",
+            goals=["Validate code", "Output final code", "Identify and fix bugs"],
+            constraints=["Ensure code correctness", "Match requirements", "Provide clear feedback"],
+            role="qa_engineer",
+            system_prompt="""You are a QA Engineer for code generation tasks. Your task is to test the Engineer's code against requirements, constraints, examples, and provided test cases, and provide the final validated Python code.
 
+<plan>
+1. Review Product Manager's requirements, constraints, examples, Architect's design, and Engineer's code.
+2. Validate the code against the function signature, requirements, and examples.
+3. Execute the provided test cases to check for correctness, including edge cases.
+4. Identify bugs or issues (e.g., incorrect logic, missing edge cases).
+5. Provide fixes if bugs are found, or confirm code correctness.
+6. Output the final validated code in a markdown block.
+</plan>
 
+Output in plain text with markdown formatting, wrapped in <answer> tags:
+
+<answer>
+## Test Results
+- {Test case 1 description}: {Pass/Fail}
+- {Test case 2 description}: {Pass/Fail}
+
+## Bugs Found
+- {Bug 1 or "None"}
+
+## Fixes Applied
+- {Fix 1 or "None"}
+
+## Validated Code
+```python
+{Final validated Python code}
+```
+</answer>
+"""
+        )
+        
         self.agents = agents_dict
         return {"workers": list(agents_dict.values())}
     
     def _publish_message(self, from_agent: str, to_agent: str, message_type: str, content: Any):
-        """Publish message to message queue"""
         message = {
             "from": from_agent,
             "to": to_agent,
@@ -316,13 +284,10 @@ class MetaGPT(AgentSystem):
             "timestamp": time.time()
         }
         self.message_queue.append(message)
-        
-        # Add message to receiver's memory
         if to_agent in self.agents:
             self.agents[to_agent].add_to_memory("messages", message)
     
     def _subscribe_messages(self, agent_name: str, message_type: str = None) -> List[Dict[str, Any]]:
-        """Subscribe to messages in message queue"""
         messages = []
         for message in self.message_queue:
             if message["to"] == agent_name and (message_type is None or message["type"] == message_type):
@@ -330,197 +295,190 @@ class MetaGPT(AgentSystem):
         return messages
     
     def _run_agent_task(self, agent_name: str, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Run agent task"""
         agent = self.agents[agent_name]
-        
-        # Build messages
         messages = [
             SystemMessage(content=agent.system_prompt),
-            HumanMessage(content=f"Task information: {json.dumps(task, ensure_ascii=False)}")
+            HumanMessage(content=str(task))
         ]
-
-        # Get corresponding schema
-        schema_map = {
-        "product_manager": None,
-        "architect": None,
-        "project_manager": None,
-        "engineer": None,
-        "qa_engineer": None
+        
+        response = agent.llm.invoke(messages)
+        content = response.content
+        usage_metadata = response.usage_metadata if hasattr(response, "usage_metadata") else None
+        
+        result = {
+            "content": content,
+            "agent": agent_name
         }
-        # Get corresponding schema
-        schema = schema_map.get(agent_name)
         
-        # Use the agent's own LLM instance
-        agent_llm = agent.llm
+        ai_message = AIMessage(content=content)
+        ai_message.name = agent_name
+        if usage_metadata:
+            ai_message.usage_metadata = usage_metadata
+        self.message_history.append(ai_message)
         
-        # Initialize LLM, use schema if agent needs structured output
-        if schema:
-            # Bind structured output to the agent's LLM for this call
-            invokable_llm = agent_llm.with_structured_output(schema=schema, include_raw=True)
-        else:
-            invokable_llm = agent_llm
-        
-        # Run LLM
-        response = invokable_llm.invoke(messages)
-        
-        if schema:
-            # For structured output
-            content = response["parsed"]
-            raw_response = response["raw"]
-            
-            # Get usage_metadata
-            usage_metadata = raw_response.usage_metadata if hasattr(raw_response, "usage_metadata") else None
-            
-            # Build result
-            result = {
-                "content": content,
-                "agent": agent_name
-            }
-            
-            # Create AIMessage and save to history
-            ai_message = AIMessage(content=str(content))
-            ai_message.name = agent_name
-            if usage_metadata:
-                ai_message.usage_metadata = usage_metadata
-            self.message_history.append(ai_message)
-            
-        else:
-            # For unstructured output
-            result = {
-                "content": response.content,
-                "agent": agent_name
-            }
-            
-            # Get usage_metadata
-            usage_metadata = response.usage_metadata if hasattr(response, "usage_metadata") else None
-            
-            # Save to message history
-            response.name = agent_name
-            self.message_history.append(response)
-        
-        # Publish message
-        message = {
+        self._publish_message(agent_name, "system", "task_result", {
             "content": result,
-            "usage_metadata": usage_metadata  # Use obtained usage_metadata directly
-        }
-        self._publish_message(agent_name, "system", "task_result", message)
+            "usage_metadata": usage_metadata
+        })
         
         return result
 
     def _process_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Process task"""
-        # Update current task
-        self.task_status["current_task"] = task
+        max_iterations = self.task_status["max_iterations"]
+        iteration = 0
+        result = None
         
-        # Product Manager processes requirements
-        product_manager_result = self._run_agent_task("product_manager", task)
-        
-        # Architect and Project Manager work
-        architect_result = self._run_agent_task("architect", product_manager_result)
-        project_manager_result = self._run_agent_task("project_manager", {
-            "product_manager_result": product_manager_result
-        })
-        
-        # Update Project Manager's result with Architect's result
-        project_manager_result = self._run_agent_task("project_manager", {
-            "product_manager_result": product_manager_result,
-            "architect_result": architect_result
-        })
-        
-        # Developer works
-        developer_result = self._run_agent_task("engineer", {
-            "product_manager_result": product_manager_result,
-            "architect_result": architect_result,
-            "project_manager_result": project_manager_result
-        })
-        
-        # Tester works
-        tester_result = self._run_agent_task("qa_engineer", {
-            "product_manager_result": product_manager_result,
-            "architect_result": architect_result,
-            "project_manager_result": project_manager_result,
-            "developer_result": developer_result
-        })
-        
-        # Return results
-        result = {
-            "product_manager_result": product_manager_result,
-            "architect_result": architect_result,
-            "project_manager_result": project_manager_result,
-            "developer_result": developer_result,
-            "tester_result": tester_result
-        }
+        while iteration < max_iterations:
+            self.task_status["iteration_count"] = iteration
+            self.task_status["current_task"] = task
+            
+            product_manager_result = self._run_agent_task("product_manager", task)
+            architect_result = self._run_agent_task("architect", {"product_manager_result": product_manager_result})
+            project_manager_result = self._run_agent_task("project_manager", {
+                "product_manager_result": product_manager_result,
+                "architect_result": architect_result
+            })
+            developer_result = self._run_agent_task("engineer", {
+                "product_manager_result": product_manager_result,
+                "architect_result": architect_result,
+                "project_manager_result": project_manager_result
+            })
+            tester_result = self._run_agent_task("qa_engineer", {
+                "product_manager_result": product_manager_result,
+                "architect_result": architect_result,
+                "project_manager_result": project_manager_result,
+                "developer_result": developer_result,
+                "test_cases": task.get("test", "")
+            })
+            
+            result = {
+                "product_manager_result": product_manager_result,
+                "architect_result": architect_result,
+                "project_manager_result": project_manager_result,
+                "developer_result": developer_result,
+                "tester_result": tester_result
+            }
+            
+            qa_content = tester_result.get("content", "")
+            if not self._need_iteration(qa_content):
+                break
+                
+            task["qa_feedback"] = {
+                "bugs": self._extract_bugs(qa_content),
+                "suggestions": self._extract_suggestions(qa_content)
+            }
+            iteration += 1
         
         return result
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """
-        Run MAS system
-        
-        Args:
-            problem: Problem data
-            
-        Returns:
-            Execution results
-        """
-        # Record start time
+    def _extract_bugs(self, qa_content: str) -> List[str]:
+        bugs_match = re.search(r"## Bugs Found\n- ([^\n]+)", qa_content)
+        if bugs_match and bugs_match.group(1) != "None":
+            return [bugs_match.group(1)]
+        return []
+    
+    def _extract_suggestions(self, qa_content: str) -> List[str]:
+        suggestions_match = re.search(r"## Improvement Suggestions\n- ([^\n]+)", qa_content)
+        if suggestions_match and suggestions_match.group(1) != "None":
+            return [suggestions_match.group(1)]
+        return []
+
+    def _need_iteration(self, qa_content: str) -> bool:
+        return bool(self._extract_bugs(qa_content) or self._extract_suggestions(qa_content))
+
+    def run_agent(self, question: Dict, problem_type: str, **kwargs) -> Dict[str, Any]:
         start_time = time.time()
         
         try:
-            # Clear message history
             self.message_history = []
             
-            # Process task
-            result = self._process_task(problem)
+            if problem_type.lower() == "humaneval":
+                # Parse the prompt to extract requirements, constraints, and examples
+                prompt = question.get("problem", "")
+                task_id = question.get("id", "unknown")
+                entry_point = question.get("entry_point", "")
+                test = question.get("test", "")
+                
+                # Extract function signature
+                signature_match = re.search(r"def (\w+)\((.*?)\)( -> .*)?:", prompt)
+                function_signature = f"def {entry_point}({signature_match.group(2) if signature_match else ''})" if signature_match else f"def {entry_point}()"
+                
+                # Extract docstring
+                docstring_match = re.search(r'"""([\s\S]*?)"""', prompt, re.DOTALL)
+                docstring = docstring_match.group(1).strip() if docstring_match else ""
+                
+                # Extract requirements, constraints, and examples from docstring
+                requirements = []
+                constraints = []
+                examples = []
+                
+                # Parse constraints
+                constraints_match = re.search(r"Constraints:([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
+                if constraints_match:
+                    constraints = [c.strip() for c in constraints_match.group(1).strip().split("\n") if c.strip()]
+                
+                # Parse examples
+                examples_match = re.search(r"Example([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
+                if examples_match:
+                    example_lines = examples_match.group(1).strip().split("\n")
+                    for line in example_lines:
+                        if "For" in line or ">>>" in line:
+                            examples.append(line.strip())
+                
+                # Derive requirements from docstring
+                requirements = [
+                    f"Implement function {entry_point}",
+                    f"Handle input types as specified in the signature",
+                    f"Return output in the format specified in the docstring"
+                ]
+                if examples:
+                    requirements.append("Match example input/output behavior")
+                if constraints:
+                    requirements.append("Adhere to specified constraints")
+                
+                task = {
+                    "id": task_id,
+                    "type": "code_generation",
+                    "description": docstring,
+                    "requirements": requirements,
+                    "constraints": constraints,
+                    "examples": examples,
+                    "entry_point": entry_point,
+                    "function_signature": function_signature,
+                    "test": test
+                }
+            else:
+                task = question
             
-            # Record end time
-            end_time = time.time()
+            result = self._process_task(task)
             
-            # Build final answer
-            # Extract final answer from tester's result
             final_answer = ""
             if "tester_result" in result and "content" in result["tester_result"]:
-                final_answer = result["tester_result"]["content"]
-            else:
-                # If no test result, use engineer's result
-                if "developer_result" in result and "content" in result["developer_result"]:
-                    final_answer = result["developer_result"]["content"]
-                else:
-                    # If still no result, use combination of all results
-                    final_answer = json.dumps(result, ensure_ascii=False, indent=2)
+                content = result["tester_result"]["content"]
+                code_match = re.search(r"## Validated Code\n```python\n([\s\S]*?)\n```", content)
+                if code_match:
+                    final_answer = f"```python\n{code_match.group(1)}\n```"
             
-            # Return result, ensure all necessary fields are included
+            end_time = time.time()
+            
             return {
                 "result": result,
                 "execution_time": end_time - start_time,
-                "messages": [msg for msg in self.message_history if hasattr(msg, 'usage_metadata')],  # Only return messages with usage_metadata
+                "messages": [msg for msg in self.message_history if hasattr(msg, "usage_metadata") and msg.usage_metadata],
+                "final_answer": final_answer,
                 "extracted_answer": final_answer
             }
             
         except Exception as e:
             print(f"Error occurred during execution: {str(e)}")
-            # Return result containing error information
             return {
                 "result": {"error": str(e)},
                 "execution_time": 0,
-                "messages": self.message_history,  # Return collected messages even if error occurs
-                "extracted_answer": f"Execution error: {str(e)}"
+                "messages": [],
+                "final_answer": f"Error: {str(e)}",
+                "extracted_answer": f"Error: {str(e)}"
             }
 
-    def _need_iteration(self, qa_result: Dict[str, Any]) -> bool:
-        """Check if iteration is needed"""
-        # If QA found bugs, iteration is needed
-        if "bugs" in qa_result and qa_result["bugs"]:
-            return True
-        
-        # If QA provided improvement suggestions, iteration is needed
-        if "improvements" in qa_result and qa_result["improvements"]:
-            return True
-        
-        return False
-
-
-# Register MetaGPT system
 AgentSystemRegistry.register(
     "metagpt",
     MetaGPT,
@@ -551,7 +509,7 @@ if __name__ == "__main__":
     # Run test
     try:
         print("Starting MetaGPT system test...")
-        result = metagpt.run_agent(test_problem)
+        result = metagpt.run_agent(test_problem, problem_type="code_generation")
         
         print("\nTest Results:")
         print("-" * 50)
@@ -574,4 +532,4 @@ if __name__ == "__main__":
                 print(json.dumps(msg.usage_metadata, ensure_ascii=False, indent=2))
         
     except Exception as e:
-        print(f"Error occurred during test: {str(e)}") 
+        print(f"Error occurred during test: {str(e)}")

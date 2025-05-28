@@ -113,7 +113,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
         """
         options = problem.get("options", [])
         answer_index = problem.get("answer_index")
-        answer_letter = problem.get("solution", "")
+        answer_letter = problem.get("answer")
         
         # If options are available and there's a valid answer index
         if options and isinstance(answer_index, int) and 0 <= answer_index < len(options):
@@ -134,49 +134,23 @@ class MMLU_ProEvaluator(BaseEvaluator):
     
     def extract_answer_from_response(self, response: str) -> str:
         """
-        Extract answer from agent response.
+        从agent响应中提取答案。
         
         Args:
-            response: Complete response text from the agent
+            response: agent的完整响应文本
             
         Returns:
-            Extracted answer letter
+            提取出的答案字母
         """
-        # Try to extract answer from <answer> tags
+        # 尝试从<answer>标签中提取答案
         match = re.search(r'<answer>([A-Za-z])</answer>', response)
         if match:
             return match.group(1)
         
-        # Try to match patterns like "the answer is X"
-        patterns = [
-            r'the answer is\s*([A-Za-z])',
-            r'choose\s*([A-Za-z])',
-            r'option\s*([A-Za-z])',
-            r'I choose\s*([A-Za-z])',
-            r'my answer is\s*([A-Za-z])'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, response)
-            if match:
-                return match.group(1)
-        
-        # If none of the patterns matched, try to extract single letters
-        # Only consider standalone A-E letters as possible answers
-        letters = re.findall(r'\b([A-E])\b', response)
-        if letters:
-            # Return the last occurring letter (assumed to be the final answer)
-            return letters[-1]
-        
-        # If no label found, return the first character of the original response (if it's a letter)
-        for char in response.strip():
-            if char.isalpha():
-                return char.upper()
-        
-        # Last fallback: return A
-        return "A"
+        # 如果没有找到标签，返回原始响应
+        return response.strip()
     
-    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any] = None, **kwargs) -> Dict[str, Any]:
+    def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Evaluate an agent's solution to a MMLU_pro problem.
         
@@ -186,9 +160,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
                 - options: List of options
                 - answer: Correct answer (letter)
                 - answer_index: Index of correct answer
-            run_result: Results from agent's execution, containing:
-                - final_answer: Agent's final answer text
-                - messages: Agent's message history
+                - response: Agent's response
             
         Returns:
             Evaluation results
@@ -196,21 +168,15 @@ class MMLU_ProEvaluator(BaseEvaluator):
         metrics_registry = kwargs.get("metrics_registry", None)
         start_time = kwargs.get("start_time", None)
         
-        # Use generic field access method
         problem_id = problem.get("id", problem.get("question_id", "unknown"))
-        problem_text = problem.get("question", problem.get("problem", ""))
-        reference_letter = problem.get("solution", "")
+        problem_text = problem.get("problem", problem.get("question", ""))
+        reference_letter = problem.get("solution", problem.get("answer", ""))
         
         # Get the full text of the correct answer
         reference_text = self.get_correct_answer_text(problem)
         
-        # Get the agent's response from run_result if available, otherwise from problem
-        raw_response = ""
-        if run_result:
-            raw_response = run_result.get("final_answer", "")
-        if not raw_response:
-            raw_response = problem.get("response", "")
-            
+        # Get the agent's response and extract the answer
+        raw_response = problem.get("response", "")
         agent_response = self.extract_answer_from_response(raw_response)
         
         # Calculate exact match score (letter-based)
@@ -246,7 +212,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
             True if the answer is correct, False otherwise
         """
         if isinstance(reference, dict):
-            reference_letter = reference.get("solution", "")
+            reference_letter = reference.get("answer", "")
         else:
             reference_letter = str(reference)
         
@@ -268,8 +234,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
         # Evaluate each problem individually
         for i, problem in enumerate(problems):
             problem_id = problem.get("id", problem.get("question_id", f"unknown_{i}"))
-            # 统一使用solution字段
-            reference_letter = problem.get("solution", "")
+            reference_letter = problem.get("solution", problem.get("answer", ""))
             reference_text = self.get_correct_answer_text(problem)
             response = problem.get("response", "")
             
@@ -334,7 +299,7 @@ if __name__ == "__main__":
             "Unsafe practices, Wants, Fear, Trivial",
             "Unsafe practices, Distress, Fear, Serious"
         ],
-        "solution": "I",
+        "answer": "I",
         "answer_index": 8,
         "response": "I"
     }

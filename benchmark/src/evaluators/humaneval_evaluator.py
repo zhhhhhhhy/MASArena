@@ -1,161 +1,197 @@
 """
-HumanEval Evaluator
-
-This module provides a standalone evaluator for HumanEval problems.
+HumanEval Evaluator – minimal-patch version
 """
 
 import time
-from typing import Dict, Any, Tuple
-from pathlib import Path
 import re
+import logging
 import traceback
+from pathlib import Path
 from threading import Thread
-
+from typing import Dict, Any, Tuple
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 from benchmark.src.evaluators.utils.sanitize import sanitize, code_extract
 
+
 class HumanEvalEvaluator:
     """Evaluator for HumanEval problems"""
-    
-    def __init__(self, name: str = "humaneval", config: Dict[str, Any] = None):
+
+    class TimeoutError(Exception):
+        """Raised when execution exceeds the allowed time limit."""
+
+    def __init__(self, name: str = "humaneval", config: Dict[str, Any] | None = None):
         self.name = name
         self.config = config or {}
-        
-        # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        
-        # Create log directory
+
+        # Path to the test data and directory for logs/results
+        self.data_path = self.config.get("data_path", f"benchmark/data/{name}_test.jsonl")
+        self.log_path = self.config.get("log_path", f"benchmark/data/results/{name.upper()}")
+
         Path(self.log_path).mkdir(parents=True, exist_ok=True)
-        
-        # Initialize run evaluator
+
+        logging.basicConfig(
+            filename=f"{self.log_path}/evaluator.log",
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
+        self.logger = logging.getLogger(__name__)
+
+        # LangSmith evaluator for packaging the evaluation run
         self.run_evaluator = RunEvaluator()
-        
-    class TimeoutError(Exception):
-        """Timeout error for code execution"""
-        pass
-        
-    def run_with_timeout(self, func, args, timeout=60):
-        """Run function with timeout"""
-        result = []
+
+    def run_with_timeout(self, func, args, timeout: int = 60):
+        """
+        Execute ``func(*args)`` in a separate thread
+        and abort if it does not finish within *timeout* seconds.
+        """
+        result: list[Any] = []
+
         def target():
             result.append(func(*args))
-            
-        thread = Thread(target=target)
+
+        thread = Thread(target=target, daemon=True)
         thread.start()
         thread.join(timeout)
-        
+
         if thread.is_alive():
-            raise self.TimeoutError()
-            
-        return result[0]
-        
-    def check_solution(self, solution: str, test: str, entry_point: str) -> bool:
-        """Check if solution passes the test"""
-        try:
-            # Create test environment
-            test_env = {}
-            
-            # Execute solution
-            exec(solution, test_env)
-            func = test_env[entry_point]
-            
-            # Execute test
-            exec(test, test_env)
-            check_func = test_env["check"]
-            
-            # Run test with timeout
-            return check_func(func)
-            
-        except Exception as e:  # noqa: F841
-            if self.config.get("verbose", False):
-                traceback.print_exc()
-            return False
-            
-    # def extract_code(self, text: str) -> str:
-    #     """Extract code from text"""
-    #     # First try to extract using sanitize
-    #     try:
-    #         return sanitize(text)
-    #     except:  # noqa: E722
-    #         # Fallback to code_extract
-    #         return code_extract(text)
+            raise self.TimeoutError("Execution timed out")
+
+        return result[0] if result else None
 
     def extract_code(self, text: str) -> str:
         """
-        Extract python code fenced by ```python ... ```.
+        Extract Python code from *text* in several fall-back steps, in order of preference:
 
-        Priority:
-        1. Block that appears under a heading containing 'Final Code'
-        2. First python block
-        3. Fallback to sanitize / code_extract
+        1. A QA Engineer section marked “## Validated Code”.
+        2. Any generic ```python fenced block.
+        3. A bare function-definition-like snippet.
+        4. As a last resort, use *sanitize* / *code_extract* helpers.
         """
-        # 1) 找到所有 ```python ... ``` 代码块
-        blocks = re.findall(r"```python\\s*([\\s\\S]*?)```", text, re.IGNORECASE)
+        self.logger.info(f"Extracting code… snippet: {text[:100]}")
 
-        if blocks:
-            # 尝试定位 'Final Code' 区块
-            final_block = None
-            # split text by headings
-            for block in blocks:
-                # 通过查看 block 前面的 100 字符是否包含 'Final Code'
-                idx = text.find(block)
-                prefix = text[max(0, idx-100):idx].lower()
-                if "final code" in prefix:
-                    final_block = block
-                    break
-            return (final_block or blocks[0]).strip()
+        # ① “## Validated Code” block
+        qa_match = re.search(r"##\s*Validated Code\s*```python\s*([\s\S]*?)```", text, re.IGNORECASE)
+        if qa_match:
+            code = qa_match.group(1).strip()
+            self.logger.info("Found code in 'Validated Code' section.")
+            return code
 
-        # 2) fallback – 保持向后兼容
+        # ② Any fenced ````python``` block
+        block_match = re.search(r"```python\s*([\s\S]*?)```", text, re.IGNORECASE)
+        if block_match:
+            code = block_match.group(1).strip()
+            self.logger.info("Found code in generic fenced block.")
+            return code
+
+        # ③ A function-shaped snippet (best effort)
+        fn_match = re.search(r"(def\s+\w+\s*\(.*?\):[\s\S]*?)(?=\n{2,}|\Z)", text)
+        if fn_match:
+            code = fn_match.group(1).strip()
+            self.logger.info("Found code by function-like regex.")
+            return code
+
+        # ④ Fallback extraction
         try:
-            return sanitize(text)
-        except Exception:  # noqa: E722
-            return code_extract(text)
-            
-    def calculate_score(self, expected_output: str, prediction: str) -> Tuple[float, str]:
-        """Calculate score for the prediction"""
-        # For HumanEval, scoring is done in check_solution
-        return 1.0 if self.check_solution(prediction, expected_output, "solve") else 0.0, prediction
-        
-    def create_run(self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: float) -> Run:
-        """Create a LangSmith run for evaluation"""
+            code = sanitize(text)
+            self.logger.info("Code extracted via sanitize().")
+            return code
+        except Exception:
+            code = code_extract(text)
+            self.logger.info("Code extracted via fallback code_extract().")
+            return code
+
+    def check_solution(self, code: str, test: str, entry_point: str) -> Tuple[bool, str]:
+        """
+        Compile *code*, execute the official *test* (which in turn calls ``check(candidate)``),
+        and return ``(passed, message)``.
+
+        Passing criterion: **all assertions inside the test must complete without raising**.
+        """
+        try:
+            # Create an isolated namespace
+            env: Dict[str, Any] = {}
+
+            # Inject the candidate implementation
+            exec(code, env)
+            candidate_fn = env[entry_point]
+
+            # Inject and obtain ``check()``
+            exec(test, env)
+            check_fn = env["check"]
+
+            # If ``check()`` raises, the except block will handle it
+            self.run_with_timeout(check_fn, (candidate_fn,), timeout=60)
+            return True, "All tests passed"
+
+        except self.TimeoutError as te:
+            msg = str(te)
+        except AssertionError as ae:
+            msg = f"Test failed: {ae}"
+        except Exception as exc:
+            msg = f"Execution error: {exc}"
+            if self.config.get("verbose", False):
+                self.logger.error(traceback.format_exc())
+
+        self.logger.error(f"Check failed: {msg}")
+        return False, msg
+
+    def calculate_score(
+        self, test_code: str, prediction: str, entry_point: str
+    ) -> Tuple[float, str, str]:
+        """
+        Return ``(score, code_used_for_test, message)`` where *score* is 1.0 on success, 0.0 otherwise.
+        """
+        passed, message = self.check_solution(prediction, test_code, entry_point)
+        return (1.0 if passed else 0.0), prediction, message
+
+    def create_run(
+        self,
+        problem: Dict[str, Any],
+        final_answer: str,
+        extracted_answer: str,
+        score: float,
+        message: str,
+    ) -> Run:
+        """Package the evaluation result as a ``Run`` object for LangSmith."""
         import uuid
-        
+
         return Run(
             id=str(uuid.uuid4()),
             name=f"{self.name.upper()}_Evaluation",
-            inputs={"problem": problem["problem"]},
+            inputs={"problem": problem["problem"], "task_id": problem["id"]},
             outputs={
                 "prediction": final_answer,
                 "extracted_answer": extracted_answer,
                 "expected": problem["test"],
                 "score": score,
+                "message": message,
                 "passed": score == 1.0,
             },
             run_type="evaluation",
-            start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            start_time=time.strftime("%Y-%m-%dT%H:%M:%S"),
             trace_id=str(uuid.uuid4()),
         )
-        
+
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate a problem given the agent's response"""
-        # Extract the final answer
+        """
+        Main entry point – keeps the outer interface unchanged.
+        Consumes one *problem* dict and the model *run_result*, returns a detailed evaluation dict.
+        """
         final_answer = run_result.get("final_answer", "")
-        
-        # Extract and clean code
         extracted_answer = self.extract_code(final_answer)
-        
-        # Calculate score
-        score = 1.0 if self.check_solution(extracted_answer, problem["test"], problem["entry_point"]) else 0.0
-        
-        # Create LangSmith run
-        run = self.create_run(problem, final_answer, extracted_answer, score)
+
+        score, extracted_answer, message = self.calculate_score(
+            problem["test"], extracted_answer, problem["entry_point"]
+        )
+
+        run = self.create_run(problem, final_answer, extracted_answer, score, message)
         run_evaluation = self.run_evaluator.evaluate_run(run=run)
-        
+
         return {
             "final_answer": final_answer,
             "extracted_answer": extracted_answer,
             "score": score,
+            "message": message,
             "run_evaluation": run_evaluation,
         }

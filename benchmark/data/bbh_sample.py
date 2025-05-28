@@ -15,7 +15,7 @@ def sample_entries(entries, sample_size):
     """Randomly sample entries without replacement."""
     return random.sample(entries, min(sample_size, len(entries)))
 
-def main(bbh_dir, output_test_path, samples_per_file=20):
+def main(bbh_dir, output_test_path, samples_per_file=2):
     """
     Create bbh_test.jsonl by sampling from each JSONL file in bbh_dir, adding task_id to each entry.
     
