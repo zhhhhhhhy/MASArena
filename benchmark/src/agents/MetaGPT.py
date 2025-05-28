@@ -453,7 +453,7 @@ class MetaGPT(AgentSystem):
         
         return result
 
-    def run_agent(self, problem: Dict[str, Any], problem_type: str, **kwargs) -> Dict[str, Any]:
+    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run MAS system
         

@@ -6,7 +6,7 @@ This module provides the base classes and interfaces for agent systems.
 
 import abc
 from typing import Dict, Any, Optional, Type, Callable, List
-import time
+from benchmark.src.agents.utils import *
 import uuid
 import os
 import json
@@ -40,6 +40,10 @@ class AgentSystem(abc.ABC):
         """
         self.name = name or self.__class__.__name__
         self.config = config or {}
+        self.evaluator_name = self.config.get("evaluator", None)
+        if self.evaluator_name is None:
+            raise ValueError("Evaluator name is not set in the configuration.")
+        
         self.metrics_registry = None
         self.evaluator = None
         self.metrics_collector = None
@@ -64,6 +68,19 @@ class AgentSystem(abc.ABC):
             # ToolIntegrationWrapper, if used (see create_agent_system factory),
             # will handle patching for tool integration.
 
+    def format_prompt(self, benchmark: str) -> str:
+        # todo: format prompts for different benchmarks
+
+        """
+        Format the prompt for different benchmarks. 
+        """
+        if benchmark == "bbh":
+            return BBH_FORMAT_PROMPT
+        else:
+            return ""
+
+ 
+
     def _initialize_evaluator(self, evaluator_type: Type = None):
         """
         Initialize the appropriate evaluator based on configuration.
@@ -73,28 +90,24 @@ class AgentSystem(abc.ABC):
         """
         if self.evaluator is not None:
             return
-        
-        # Get evaluator name from config
-        evaluator_name = self.config.get("evaluator", None)
-        if evaluator_name is None:
-            raise ValueError("Evaluator name is not set in the configuration.")
+
         
         if evaluator_type is None:
             # Import here to avoid circular imports
             try:
                 from benchmark.src.evaluators import AVAILABLE_EVALUATORS
                 # Select evaluator_type based on evaluator_name
-                evaluator_type = AVAILABLE_EVALUATORS[evaluator_name]
+                evaluator_type = AVAILABLE_EVALUATORS[self.evaluator_name]
                
             except ImportError:
                 raise ImportError("Could not import evaluator. Please provide evaluator_type.")
         
         # Create evaluator instance
         self.evaluator = evaluator_type(
-            name=evaluator_name,
+            name=self.evaluator_name,
             config={
-                "data_path": self.config.get("data_path", f"benchmark/data/{evaluator_name}_test.jsonl"),
-                "log_path": self.config.get("log_path", f"benchmark/data/results/{evaluator_name.upper()}")
+                "data_path": self.config.get("data_path", f"benchmark/data/{self.evaluator_name}_test.jsonl"),
+                "log_path": self.config.get("log_path", f"benchmark/data/results/{self.evaluator_name.upper()}")
             }
         )
 
@@ -556,7 +569,6 @@ class AgentSystem(abc.ABC):
                         tags={
                             "agent_system": self.name,
                             "evaluator": self.evaluator.name,
-                            # "problem_type": self.evaluator.name,
                             "run_id": run_id
                         }
                     )
