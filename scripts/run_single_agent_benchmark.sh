@@ -79,8 +79,8 @@ for TASK_CATEGORY in "${TASK_CATEGORIES[@]}"; do
       MODEL_PREFIX=$(echo $MODEL_NAME | cut -d'-' -f1 | cut -d'/' -f1)
       
       # Get provider name from mapping
-      if grep -q "\"$MODEL_PREFIX\":" scripts/model_providers.json; then
-        MODEL_PROVIDER=$(grep "\"$MODEL_PREFIX\":" scripts/model_providers.json | cut -d':' -f2 | tr -d ' ",' | head -n 1)
+      if grep -q "\"$MODEL_PREFIX\":" model_providers.json; then
+        MODEL_PROVIDER=$(grep "\"$MODEL_PREFIX\":" model_providers.json | cut -d':' -f2 | tr -d ' ",' | head -n 1)
       else
         MODEL_PROVIDER=$MODEL_PREFIX
       fi
@@ -108,8 +108,8 @@ for TASK_CATEGORY in "${TASK_CATEGORIES[@]}"; do
       MODEL_PREFIX=$(echo $MODEL_NAME | cut -d'-' -f1 | cut -d'/' -f1)
       
       # Get provider name from mapping
-      if grep -q "\"$MODEL_PREFIX\":" scripts/model_providers.json; then
-        MODEL_PROVIDER=$(grep "\"$MODEL_PREFIX\":" scripts/model_providers.json | cut -d':' -f2 | tr -d ' ",' | head -n 1)
+      if grep -q "\"$MODEL_PREFIX\":" model_providers.json; then
+        MODEL_PROVIDER=$(grep "\"$MODEL_PREFIX\":" model_providers.json | cut -d':' -f2 | tr -d ' ",' | head -n 1)
       else
         MODEL_PROVIDER=$MODEL_PREFIX
       fi
