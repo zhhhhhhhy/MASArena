@@ -41,9 +41,6 @@ class EvaluationResult(TypedDict):
 # Load environment variables
 load_dotenv()
 
-base_url = os.getenv("BASE_URL")
-api_key = os.getenv("OPENAI_API_KEY")
-
 @dataclass
 class ExpertProfile:
     id: str
@@ -82,9 +79,7 @@ class RecruiterAgent:
         )
         # 使用结构化输出初始化LLM
         self.llm = ChatOpenAI(
-            model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY")
+            model=self.model_name
         )
         
     def _create_prompt(self, problem: str, feedback: str = None) -> str:
@@ -256,8 +251,6 @@ class WorkAgent:
         )
         self.llm = ChatOpenAI(
             model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY"),
             max_tokens=1000
         )
 
@@ -337,9 +330,7 @@ class Evaluator:
         self.min_improvement_threshold = min_improvement_threshold  # 最低改进阈值
         self.previous_solution_quality = 0  # 上一轮解决方案的质量
         self.llm = ChatOpenAI(
-            model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY")
+            model=self.model_name
         )
         
     def evaluate(self, problem: str, solutions: List[Dict[str, Any]], iteration: int, previous_solutions: List[Dict[str, Any]] = None) -> Dict[str, Any]:

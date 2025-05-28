@@ -35,8 +35,6 @@ class Agent:
         self.chat_history = []
         self.llm = ChatOpenAI(
             model=self.model_name,
-            base_url=os.getenv("BASE_URL"),
-            api_key=os.getenv("OPENAI_API_KEY"),
             request_timeout=60,  # 设置请求超时为60秒
             max_retries=2        # 设置最大重试次数为2
         )
@@ -113,8 +111,6 @@ class ResultExtractor:
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.llm = ChatOpenAI(
             model=self.model_name,
-            base_url=os.getenv("BASE_URL"),      # 显式添加 base_url
-            api_key=os.getenv("OPENAI_API_KEY"), # 显式添加 api_key
             request_timeout=60,  # 设置请求超时为60秒
             max_retries=2        # 设置最大重试次数为2
         )
