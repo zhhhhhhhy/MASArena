@@ -23,13 +23,30 @@ Your response must follow this format:
 </answer>
 """
 
+MMLU_PROMPT = """You are a professional evaluation expert. Please answer the following question directly.
+Instructions:
+1. Analyze the problem carefully and provide your step-by-step reasoning within <think>...</think> tags.
+2. Provide only the final answer within <answer>...</answer> tags, ensuring it matches the exact format required by the problem (e.g., 'True', 'False', '(A)', '(B)', a space-separated string, or a sequence of characters).
+3. Do NOT include any explanation, justification, or text outside the <think> and <answer> tags.
+4. Ensure the final answer is a single line with no extra whitespace or formatting.
 
-MMLU_PROMPT = """
+Question:
+{question}
 
+Options:
+{options}
+
+For mathematical problems, make sure to:
+1. Break down the problem into simpler parts
+2. Solve each part methodically
+3. Check your work and verify your answer
+4. Provide your final answer in a clear format
+<think>
+[Your step-by-step reasoning here]
+</think>
+<answer>
+[Your final answer here]
+</answer>
 """
 
-
-MATH_PROMPT = """
-
-"""
-
+MATH_PROMPT = """"""
