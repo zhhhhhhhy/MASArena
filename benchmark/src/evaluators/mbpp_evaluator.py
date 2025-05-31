@@ -1,173 +1,180 @@
 """
 MBPP Evaluator
-
-This module provides a standalone evaluator for MBPP (Mostly Basic Python Problems) problems.
 """
 
+from __future__ import annotations
+
+import logging
+import re
 import time
-import threading
-from typing import Dict, Any, Tuple, List, Optional
+import traceback
+import uuid
 from pathlib import Path
+from threading import Thread
+from typing import Any, Dict, List, Tuple
 
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
+
 from benchmark.src.evaluators.utils.sanitize import sanitize
 
+
+class TimeoutError(Exception):
+    """Raised when the sandboxed execution exceeds the time-limit."""
+
+
+def run_with_timeout(func, args: tuple[Any, ...] = (), timeout: int = 15):
+    """
+    Execute `func(*args)` in a daemon thread.
+    Raise `TimeoutError` if it runs longer than `timeout` seconds.
+    """
+    result: list[Any] = []
+
+    def target():
+        result.append(func(*args))
+
+    thread = Thread(target=target, daemon=True)
+    thread.start()
+    thread.join(timeout)
+
+    if thread.is_alive():
+        raise TimeoutError(f"Execution timed out after {timeout}s")
+
+    return result[0] if result else None
+
+
 class MBPPEvaluator:
-    """Evaluator for MBPP problems"""
-    
-    def __init__(self, name: str = "mbpp", config: Dict[str, Any] = None):
+    """Evaluator for MBPP code-generation tasks."""
+
+    def __init__(self, name: str = "mbpp", config: Dict[str, Any] | None = None):
         self.name = name
         self.config = config or {}
-        
-        # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        
-        # Create log directory
+
+        # Default paths can be overridden via `config`
+        self.data_path = self.config.get("data_path", f"benchmark/data/{name}.jsonl")
+        self.log_path = self.config.get("log_path", f"benchmark/data/results/{name.upper()}")
+
         Path(self.log_path).mkdir(parents=True, exist_ok=True)
-        
-        # Initialize run evaluator
+
+        logging.basicConfig(
+            filename=f"{self.log_path}/evaluator.log",
+            level=logging.INFO,
+            format="%(asctime)s - %(levelname)s - %(message)s",
+        )
+        self.logger = logging.getLogger(__name__)
         self.run_evaluator = RunEvaluator()
-        
-        # Constants
-        self.PASS = "PASS"
-        self.FAIL = "FAIL"
-        
-    class TimeoutError(Exception):
-        """Timeout error for code execution"""
-        pass
-        
-    def run_with_timeout(self, func, timeout=15):
-        """Run function with timeout"""
-        result = []
-        stop_event = threading.Event()
-        
-        def target():
-            try:
-                result.append(func())
-            except Exception as e:
-                result.append(e)
-            finally:
-                stop_event.set()
-            
-        thread = threading.Thread(target=target)
-        thread.start()
-        is_timeout = not stop_event.wait(timeout)
-        
-        if is_timeout:
-            raise self.TimeoutError("Function execution timed out")
-            
-        if not result:
-            return None
-        if isinstance(result[0], Exception):
-            raise result[0]
-        return result[0]
-        
-    def check_solution(self, solution: str, test: str, entry_point: str) -> Tuple[str, str]:
-        """Check if solution passes the test"""
-        try:
-            # Clean and validate code
-            solution = sanitize(code=solution, entrypoint=entry_point)
-            
-            # Create test environment with common imports
-            global_dict = {
-                "math": __import__("math"),
-                "hashlib": __import__("hashlib"),
-                "re": __import__("re"),
-                "List": List,
-                "Dict": Dict,
-                "Tuple": Tuple,
-                "Optional": Optional,
-                "Any": Any,
-            }
-            
-            # Execute solution
-            exec(solution, global_dict)
-            
-            if entry_point not in global_dict:
-                raise ValueError(f"Function {entry_point} is not defined in the solution.")
-            
-            # Execute test
-            exec(test, global_dict)
-            check = global_dict["check"]
-            
-            # Run test with timeout
-            result = self.run_with_timeout(check, 15)
-            
-            if result is None:
-                return (self.PASS, "The solution passed all test cases.")
-                
-        except self.TimeoutError:
-            return (
-                self.FAIL,
-                "Execution timed out. Please check if your solution contains infinite loops or overly time-consuming operations."
-            )
-        except Exception as e:
-            error_message = f"Error: {str(e)}.\n Solution: {solution}.\n Test: {test}"
-            
-            # Log error
-            with open("error.log", "a", encoding="utf-8") as log_file:
-                log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {error_message}\n")
-                
-            return (self.FAIL, error_message)
-            
+
+
     def extract_code(self, text: str) -> str:
-        """Extract code from text"""
-        # For MBPP, we expect the code to be a complete function
-        return sanitize(text)
-        
-    def calculate_score(self, expected_output: str, prediction: str) -> Tuple[float, str]:
-        """Calculate score for the prediction"""
-        # For MBPP, scoring is done in check_solution
-        return 0.0, prediction
-        
-    def create_run(self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: float) -> Run:
-        """Create a LangSmith run for evaluation"""
-        import uuid
-        
-        return Run(
+        """
+        Best-effort extraction of Python code from agent output.
+
+        Priority:
+        1. Code under a "## Validated Code" heading.
+        2. First ```python fenced block.
+        3. Entire text (fallback) – `sanitize` will later trim Markdown.
+        """
+        validated = re.search(r"##\s*Validated Code\s*```python\s*([\s\S]*?)```", text, re.I)
+        if validated:
+            return validated.group(1).strip()
+
+        fenced = re.search(r"```python\s*([\s\S]*?)```", text, re.I)
+        if fenced:
+            return fenced.group(1).strip()
+
+        return text.strip()
+
+
+    def check_solution(
+        self,
+        code: str,
+        test: str,
+        entry_point: str,
+        test_imports: List[str] | None = None,
+    ) -> Tuple[bool, str]:
+        """
+        Compile user code, run official MBPP `check()`.
+
+        Returns:
+            (passed: bool, message: str)
+            `passed` is True iff all assertions succeed within the time-limit.
+        """
+        try:
+            # Remove Markdown, ensure the target function exists
+            code_clean = sanitize(code=code, entrypoint=entry_point)
+
+            # Isolated global namespace
+            env: Dict[str, Any] = {}
+            exec(code_clean, env)
+
+            # Execute additional import statements if provided
+            for stmt in test_imports or []:
+                exec(stmt, env)
+
+            if entry_point not in env:
+                raise ValueError(f"Function `{entry_point}` is missing in submitted code.")
+
+            # Inject and run the official unit tests
+            exec(test, env)
+            check_fn = env["check"]
+
+            run_with_timeout(check_fn, timeout=15)  # `check()` takes no args
+            return True, "All tests passed"
+
+        except TimeoutError as te:
+            return False, str(te)
+        except AssertionError as ae:
+            return False, f"Assertion failed: {ae}"
+        except Exception as exc:  # noqa: BLE001
+            if self.config.get("verbose"):
+                self.logger.error(traceback.format_exc())
+            return False, f"Execution error: {exc}"
+
+    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Main entrypoint called by benchmark_runner.
+
+        Args:
+            problem: A dict with MBPP fields (`prompt`, `test`, ...)
+            run_result: Output from the MetaGPT agent chain (contains "final_answer").
+
+        Returns:
+            Dict with score, extracted answer, LangSmith run evaluation, etc.
+        """
+        final_answer_text = run_result.get("final_answer", "")
+        extracted_code = self.extract_code(final_answer_text)
+
+        passed, msg = self.check_solution(
+            extracted_code,
+            problem["test"],
+            problem["entry_point"],
+            problem.get("test_imports") or [],
+        )
+        score = 1.0 if passed else 0.0
+
+        # Generate valid UUIDs for LangSmith
+        run = Run(
             id=str(uuid.uuid4()),
             name=f"{self.name.upper()}_Evaluation",
-            inputs={"problem": problem["problem"]},
+            inputs={"problem": problem["problem"], "task_id": problem["id"]},
             outputs={
-                "prediction": final_answer,
-                "extracted_answer": extracted_answer,
-                "expected": problem["test"],
+                "prediction": final_answer_text,
+                "extracted_code": extracted_code,
+                "expected": problem["solution"],
                 "score": score,
-                "passed": score == 1.0,
+                "message": msg,
+                "passed": passed,
             },
             run_type="evaluation",
-            start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            start_time=time.strftime("%Y-%m-%dT%H:%M:%S"),
             trace_id=str(uuid.uuid4()),
         )
-        
-    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
-        """Evaluate a problem given the agent's response"""
-        # Extract the final answer
-        final_answer = run_result.get("final_answer", "")
-        
-        # Extract and clean code
-        extracted_answer = self.extract_code(final_answer)
-        
-        # Check solution
-        result, message = self.check_solution(
-            extracted_answer, 
-            problem["test"], 
-            problem["entry_point"]
-        )
-        
-        # Calculate score
-        score = 1.0 if result == self.PASS else 0.0
-        
-        # Create LangSmith run
-        run = self.create_run(problem, final_answer, extracted_answer, score)
-        run_evaluation = self.run_evaluator.evaluate_run(run=run)
-        
+        run_eval = self.run_evaluator.evaluate_run(run=run)
+
         return {
-            "final_answer": final_answer,
-            "extracted_answer": extracted_answer,
+            "final_answer": final_answer_text,
+            "extracted_answer": extracted_code,
             "score": score,
-            "message": message,
-            "run_evaluation": run_evaluation,
+            "message": msg,
+            "run_evaluation": run_eval,
         }

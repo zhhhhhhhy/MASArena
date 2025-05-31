@@ -14,6 +14,7 @@ import uuid
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
+
 class BBHEvaluator:
     """
     Evaluator for Big-Bench Hard (BBH) problems.
@@ -146,13 +147,15 @@ class BBHEvaluator:
             if predicted_words == expected_words:
                 return 1.0, extracted_answer, "Correct"
             else:
-                error_message = f"Incorrect word sorting: Expected words '{normalized_expected}', got '{normalized_answer}'"
+                error_message = (
+                    f"Incorrect word sorting: Expected words '{normalized_expected}', got '{normalized_answer}'"
+                )
                 with open(f"{self.log_path}/error.log", "a", encoding="utf-8") as log_file:
                     log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {error_message}\n")
                 return 0.0, extracted_answer, error_message
         else:
             # For other tasks, use exact string comparison
-            if normalized_answer == normalized_expected:
+            if normalized_answer.lower() == normalized_expected.lower():
                 return 1.0, extracted_answer, "Correct"
 
             error_message = f"Incorrect: Expected '{normalized_expected}', got '{normalized_answer}'"
@@ -160,7 +163,9 @@ class BBHEvaluator:
                 log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {error_message}\n")
             return 0.0, extracted_answer, error_message
 
-    def create_run(self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: float, message: str) -> Run:
+    def create_run(
+        self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: float, message: str
+    ) -> Run:
         """
         Create a LangSmith run for evaluation.
 
@@ -220,4 +225,52 @@ class BBHEvaluator:
             "score": score,
             "message": message,
             "run_evaluation": run_evaluation,
+        }
+
+    def run_benchmark(self, agent, max_problems: int = None):
+        """
+        Run the BBH benchmark on the provided agent.
+
+        Args:
+            agent: The agent to evaluate (must have a run_agent method)
+            max_problems: Maximum number of problems to evaluate (None for all)
+
+        Returns:
+            Evaluation results dictionary
+        """
+        results = []
+        with open(self.data_path, "r", encoding="utf-8") as f:
+            for i, line in enumerate(f):
+                if max_problems and i >= max_problems:
+                    break
+                problem = json.loads(line.strip())
+                try:
+                    # Run agent on problem
+                    agent_response = agent.run_agent(problem, problem_type="bbh")
+                    # Evaluate
+                    result = self.evaluate(problem, agent_response)
+                    results.append(result)
+                except Exception as e:
+                    error_message = f"Error evaluating problem {problem['task_id']}: {str(e)}"
+                    with open(f"{self.log_path}/error.log", "a", encoding="utf-8") as log_file:
+                        log_file.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} - {error_message}\n")
+                    results.append(
+                        {
+                            "final_answer": "",
+                            "extracted_answer": "",
+                            "score": 0.0,
+                            "message": error_message,
+                            "run_evaluation": None,
+                        }
+                    )
+
+        # Calculate overall accuracy
+        total_score = sum(r["score"] for r in results)
+        accuracy = total_score / len(results) if results else 0.0
+
+        return {
+            "results": results,
+            "accuracy": accuracy,
+            "total_problems": len(results),
+            "correct": int(total_score),
         }

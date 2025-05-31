@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
+
 @dataclass
 class Agent:
     name: str
@@ -18,37 +19,28 @@ class Agent:
     system_prompt: str
     memory: Dict[str, Any] = None
     llm: Any = field(init=False, repr=False)
-    
+
     def __post_init__(self):
         if self.memory is None:
-            self.memory = {
-                "messages": [],
-                "knowledge": {},
-                "tasks": [],
-                "completed_tasks": []
-            }
+            self.memory = {"messages": [], "knowledge": {}, "tasks": [], "completed_tasks": []}
         self.llm = ChatOpenAI(
             model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
         )
-    
+
     def add_to_memory(self, key: str, value: Any):
         if key not in self.memory:
             self.memory[key] = []
         self.memory[key].append(value)
-    
+
     def get_from_memory(self, key: str) -> Any:
         return self.memory.get(key, [])
-    
+
     def clear_memory(self, key: str = None):
         if key:
             self.memory[key] = []
         else:
-            self.memory = {
-                "messages": [],
-                "knowledge": {},
-                "tasks": [],
-                "completed_tasks": []
-            }
+            self.memory = {"messages": [], "knowledge": {}, "tasks": [], "completed_tasks": []}
+
 
 class MetaGPT(AgentSystem):
     def __init__(self, name: str = None, config: Dict[str, Any] = None):
@@ -59,16 +51,16 @@ class MetaGPT(AgentSystem):
             "current_task": None,
             "task_history": [],
             "iteration_count": 0,
-            "max_iterations": self.config.get("max_iterations", 3)
+            "max_iterations": self.config.get("max_iterations", 3),
         }
         self.llm = ChatOpenAI(
             model_name=os.getenv("MODEL_NAME", "gpt-4o-mini"),
         )
         self.message_history = []
-    
+
     def _create_agents(self) -> Dict[str, List[Agent]]:
         agents_dict = {}
-        
+
         # Product Manager
         agents_dict["product_manager"] = Agent(
             name="Product Manager",
@@ -119,9 +111,9 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
 ## Scope
 - {Scope description}
 </answer>
-"""
+""",
         )
-        
+
         # Architect
         agents_dict["architect"] = Agent(
             name="Architect",
@@ -151,9 +143,9 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
 ## Technology Stack
 - Python
 </answer>
-"""
+""",
         )
-        
+
         # Project Manager
         agents_dict["project_manager"] = Agent(
             name="Project Manager",
@@ -182,24 +174,15 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
 - Examples: {List key examples}
 - Architecture Notes: {Key architecture points}
 </answer>
-"""
+""",
         )
-        
+
         # Engineer
         agents_dict["engineer"] = Agent(
             name="Engineer",
             description="Responsible for code writing and implementation, developing according to architect's design and project manager's task assignments.",
-            goals=[
-                "Write correct Python code",
-                "Implement features",
-                "Fix bugs",
-                "Optimize performance"
-            ],
-            constraints=[
-                "Must follow architecture design",
-                "Must match function signature",
-                "Use markdown code block"
-            ],
+            goals=["Write correct Python code", "Implement features", "Fix bugs", "Optimize performance"],
+            constraints=["Must follow architecture design", "Must match function signature", "Use markdown code block"],
             role="engineer",
             system_prompt="""You are a professional Engineer responsible for code writing and implementation, developing according to the Architect's design and Project Manager's task assignments.
 
@@ -230,9 +213,9 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
 ## Optimizations
 - {Optimization 1 or "None"}
 </answer>
-"""
+""",
         )
-        
+
         # QA Engineer
         agents_dict["qa_engineer"] = Agent(
             name="QA Engineer",
@@ -269,106 +252,105 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
 {Final validated Python code}
 ```
 </answer>
-"""
+""",
         )
-        
+
         self.agents = agents_dict
         return {"workers": list(agents_dict.values())}
-    
+
     def _publish_message(self, from_agent: str, to_agent: str, message_type: str, content: Any):
         message = {
             "from": from_agent,
             "to": to_agent,
             "type": message_type,
             "content": content,
-            "timestamp": time.time()
+            "timestamp": time.time(),
         }
         self.message_queue.append(message)
         if to_agent in self.agents:
             self.agents[to_agent].add_to_memory("messages", message)
-    
+
     def _subscribe_messages(self, agent_name: str, message_type: str = None) -> List[Dict[str, Any]]:
         messages = []
         for message in self.message_queue:
             if message["to"] == agent_name and (message_type is None or message["type"] == message_type):
                 messages.append(message)
         return messages
-    
+
     def _run_agent_task(self, agent_name: str, task: Dict[str, Any]) -> Dict[str, Any]:
         agent = self.agents[agent_name]
-        messages = [
-            SystemMessage(content=agent.system_prompt),
-            HumanMessage(content=str(task))
-        ]
-        
+        messages = [SystemMessage(content=agent.system_prompt), HumanMessage(content=str(task))]
+
         response = agent.llm.invoke(messages)
         content = response.content
         usage_metadata = response.usage_metadata if hasattr(response, "usage_metadata") else None
-        
-        result = {
-            "content": content,
-            "agent": agent_name
-        }
-        
+
+        result = {"content": content, "agent": agent_name}
+
         ai_message = AIMessage(content=content)
         ai_message.name = agent_name
         if usage_metadata:
             ai_message.usage_metadata = usage_metadata
         self.message_history.append(ai_message)
-        
-        self._publish_message(agent_name, "system", "task_result", {
-            "content": result,
-            "usage_metadata": usage_metadata
-        })
-        
+
+        self._publish_message(
+            agent_name, "system", "task_result", {"content": result, "usage_metadata": usage_metadata}
+        )
+
         return result
 
     def _process_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
         max_iterations = self.task_status["max_iterations"]
         iteration = 0
         result = None
-        
+
         while iteration < max_iterations:
             self.task_status["iteration_count"] = iteration
             self.task_status["current_task"] = task
-            
+
             product_manager_result = self._run_agent_task("product_manager", task)
             architect_result = self._run_agent_task("architect", {"product_manager_result": product_manager_result})
-            project_manager_result = self._run_agent_task("project_manager", {
-                "product_manager_result": product_manager_result,
-                "architect_result": architect_result
-            })
-            developer_result = self._run_agent_task("engineer", {
-                "product_manager_result": product_manager_result,
-                "architect_result": architect_result,
-                "project_manager_result": project_manager_result
-            })
-            tester_result = self._run_agent_task("qa_engineer", {
-                "product_manager_result": product_manager_result,
-                "architect_result": architect_result,
-                "project_manager_result": project_manager_result,
-                "developer_result": developer_result,
-                "test_cases": task.get("test", "")
-            })
-            
+            project_manager_result = self._run_agent_task(
+                "project_manager",
+                {"product_manager_result": product_manager_result, "architect_result": architect_result},
+            )
+            developer_result = self._run_agent_task(
+                "engineer",
+                {
+                    "product_manager_result": product_manager_result,
+                    "architect_result": architect_result,
+                    "project_manager_result": project_manager_result,
+                },
+            )
+            tester_result = self._run_agent_task(
+                "qa_engineer",
+                {
+                    "product_manager_result": product_manager_result,
+                    "architect_result": architect_result,
+                    "project_manager_result": project_manager_result,
+                    "developer_result": developer_result,
+                    "test_cases": task.get("test", ""),
+                },
+            )
+
             result = {
                 "product_manager_result": product_manager_result,
                 "architect_result": architect_result,
                 "project_manager_result": project_manager_result,
                 "developer_result": developer_result,
-                "tester_result": tester_result
+                "tester_result": tester_result,
             }
-            
+
             qa_content = tester_result.get("content", "")
             if not self._need_iteration(qa_content):
                 break
-                
+
             task["qa_feedback"] = {
                 "bugs": self._extract_bugs(qa_content),
-                "suggestions": self._extract_suggestions(qa_content)
+                "suggestions": self._extract_suggestions(qa_content),
             }
             iteration += 1
-        
+
         return result
 
     def _extract_bugs(self, qa_content: str) -> List[str]:
@@ -376,7 +358,7 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
         if bugs_match and bugs_match.group(1) != "None":
             return [bugs_match.group(1)]
         return []
-    
+
     def _extract_suggestions(self, qa_content: str) -> List[str]:
         suggestions_match = re.search(r"## Improvement Suggestions\n- ([^\n]+)", qa_content)
         if suggestions_match and suggestions_match.group(1) != "None":
@@ -386,37 +368,42 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
     def _need_iteration(self, qa_content: str) -> bool:
         return bool(self._extract_bugs(qa_content) or self._extract_suggestions(qa_content))
 
-    def run_agent(self, question: Dict, **kwargs) -> Dict[str, Any]:
+    def run_agent(self, question: Dict, problem_type: str, **kwargs) -> Dict[str, Any]:
         start_time = time.time()
-        
+
         try:
             self.message_history = []
-            
-            if self.evaluator_name.lower() == "humaneval":
+            problem_type_lc = problem_type.lower()
+            # HumanEval (Code generation task) 
+            if  problem_type_lc == "humaneval":
                 # Parse the prompt to extract requirements, constraints, and examples
                 prompt = question.get("problem", "")
                 task_id = question.get("id", "unknown")
                 entry_point = question.get("entry_point", "")
                 test = question.get("test", "")
-                
+
                 # Extract function signature
                 signature_match = re.search(r"def (\w+)\((.*?)\)( -> .*)?:", prompt)
-                function_signature = f"def {entry_point}({signature_match.group(2) if signature_match else ''})" if signature_match else f"def {entry_point}()"
-                
+                function_signature = (
+                    f"def {entry_point}({signature_match.group(2) if signature_match else ''})"
+                    if signature_match
+                    else f"def {entry_point}()"
+                )
+
                 # Extract docstring
                 docstring_match = re.search(r'"""([\s\S]*?)"""', prompt, re.DOTALL)
                 docstring = docstring_match.group(1).strip() if docstring_match else ""
-                
+
                 # Extract requirements, constraints, and examples from docstring
                 requirements = []
                 constraints = []
                 examples = []
-                
+
                 # Parse constraints
                 constraints_match = re.search(r"Constraints:([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
                 if constraints_match:
                     constraints = [c.strip() for c in constraints_match.group(1).strip().split("\n") if c.strip()]
-                
+
                 # Parse examples
                 examples_match = re.search(r"Example([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
                 if examples_match:
@@ -424,18 +411,18 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
                     for line in example_lines:
                         if "For" in line or ">>>" in line:
                             examples.append(line.strip())
-                
+
                 # Derive requirements from docstring
                 requirements = [
                     f"Implement function {entry_point}",
-                    f"Handle input types as specified in the signature",
-                    f"Return output in the format specified in the docstring"
+                    "Handle input types as specified in the signature",
+                    "Return output in the format specified in the docstring",
                 ]
                 if examples:
                     requirements.append("Match example input/output behavior")
                 if constraints:
                     requirements.append("Adhere to specified constraints")
-                
+
                 task = {
                     "id": task_id,
                     "type": "code_generation",
@@ -445,30 +432,63 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
                     "examples": examples,
                     "entry_point": entry_point,
                     "function_signature": function_signature,
-                    "test": test
+                    "test": test,
                 }
+            # MBPP (Meta-Bench Programming Problems) 
+            elif problem_type_lc == "mbpp":
+                prompt      = question.get("problem", "")
+                task_id     = question.get("id", "unknown")
+                entry_point = question.get("entry_point")
+                test_code   = question.get("test", "")
+ 
+                 # ① 解析函数签名
+                sig_match = re.search(r"def\s+(\w+)\((.*?)\)\s*:", prompt)
+                params = sig_match.group(2) if sig_match else ""
+                function_signature = f"def {entry_point}({params})"
+ 
+                 # MBPP prompt 通常没有三引号 docstring，这里使用 prompt 文本作为描述
+                description  = prompt.strip()
+ 
+                 # ② 简要需求
+                requirements = [
+                     f"Implement function `{entry_point}` exactly as specified.",
+                     "Return value must satisfy all provided asserts.",
+                 ]
+                task = {
+                     "id": task_id,
+                     "type": "code_generation",
+                     "description": description,
+                     "requirements": requirements,
+                     "constraints": [],
+                     "examples": question.get("test_list", []),
+                     "entry_point": entry_point,
+                     "function_signature": function_signature,
+                     "test": test_code,
+                 }
             else:
                 task = question
-            
+
             result = self._process_task(task)
-            
+
             final_answer = ""
             if "tester_result" in result and "content" in result["tester_result"]:
                 content = result["tester_result"]["content"]
                 code_match = re.search(r"## Validated Code\n```python\n([\s\S]*?)\n```", content)
                 if code_match:
                     final_answer = f"```python\n{code_match.group(1)}\n```"
-            
+
             end_time = time.time()
-            
+
             return {
                 "result": result,
                 "execution_time": end_time - start_time,
-                "messages": [msg for msg in self.message_history if hasattr(msg, "usage_metadata") and msg.usage_metadata],
+                "messages": [
+                    msg for msg in self.message_history if hasattr(msg, "usage_metadata") and msg.usage_metadata
+                ],
                 "final_answer": final_answer,
-                "extracted_answer": final_answer
+                "extracted_answer": final_answer,
             }
-            
+
         except Exception as e:
             print(f"Error occurred during execution: {str(e)}")
             return {
@@ -476,22 +496,17 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
                 "execution_time": 0,
                 "messages": [],
                 "final_answer": f"Error: {str(e)}",
-                "extracted_answer": f"Error: {str(e)}"
+                "extracted_answer": f"Error: {str(e)}",
             }
 
-AgentSystemRegistry.register(
-    "metagpt",
-    MetaGPT,
-    max_iterations=3
-)
+
+AgentSystemRegistry.register("metagpt", MetaGPT, max_iterations=3)
 
 if __name__ == "__main__":
     # Create MetaGPT instance
-    config = {
-        "max_iterations": 3
-    }
+    config = {"max_iterations": 3}
     metagpt = MetaGPT(name="Test System", config=config)
-    
+
     # Create test problem
     test_problem = {
         "id": "test_001",
@@ -502,24 +517,24 @@ if __name__ == "__main__":
             "Accept two parameters a and b",
             "Return the result of a+b",
             "Include appropriate type hints",
-            "Include docstring"
-        ]
+            "Include docstring",
+        ],
     }
-    
+
     # Run test
     try:
         print("Starting MetaGPT system test...")
-        result = metagpt.run_agent(test_problem)
-        
+        result = metagpt.run_agent(test_problem, problem_type="code_generation")
+
         print("\nTest Results:")
         print("-" * 50)
         print(f"Execution time: {result['execution_time']:.2f}s")
-        
+
         print("\nTask Execution Results:")
         print("-" * 50)
-        print(result['extracted_answer'])
-        print(result['result']['tester_result']['content'])
-        
+        print(result["extracted_answer"])
+        print(result["result"]["tester_result"]["content"])
+
         print("\nMessage History:")
         print("-" * 50)
         for msg in result.get("messages", []):
@@ -528,8 +543,8 @@ if __name__ == "__main__":
             if hasattr(msg, "content"):
                 print(msg.content)
             if hasattr(msg, "usage_metadata") and msg.usage_metadata:
-                print(f"\nToken usage:")
+                print("\nToken usage:")
                 print(json.dumps(msg.usage_metadata, ensure_ascii=False, indent=2))
-        
+
     except Exception as e:
         print(f"Error occurred during test: {str(e)}")

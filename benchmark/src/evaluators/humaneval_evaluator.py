@@ -1,5 +1,5 @@
 """
-HumanEval Evaluator – minimal-patch version
+HumanEval Evaluator
 """
 
 import time
