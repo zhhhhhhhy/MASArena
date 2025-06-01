@@ -5,6 +5,8 @@ This module implements a simple single-agent system that uses a single LLM
 to solve problems directly.
 """
 
+import nltk
+nltk.download('punkt_tab')
 import time
 import uuid
 import os
@@ -60,6 +62,9 @@ class SingleAgent(AgentSystem):
     3. Check your work and verify your answer
     4. Provide your final answer in a clear format
     """
+        # Agent system: single_agent
+        # Accuracy: 80.00% (40/50)
+        # Total duration: 176691ms
         elif problem_type == "bbh":
             return f"""
         You are a highly capable AI assistant tackling a problem from the **Big-Bench Hard (BBH)** benchmark.
@@ -135,10 +140,52 @@ class SingleAgent(AgentSystem):
 
         Remember: respond with **ONLY** the two blocks shown above—nothing else.
         """
+        elif problem_type == "drop":
+            return f"""
+You are an expert reading-comprehension assistant tackling a question from the **DROP** benchmark
+(Discrete Reasoning Over Paragraphs).
 
+Your reply **MUST** contain **exactly two** XML-like blocks and nothing else:
 
+<think>
+…Write your step-by-step reasoning here…
+</think>
+<answer>
+…ONLY the final answer here (no extra words, no units unless they are part of the answer)…
+</answer>
 
-            
+Passage & Question:
+{problem_text}
+
+Remember:
+1. Put **all** reasoning strictly inside <think> … </think>.
+2. The <answer> block must contain only the short answer string required by the question,
+   trimmed of leading/trailing spaces.
+3. Output absolutely nothing outside those two blocks.
+"""
+
+        elif problem_type == "ifeval":
+        # IFEval —— Instruction Following Evaluation
+            return f"""
+You are taking part in the **Instruction Following Evaluation (IFEval)** benchmark.
+
+Read the user instruction carefully and produce ONE final response that satisfies *every*
+constraint implied by the instruction IDs and by the instruction text itself.
+
+### Rules
+1. Think step-by-step **silently** – do **NOT** reveal your reasoning.
+2. Follow all punctuation, formatting, length, highlighting and stylistic constraints exactly.
+3. If an instruction forbids an element (e.g. no commas), *never* include it.
+4. If an instruction sets a minimum (e.g. ≥ 300 words, ≥ 3 highlighted sections), be sure to exceed it.
+5. Return **only** the finished response text – no explanations, no markdown fences, no extra whitespace.
+
+---  USER INSTRUCTION  ---
+{problem_text}
+--------------------------------
+
+Begin now.  Remember: output only the compliant answer.
+"""
+
 
     def run_agent(self, problem: Dict[str, Any], problem_type: str, **kwargs) -> Dict[str, Any]:
         """
@@ -154,7 +201,7 @@ class SingleAgent(AgentSystem):
             Dictionary of run results including messages with usage metadata
         """
         problem_text = problem["problem"]
-        problem_id = problem.get("id", f"problem_{hash(problem_text)}")
+        problem_id = str(problem.get("id", f"problem_{hash(problem_text)}"))
         task_type = re.sub(r'_\d+$', '', problem_id) if problem_id else ""
     
         # Initialize the language model

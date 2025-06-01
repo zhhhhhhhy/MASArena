@@ -1,152 +1,177 @@
 """
 DROP Evaluator
 
-This module provides a standalone evaluator for DROP (Discrete Reasoning Over Paragraphs) problems.
+Standalone evaluator for DROP (Discrete Reasoning Over Paragraphs) problems.
+
 """
+
+from __future__ import annotations
 
 import re
 import string
 import time
+from pathlib import Path
 from collections import Counter
 from typing import Dict, Any, Tuple, List
-from pathlib import Path
 
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
+_ANS_TAG_RE   = re.compile(r"<answer>\s*([\s\S]*?)\s*</answer>", re.IGNORECASE)
+_FINAL_RE     = re.compile(r"(?:^|\n)\s*(?:final\s+answer|answer)\s*[:\-]?\s*([\s\S]+)", re.IGNORECASE)
+
+
 class DROPEvaluator:
-    """Evaluator for DROP problems"""
-    
-    def __init__(self, name: str = "drop", config: Dict[str, Any] = None):
-        self.name = name
+    """Evaluator for DROP benchmark problems."""
+
+    def __init__(self, name: str = "drop", config: Dict[str, Any] | None = None):
+        self.name   = name
         self.config = config or {}
-        
-        # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        
-        # Create log directory
+
+        self.data_path = self.config.get("data_path", f"benchmark/data/{name}_test.jsonl")
+        self.log_path  = self.config.get("log_path",  f"benchmark/data/results/{name.upper()}")
         Path(self.log_path).mkdir(parents=True, exist_ok=True)
-        
-        # Initialize run evaluator
+
         self.run_evaluator = RunEvaluator()
-        
-    def normalize_answer(self, s: str) -> List[str]:
+
+
+    def _extract_answer(self, raw: Any) -> str:
         """
-        Normalize answers for evaluation.
-        
-        Args:
-            s: The answer string to normalize
-            
-        Returns:
-            List of normalized tokens
+        Extracts the first plausible answer string from an LLM response.
+        1. <answer> … </answer>
+        2. "Final Answer:" / "Answer:"
+        3. Last non-empty line of text
+        Always returns a trimmed string (may be empty).
         """
-        def remove_articles(text):
-            return re.sub(r"\b(a|an|the)\b", " ", text)
-            
-        def white_space_fix(text):
-            return " ".join(text.split())
-            
-        def remove_punc(text):
-            exclude = set(string.punctuation)
-            return "".join(ch for ch in text if ch not in exclude)
-            
-        def lower(text):
-            return text.lower()
-            
-        return white_space_fix(remove_articles(remove_punc(lower(s))))
-        
-    def calculate_score(self, ground_truth: str, prediction: str) -> Tuple[float, str]:
-        """
-        Compute the F1 score between prediction and ground truth answers.
-        
-        Args:
-            ground_truth: The ground truth answer
-            prediction: The predicted answer
-            
-        Returns:
-            Tuple of (f1_score, prediction)
-        """
-        prediction_tokens = self.normalize_answer(prediction).split()
-        ground_truth_tokens = self.normalize_answer(ground_truth).split()
-        
-        common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
+        txt = str(raw).strip()
+
+        # 1. Check for <answer>...</answer> tags
+        m = _ANS_TAG_RE.search(txt)
+        if m:
+            return m.group(1).strip()
+
+        # 2. Check for "Final Answer:" or "Answer:" prefix
+        m = _FINAL_RE.search(txt)
+        if m:
+            # Take only the first line to avoid including reasoning
+            return m.group(1).strip().splitlines()[0].strip()
+
+        # 3. Fallback: last non-empty line
+        for line in reversed(txt.splitlines()):
+            if line.strip():
+                return line.strip()
+        return ""
+
+    @staticmethod
+    def _normalize(s: Any) -> str:
+        """DROP normalization: lowercase -> remove articles/punctuation -> collapse whitespace."""
+        s = str(s)
+
+        def remove_articles(t: str) -> str:
+            return re.sub(r"\b(a|an|the)\b", " ", t)
+
+        def white_space_fix(t: str) -> str:
+            return " ".join(t.split())
+
+        def remove_punc(t: str) -> str:
+            return "".join(ch for ch in t if ch not in string.punctuation)
+
+        return white_space_fix(remove_articles(remove_punc(s.lower())))
+
+
+    def _f1(self, gold: str, pred: str) -> float:
+        """Calculates token-level F1 score (AllenNLP-style)."""
+        gold_toks: List[str] = self._normalize(gold).split()
+        pred_toks: List[str] = self._normalize(pred).split()
+
+        if not gold_toks and not pred_toks:
+            return 1.0
+        if not gold_toks or not pred_toks:
+            return 0.0
+
+        common = Counter(gold_toks) & Counter(pred_toks)
         num_same = sum(common.values())
-        
         if num_same == 0:
-            return 0, prediction
-            
-        precision = 1.0 * num_same / len(prediction_tokens)
-        recall = 1.0 * num_same / len(ground_truth_tokens)
-        f1 = (2 * precision * recall) / (precision + recall)
-        
-        return f1, prediction
-        
-    def create_run(self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: float) -> Run:
-        """Create a LangSmith run for evaluation"""
+            return 0.0
+
+        precision = num_same / len(pred_toks)
+        recall    = num_same / len(gold_toks)
+        return 2 * precision * recall / (precision + recall)
+
+
+    def _make_run(
+        self,
+        problem: Dict[str, Any],
+        final_answer: str,
+        extracted: str,
+        score: float
+    ) -> Run:
+        """Creates a LangSmith Run object for evaluation."""
         import uuid
-        
         return Run(
             id=str(uuid.uuid4()),
             name=f"{self.name.upper()}_Evaluation",
-            inputs={"context": problem["context"]},
+            inputs={"context": problem["problem"], "task_id": problem.get("id")},
             outputs={
-                "prediction": final_answer,
-                "extracted_answer": extracted_answer,
-                "expected": problem["ref_text"],
-                "score": score,
-                "passed": score >= 0.3,  # DROP uses 0.3 as threshold
+                "prediction"      : final_answer,
+                "extracted_answer": extracted,
+                "expected"        : problem["solution"],
+                "score"           : score,
+                "passed"          : score >= 0.3,  # Matches official threshold of 0.3 for passing
             },
             run_type="evaluation",
             start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
             trace_id=str(uuid.uuid4()),
         )
-        
+
+
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Evaluate a problem given the agent's response.
-        
-        Args:
-            problem: The problem dictionary with "context" and "ref_text" keys
-            run_result: The result from running the agent system
-            
-        Returns:
-            Evaluation results dictionary
+        Evaluates a problem against an LLM response.
+
+        Args
+        ----
+        problem     dict: {"problem": passage+question, "solution": ref_answer, "id": …}
+        run_result  dict: {"final_answer": <raw LLM output>, …}
+
+        Returns
+        -------
+        Dictionary with keys {final_answer, extracted_answer, score, run_evaluation}
         """
-        # Extract the final answer
-        final_answer = run_result.get("final_answer", "")
-        
-        # Get reference answers
-        ref_answers = problem["ref_text"].split("|")
-        
-        # Calculate F1 scores for each reference answer
-        f1_scores = []
-        for ref_answer in ref_answers:
-            if ref_answer.strip():
-                # Split prediction into parts if it contains multiple answers
-                pred_parts = final_answer.split("|")
-                for pred_part in pred_parts:
-                    f1_score, _ = self.calculate_score(ref_answer, pred_part)
-                    f1_scores.append(f1_score)
-        
-        # Get the best F1 score
-        best_score = max(f1_scores) if f1_scores else 0.0
-        
-        # Create LangSmith run
-        run = self.create_run(problem, final_answer, final_answer, best_score)
-        run_evaluation = self.run_evaluator.evaluate_run(run=run)
-        
-        # Log mismatch if score is too low
-        if best_score < 0.3:
-            with open(f"{self.log_path}/mismatches.log", "a") as f:
-                f.write(f"\nContext: {problem['context']}\n")
-                f.write(f"Expected: {problem['ref_text']}\n")
-                f.write(f"Predicted: {final_answer}\n")
-                f.write(f"Score: {best_score}\n")
-        
+        raw_out          = run_result.get("final_answer", "")
+        extracted_answer = self._extract_answer(raw_out)
+
+        # Support multiple answers (split by |); take the best F1 score for each prediction and gold answer
+        gold_list = [x.strip() for x in str(problem["solution"]).split("|") if x.strip()]
+        pred_list = [x.strip() for x in extracted_answer.split("|") if x.strip()]
+
+        scores = [
+            self._f1(gold, pred)
+            for gold in gold_list for pred in pred_list
+        ] or [0.0]
+
+        best_f1 = max(scores)
+
+        # Log low-scoring cases
+        if best_f1 < 0.3:
+            with open(Path(self.log_path) / "mismatches.log", "a", encoding="utf-8") as f:
+                f.write("\n" + "-" * 80 + "\n")
+                f.write(f"ID       : {problem.get('id')}\n")
+                f.write(f"Question : {problem['problem']}\n")
+                f.write(f"Expected : {problem['solution']}\n")
+                f.write(f"Predicted: {extracted_answer}\n")
+                f.write(f"F1 score : {best_f1:.4f}\n")
+
+        # Create LangSmith run and structure the return value
+        run = self._make_run(problem, str(raw_out), extracted_answer, best_f1)
+        run_eval = self.run_evaluator.evaluate_run(run=run)
+
+        # Final score: 1.0 if F1 >= 0.3, else use the F1 score directly
+        final_score = 1 if best_f1 >= 0.3 else best_f1
+
         return {
-            "final_answer": final_answer,
-            "extracted_answer": final_answer,
-            "score": best_score,
-            "run_evaluation": run_evaluation,
+            "final_answer"    : str(raw_out),
+            "extracted_answer": extracted_answer,
+            "score"           : final_score,
+            "run_evaluation"  : run_eval,
         }

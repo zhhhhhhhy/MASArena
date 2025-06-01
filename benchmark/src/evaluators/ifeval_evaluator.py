@@ -1,13 +1,9 @@
 """
-IFEval Evaluator
-
-This module provides a standalone evaluator for instruction following evaluation.
+IFEval Evaluator – revised to follow the official scoring more closely
 """
 
-import json
 import collections
-from typing import Dict, Any, List
-from pathlib import Path
+from typing import Dict, Any
 
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
@@ -19,132 +15,125 @@ from benchmark.src.evaluators.utils.ifeval.evaluation_lib import (
     OutputExample,
 )
 
+
 class IFEvalEvaluator:
-    """
-    Evaluator for instruction following tasks.
-    Integrates the official IFEval implementation.
-    """
-    
-    def __init__(self, name: str = "ifeval", config: Dict[str, Any] = None):
-        """
-        Initialize the IFEval Evaluator.
-        
-        Args:
-            name: Name of the evaluator
-            config: Configuration parameters
-        """
+    """Evaluates LLM outputs on IFEval tasks (strict & loose modes)."""
+
+    def __init__(self, name: str = "ifeval", config: Dict[str, Any] | None = None):
         self.name = name
         self.config = config or {}
         self.run_evaluator = RunEvaluator()
-        
+
     def preprocess_input(self, problem: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Preprocess the input problem before passing to the agent system.
-        
-        Args:
-            problem: Raw problem dictionary
-            
-        Returns:
-            Preprocessed problem dictionary
+        Standardizes the input dictionary from the Runner, extracting fields needed for the agent.
         """
-        # Create input example
+        instr_ids = problem.get("instruction_id_list",
+                                problem.get("instruction_ids", []))
+        kwargs_ = problem.get("kwargs", [])
+
         input_example = InputExample(
-            key=problem.get("key", 0),
-            instruction_id_list=problem["instruction_id_list"],
-            prompt=problem["prompt"],
-            kwargs=problem["kwargs"]
+            key=problem.get("id", problem.get("key", 0)),
+            instruction_id_list=instr_ids,
+            prompt=problem["problem"],   # (Runner maps to 'problem')
+            kwargs=kwargs_,
         )
-        
-        # Return preprocessed input
+
         return {
-            "problem": input_example.prompt,  # Use the prompt as the main problem
+            "problem": input_example.prompt,            # Content sent to the agent
             "instruction_id_list": input_example.instruction_id_list,
             "kwargs": input_example.kwargs,
             "key": input_example.key,
-            "original_problem": problem  # Keep original data for evaluation
+            "original_problem": problem,                # Retrieved during evaluation
         }
-        
-    def calculate_metrics(self, output: OutputExample) -> Dict[str, Any]:
-        """Calculate metrics for a single example using official logic"""
-        follow_instruction_list = output.follow_instruction_list
-        instruction_id_list = output.instruction_id_list
-        
-        # Calculate instruction-level metrics
-        instruction_total = len(instruction_id_list)
-        instruction_correct = sum(follow_instruction_list)
-        instruction_accuracy = instruction_correct / instruction_total if instruction_total > 0 else 0
-        
-        # Calculate instruction type metrics
-        type_metrics = collections.defaultdict(lambda: {"total": 0, "correct": 0})
-        for instruction_id, followed in zip(instruction_id_list, follow_instruction_list):
-            instr_type = instruction_id.split(":")[0]  # e.g., "keywords" from "keywords:existence"
-            type_metrics[instr_type]["total"] += 1
-            if followed:
-                type_metrics[instr_type]["correct"] += 1
-        
-        # Convert type metrics to accuracies
-        type_accuracies = {}
-        for instr_type, counts in type_metrics.items():
-            accuracy = counts["correct"] / counts["total"] if counts["total"] > 0 else 0
-            type_accuracies[instr_type] = {
-                "accuracy": accuracy,
-                "correct": counts["correct"],
-                "total": counts["total"]
-            }
-        
+
+    @staticmethod
+    def _aggregate_metrics(output: OutputExample) -> Dict[str, Any]:
+        """
+        Converts OutputExample into usable metrics:
+        - prompt_followed: bool
+        - instruction_accuracy: per-instruction accuracy
+        - tier0 / tier1: statistics for tier-0 (prefix) and tier-1 (full ID)
+        """
+        follow_list = output.follow_instruction_list
+        instr_ids = output.instruction_id_list
+
+        # Prompt-level
+        prompt_followed = all(follow_list)
+
+        # Instruction-level
+        total = len(instr_ids)
+        correct = sum(follow_list)
+        instr_acc = correct / total if total else 0
+
+        # Tier-0 (prefix) and Tier-1 (full ID)
+        tier0 = collections.defaultdict(lambda: {"total": 0, "correct": 0})
+        tier1 = collections.defaultdict(lambda: {"total": 0, "correct": 0})
+
+        for iid, ok in zip(instr_ids, follow_list):
+            tier0_id = iid.split(":")[0]
+            tier0[tier0_id]["total"] += 1
+            tier1[iid]["total"] += 1
+            if ok:
+                tier0[tier0_id]["correct"] += 1
+                tier1[iid]["correct"] += 1
+
+        def _ratio(d):  # Helper function
+            return {k: {
+                        "accuracy": v["correct"] / v["total"] if v["total"] else 0,
+                        "correct": v["correct"],
+                        "total": v["total"],
+                    } for k, v in d.items()}
+
         return {
-            "instruction_accuracy": instruction_accuracy,
-            "instruction_correct": instruction_correct,
-            "instruction_total": instruction_total,
-            "all_instructions_followed": output.follow_all_instructions,
-            "instruction_results": output.follow_instruction_list,
-            "type_accuracies": type_accuracies
+            "prompt_followed": prompt_followed,
+            "instruction_accuracy": instr_acc,
+            "instruction_correct": correct,
+            "instruction_total": total,
+            "instruction_results": follow_list,
+            "tier0_accuracies": _ratio(tier0),
+            "tier1_accuracies": _ratio(tier1),
         }
-        
-    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
+
+    def evaluate(self, problem: Dict[str, Any],
+                 run_result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Evaluate a problem given the agent's response.
-        
-        Args:
-            problem: The problem dictionary with "prompt", "instruction_id_list", and "kwargs"
-            run_result: The result from running the agent system
-            
-        Returns:
-            Evaluation results dictionary
+        Evaluates a single sample in both strict and loose modes.
+        The score is based on whether the prompt is fully followed in strict mode.
         """
-        # Extract the final answer
-        final_answer = run_result.get("final_answer", "")
-        
-        # Get original problem data
-        original_problem = problem.get("original_problem", problem)
-        
-        # Create input example for official evaluator
-        input_example = InputExample(
-            key=original_problem.get("key", 0),
-            instruction_id_list=original_problem["instruction_id_list"],
-            prompt=original_problem["prompt"],
-            kwargs=original_problem["kwargs"]
+        # 1. Retrieve and clean the model's answer (remove BOM/whitespace)
+        final_ans = run_result.get("final_answer", "")
+        try:
+            final_ans = final_ans.encode("utf-8").decode("utf-8-sig").strip()
+        except UnicodeDecodeError:
+            final_ans = final_ans.strip()
+
+        # 2. Restore InputExample
+        original = problem.get("original_problem", problem)
+        instr_ids = original.get("instruction_id_list", [])
+        kwargs_ = original.get("kwargs", [])
+
+        inp = InputExample(
+            key=original.get("id", original.get("key", 0)),
+            instruction_id_list=instr_ids,
+            prompt=original["problem"],
+            kwargs=kwargs_,
         )
-        
-        # Create response dictionary
-        prompt_to_response = {input_example.prompt: final_answer}
-        
-        # Run both strict and loose evaluations
-        strict_result = test_instruction_following_strict(input_example, prompt_to_response)
-        loose_result = test_instruction_following_loose(input_example, prompt_to_response)
-        
-        # Calculate metrics
-        strict_metrics = self.calculate_metrics(strict_result)
-        loose_metrics = self.calculate_metrics(loose_result)
-        
-        # Use strict accuracy as the main score for metrics collection
-        score = strict_metrics["instruction_accuracy"]
-        
-        evaluation_result = {
-            "final_answer": final_answer,
-            "score": score,  # This is what supervisor_mas will use
+
+        # 3. Call official evaluation functions
+        mapping = {inp.prompt: final_ans}
+        strict_out = test_instruction_following_strict(inp, mapping)
+        loose_out  = test_instruction_following_loose(inp, mapping)
+
+        strict_metrics = self._aggregate_metrics(strict_out)
+        loose_metrics  = self._aggregate_metrics(loose_out)
+
+        # 4. Main score: prompt-level strict
+        score = 1.0 if strict_metrics["prompt_followed"] else 0.0
+
+        return {
+            "final_answer": final_ans,
+            "score": score,
             "strict_evaluation": strict_metrics,
-            "loose_evaluation": loose_metrics
+            "loose_evaluation": loose_metrics,
         }
-        
-        return evaluation_result
