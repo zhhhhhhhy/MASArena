@@ -75,7 +75,15 @@ class AgentSystem(abc.ABC):
         Format the prompt for different benchmarks. 
         """
         if self.evaluator_name == "bbh":
-            return BBH_FORMAT_PROMPT
+            return BBH_PROMPT
+        if self.evaluator_name == "ifeval":
+            return IFEVAL_PROMPT
+        if self.evaluator_name == "drop":
+            return DROP_PROMPT
+        if self.evaluator_name == "humaneval":
+            return HUMANEVAL_PROMPT
+        if self.evaluator_name == "mbpp":
+            return MBPP_PROMPT
         if self.evaluator_name == "mmlu_pro":
             return MMLU_PROMPT
         else:
