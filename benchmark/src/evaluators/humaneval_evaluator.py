@@ -11,18 +11,18 @@ from threading import Thread
 from typing import Dict, Any, Tuple
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
+from benchmark.src.evaluators.base_code_evaluator import BaseCodeEvaluator
 from benchmark.src.evaluators.utils.sanitize import sanitize, code_extract
 
 
-class HumanEvalEvaluator:
+class HumanEvalEvaluator(BaseCodeEvaluator):
     """Evaluator for HumanEval problems"""
 
     class TimeoutError(Exception):
         """Raised when execution exceeds the allowed time limit."""
 
     def __init__(self, name: str = "humaneval", config: Dict[str, Any] | None = None):
-        self.name = name
-        self.config = config or {}
+        super().__init__(name, config)
 
         # Path to the test data and directory for logs/results
         self.data_path = self.config.get("data_path", f"benchmark/data/{name}_test.jsonl")
@@ -63,14 +63,14 @@ class HumanEvalEvaluator:
         """
         Extract Python code from *text* in several fall-back steps, in order of preference:
 
-        1. A QA Engineer section marked “## Validated Code”.
+        1. A QA Engineer section marked "## Validated Code".
         2. Any generic ```python fenced block.
         3. A bare function-definition-like snippet.
         4. As a last resort, use *sanitize* / *code_extract* helpers.
         """
         self.logger.info(f"Extracting code… snippet: {text[:100]}")
 
-        # ① “## Validated Code” block
+        # ① "## Validated Code" block
         qa_match = re.search(r"##\s*Validated Code\s*```python\s*([\s\S]*?)```", text, re.IGNORECASE)
         if qa_match:
             code = qa_match.group(1).strip()

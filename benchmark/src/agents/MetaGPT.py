@@ -368,54 +368,25 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
     def _need_iteration(self, qa_content: str) -> bool:
         return bool(self._extract_bugs(qa_content) or self._extract_suggestions(qa_content))
 
-    # A unified task preparation function to handle all datasets (HumanEval / MBPP / …)
-    def _prepare_task(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+    def run_agent(self, task_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
-        Convert raw dataset JSON (HumanEval / MBPP / …) into a standardized structure:
-        {id, description, entry_point, function_signature, test, …}
-        for internal multi-agent pipeline consumption.
+        Run the agent system on a task.
+        
+        Args:
+            task_data: The task data in a standardized format (prepared by evaluator)
+            **kwargs: Additional keyword arguments
+            
+        Returns:
+            Dict containing execution results and messages
         """
-        prompt = raw.get("prompt") or raw.get("problem", "")
-        task_id = raw.get("id", "unknown")
-        entry_point = raw.get("entry_point", "")
-
-        # Extract (or infer) function signature
-        sig = re.search(r"def\s+(\w+)\((.*?)\)\s*(->\s*[^:]*)?:", prompt)
-        params = sig.group(2) if sig else ""
-        function_signature = f"def {entry_point}({params})"
-
-        # Extract triple-quoted docstring
-        doc_match = re.search(r'"""([\s\S]*?)"""', prompt, re.DOTALL)
-        docstring = doc_match.group(1).strip() if doc_match else ""
-
-        # Extract simple examples / constraints (expand as needed)
-        examples = re.findall(r">>>(.+)", prompt)
-        constraints = re.findall(r"Constraints?:([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
-
-        return {
-            "id": task_id,
-            "type": "code_generation",
-            "description": docstring or prompt.strip()[:120] + "...",
-            "requirements": [f"Implement `{entry_point}` function"],
-            "constraints": [c.strip() for c in constraints[0].splitlines()] if constraints else [],
-            "examples": examples,
-            "entry_point": entry_point,
-            "function_signature": function_signature,
-            "test": raw.get("test", ""),
-        }
-
-    def run_agent(self, question: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         start = time.time()
         self.message_history = []
 
         try:
-            task = self._prepare_task(question)
-            result_chain = self._process_task(task)
+            result_chain = self._process_task(task_data)
 
-            # Extract final validated code from the QA stage output (unchanged)
+            # Return the raw QA output without specific extraction
             tester_out = result_chain.get("tester_result", {}).get("content", "")
-            code_m = re.search(r"##\s*Validated Code\s*```python\s*([\s\S]*?)```", tester_out)
-            final_answer = f"```python\n{code_m.group(1)}\n```" if code_m else ""
 
             return {
                 "result": result_chain,
@@ -424,8 +395,7 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
                     m for m in self.message_history
                     if getattr(m, "usage_metadata", None)
                 ],
-                "final_answer": final_answer,
-                "extracted_answer": final_answer,
+                "final_answer": tester_out,
             }
 
         except Exception as exc:
@@ -434,7 +404,6 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
                 "execution_time": 0,
                 "messages": [],
                 "final_answer": f"Error: {exc}",
-                "extracted_answer": f"Error: {exc}",
             }
 
 
@@ -470,8 +439,7 @@ if __name__ == "__main__":
 
         print("\nTask Execution Results:")
         print("-" * 50)
-        print(result["extracted_answer"])
-        print(result["result"]["tester_result"]["content"])
+        print(result["final_answer"])
 
         print("\nMessage History:")
         print("-" * 50)
