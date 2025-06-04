@@ -35,8 +35,6 @@ BENCHMARK_KEY_MAPPINGS = {
         "test_imports": None,
         "instruction_id_list":None,
         "kwargs": None,
-
-
     },
     "mbpp": {
         "id": "task_id",
@@ -285,7 +283,8 @@ class BenchmarkRunner:
 
             try:
                 # Evaluate the problem using the agent system
-                results = agent.evaluate(normalized_problem, benchmark_name, metrics_registry=self.metrics_registry)
+                # results = agent.evaluate(normalized_problem, benchmark_name, metrics_registry=self.metrics_registry)
+                results = agent.evaluate(normalized_problem, metrics_registry=self.metrics_registry)
 
                 # Stop problem timer
                 problem_duration_ms = self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")

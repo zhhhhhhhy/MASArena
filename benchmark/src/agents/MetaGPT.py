@@ -368,135 +368,73 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
     def _need_iteration(self, qa_content: str) -> bool:
         return bool(self._extract_bugs(qa_content) or self._extract_suggestions(qa_content))
 
-    def run_agent(self, question: Dict, problem_type: str, **kwargs) -> Dict[str, Any]:
-        start_time = time.time()
+    # A unified task preparation function to handle all datasets (HumanEval / MBPP / …)
+    def _prepare_task(self, raw: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Convert raw dataset JSON (HumanEval / MBPP / …) into a standardized structure:
+        {id, description, entry_point, function_signature, test, …}
+        for internal multi-agent pipeline consumption.
+        """
+        prompt = raw.get("prompt") or raw.get("problem", "")
+        task_id = raw.get("id", "unknown")
+        entry_point = raw.get("entry_point", "")
+
+        # Extract (or infer) function signature
+        sig = re.search(r"def\s+(\w+)\((.*?)\)\s*(->\s*[^:]*)?:", prompt)
+        params = sig.group(2) if sig else ""
+        function_signature = f"def {entry_point}({params})"
+
+        # Extract triple-quoted docstring
+        doc_match = re.search(r'"""([\s\S]*?)"""', prompt, re.DOTALL)
+        docstring = doc_match.group(1).strip() if doc_match else ""
+
+        # Extract simple examples / constraints (expand as needed)
+        examples = re.findall(r">>>(.+)", prompt)
+        constraints = re.findall(r"Constraints?:([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
+
+        return {
+            "id": task_id,
+            "type": "code_generation",
+            "description": docstring or prompt.strip()[:120] + "...",
+            "requirements": [f"Implement `{entry_point}` function"],
+            "constraints": [c.strip() for c in constraints[0].splitlines()] if constraints else [],
+            "examples": examples,
+            "entry_point": entry_point,
+            "function_signature": function_signature,
+            "test": raw.get("test", ""),
+        }
+
+    def run_agent(self, question: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        start = time.time()
+        self.message_history = []
 
         try:
-            self.message_history = []
-            problem_type_lc = problem_type.lower()
-            # HumanEval (Code generation task) 
-            if  problem_type_lc == "humaneval":
-                # Parse the prompt to extract requirements, constraints, and examples
-                prompt = question.get("problem", "")
-                task_id = question.get("id", "unknown")
-                entry_point = question.get("entry_point", "")
-                test = question.get("test", "")
+            task = self._prepare_task(question)
+            result_chain = self._process_task(task)
 
-                # Extract function signature
-                signature_match = re.search(r"def (\w+)\((.*?)\)( -> .*)?:", prompt)
-                function_signature = (
-                    f"def {entry_point}({signature_match.group(2) if signature_match else ''})"
-                    if signature_match
-                    else f"def {entry_point}()"
-                )
-
-                # Extract docstring
-                docstring_match = re.search(r'"""([\s\S]*?)"""', prompt, re.DOTALL)
-                docstring = docstring_match.group(1).strip() if docstring_match else ""
-
-                # Extract requirements, constraints, and examples from docstring
-                requirements = []
-                constraints = []
-                examples = []
-
-                # Parse constraints
-                constraints_match = re.search(r"Constraints:([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
-                if constraints_match:
-                    constraints = [c.strip() for c in constraints_match.group(1).strip().split("\n") if c.strip()]
-
-                # Parse examples
-                examples_match = re.search(r"Example([\s\S]*?)(?=\n\s*\n|$)", docstring, re.DOTALL)
-                if examples_match:
-                    example_lines = examples_match.group(1).strip().split("\n")
-                    for line in example_lines:
-                        if "For" in line or ">>>" in line:
-                            examples.append(line.strip())
-
-                # Derive requirements from docstring
-                requirements = [
-                    f"Implement function {entry_point}",
-                    "Handle input types as specified in the signature",
-                    "Return output in the format specified in the docstring",
-                ]
-                if examples:
-                    requirements.append("Match example input/output behavior")
-                if constraints:
-                    requirements.append("Adhere to specified constraints")
-
-                task = {
-                    "id": task_id,
-                    "type": "code_generation",
-                    "description": docstring,
-                    "requirements": requirements,
-                    "constraints": constraints,
-                    "examples": examples,
-                    "entry_point": entry_point,
-                    "function_signature": function_signature,
-                    "test": test,
-                }
-            # MBPP (Meta-Bench Programming Problems) 
-            elif problem_type_lc == "mbpp":
-                prompt      = question.get("problem", "")
-                task_id     = question.get("id", "unknown")
-                entry_point = question.get("entry_point")
-                test_code   = question.get("test", "")
- 
-                 # ① 解析函数签名
-                sig_match = re.search(r"def\s+(\w+)\((.*?)\)\s*:", prompt)
-                params = sig_match.group(2) if sig_match else ""
-                function_signature = f"def {entry_point}({params})"
- 
-                 # MBPP prompt 通常没有三引号 docstring，这里使用 prompt 文本作为描述
-                description  = prompt.strip()
- 
-                 # ② 简要需求
-                requirements = [
-                     f"Implement function `{entry_point}` exactly as specified.",
-                     "Return value must satisfy all provided asserts.",
-                 ]
-                task = {
-                     "id": task_id,
-                     "type": "code_generation",
-                     "description": description,
-                     "requirements": requirements,
-                     "constraints": [],
-                     "examples": question.get("test_list", []),
-                     "entry_point": entry_point,
-                     "function_signature": function_signature,
-                     "test": test_code,
-                 }
-            else:
-                task = question
-
-            result = self._process_task(task)
-
-            final_answer = ""
-            if "tester_result" in result and "content" in result["tester_result"]:
-                content = result["tester_result"]["content"]
-                code_match = re.search(r"## Validated Code\n```python\n([\s\S]*?)\n```", content)
-                if code_match:
-                    final_answer = f"```python\n{code_match.group(1)}\n```"
-
-            end_time = time.time()
+            # Extract final validated code from the QA stage output (unchanged)
+            tester_out = result_chain.get("tester_result", {}).get("content", "")
+            code_m = re.search(r"##\s*Validated Code\s*```python\s*([\s\S]*?)```", tester_out)
+            final_answer = f"```python\n{code_m.group(1)}\n```" if code_m else ""
 
             return {
-                "result": result,
-                "execution_time": end_time - start_time,
+                "result": result_chain,
+                "execution_time": time.time() - start,
                 "messages": [
-                    msg for msg in self.message_history if hasattr(msg, "usage_metadata") and msg.usage_metadata
+                    m for m in self.message_history
+                    if getattr(m, "usage_metadata", None)
                 ],
                 "final_answer": final_answer,
                 "extracted_answer": final_answer,
             }
 
-        except Exception as e:
-            print(f"Error occurred during execution: {str(e)}")
+        except Exception as exc:
             return {
-                "result": {"error": str(e)},
+                "result": {"error": str(exc)},
                 "execution_time": 0,
                 "messages": [],
-                "final_answer": f"Error: {str(e)}",
-                "extracted_answer": f"Error: {str(e)}",
+                "final_answer": f"Error: {exc}",
+                "extracted_answer": f"Error: {exc}",
             }
 
 
