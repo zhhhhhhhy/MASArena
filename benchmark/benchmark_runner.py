@@ -19,77 +19,11 @@ from benchmark.src.metrics import (
     SystemMetricsCollector,
     AgentMetricsCollector,
     InterAgentMetricsCollector,
-    MetricsCollector,
+    MetricsCollector
 )
 from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
-
-# Define benchmark key mappings for extensibility
-BENCHMARK_KEY_MAPPINGS = {
-    "humaneval": {
-        "id": "task_id",
-        "problem": "prompt",
-        "solution": "canonical_solution",
-        "test": "test",
-        "entry_point": "entry_point",
-        "test_imports": None,
-        "instruction_id_list":None,
-        "kwargs": None,
-
-
-    },
-    "mbpp": {
-        "id": "task_id",
-        "problem": "prompt",
-        "solution": "code",
-        "test": "test",
-        "entry_point": "entry_point",
-        "test_imports": "test_imports",
-        "instruction_id_list":None,
-        "kwargs": None,
-    },
-    "math": {
-        "id": "id",
-        "problem": "problem",
-        "solution": "solution",
-        "test": None,
-        "entry_point": None,
-        "test_imports": None,
-        "instruction_id_list":None,
-        "kwargs": None,
-    },
-    "bbh": {
-        "id": "task_id",
-        "problem": "input",
-        "solution": "target",
-        "test": None,
-        "entry_point": None,
-        "test_imports": None,
-        "instruction_id_list":None,
-        "kwargs": None,
-    },
-    "drop": {
-        "id": "id",
-        "problem": "context",
-        "solution": "ref_text",
-        "test": None,
-        "entry_point": None,
-        "test_imports": None,
-        "instruction_id_list":None,
-        "kwargs": None,
-    },
-    "ifeval": {
-        "id": "key",
-        "problem": "prompt",
-        "solution": None,
-        "test": None,
-        "entry_point": None,
-        "test_imports": None,
-        "instruction_id_list": "instruction_id_list",
-        "kwargs": "kwargs",
-    },
-}
-
+from benchmark.src.evaluators.utils.normalization import normalize_problem_keys
 
 class BenchmarkRunner:
     """
@@ -123,7 +57,7 @@ class BenchmarkRunner:
 
         # Set up metrics
         self.metrics_registry = self._setup_metrics()
-
+        
         # Create centralized metrics collector
         self.metrics_collector = MetricsCollector(self.metrics_registry)
 
@@ -181,26 +115,36 @@ class BenchmarkRunner:
 
         # Start metrics collection
         self.metrics_registry.start_all_collectors()
-
+        
         # Record benchmark metadata using centralized collector
         self.metrics_collector.record_metric(
             "benchmark.metadata",
             1.0,
-            {"benchmark": benchmark_name, "agent_system": agent_system, "limit": limit, "timestamp": self.timestamp},
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system,
+                "limit": limit,
+                "timestamp": self.timestamp
+            }
         )
-
+        
         # Start benchmark timer through centralized collector
         self.metrics_collector.start_timer(
-            "benchmark.execution", {"benchmark": benchmark_name, "agent_system": agent_system, "limit": limit}
+            "benchmark.execution",
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system,
+                "limit": limit
+            }
         )
 
         # Create agent system with appropriate configuration
         if agent_config is None:
             agent_config = {}
-
+            
         # Add evaluator name to configuration
         agent_config["evaluator"] = benchmark_name
-
+        
         # Set mock_mcp flag if using mcp_config_file with "mock" in the name
         if agent_config.get("use_mcp_tools") and agent_config.get("mcp_config_file"):
             config_file = agent_config.get("mcp_config_file", "")
@@ -228,18 +172,16 @@ class BenchmarkRunner:
 
         # Limit problems
         problems = problems[:limit]
-
+        
         # Record problem count
         self.metrics_collector.record_metric(
-            "benchmark.problem_count", len(problems), {"benchmark": benchmark_name, "agent_system": agent_system}
+            "benchmark.problem_count",
+            len(problems),
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system
+            }
         )
-
-        # Get key mapping for the benchmark
-        key_mapping = BENCHMARK_KEY_MAPPINGS.get(benchmark_name)
-        if key_mapping is None:
-            raise ValueError(
-                f"Unknown benchmark: {benchmark_name}. Supported: {', '.join(BENCHMARK_KEY_MAPPINGS.keys())}"
-            )
 
         # Process problems
         all_results = []
@@ -249,23 +191,7 @@ class BenchmarkRunner:
 
         for i, problem in enumerate(problems):
             # Normalize problem dictionary
-            normalized_problem = {
-                "id": problem.get(key_mapping["id"], f"problem_{i + 1}"),
-                "problem": problem.get(key_mapping["problem"], ""),
-                "solution": problem.get(key_mapping["solution"], ""),
-                # "test": problem.get(key_mapping["test"], ""),
-                # "entry_point": problem.get(key_mapping["entry_point"], ""),
-            }
-            if key_mapping["test"] is not None:
-                normalized_problem["test"] = problem.get(key_mapping["test"], "")
-            if key_mapping["entry_point"] is not None:
-                normalized_problem["entry_point"] = problem.get(key_mapping["entry_point"], "")
-            if key_mapping["test_imports"] is not None:
-                normalized_problem["test_imports"] = problem.get(key_mapping["test_imports"], [])
-            if key_mapping["instruction_id_list"] is not None:
-                normalized_problem["instruction_id_list"] = problem.get(key_mapping["instruction_id_list"], [])
-            if key_mapping["kwargs"] is not None:
-                normalized_problem["kwargs"] = problem.get(key_mapping["kwargs"], {})
+            normalized_problem = normalize_problem_keys(problem, benchmark_name, i)
 
             problem_id = normalized_problem["id"]
 
@@ -279,26 +205,26 @@ class BenchmarkRunner:
                     "problem_id": problem_id,
                     "benchmark": benchmark_name,
                     "agent_system": agent_system,
-                    "problem_index": i,
-                },
+                    "problem_index": i
+                }
             )
 
             try:
                 # Evaluate the problem using the agent system
-                results = agent.evaluate(normalized_problem, benchmark_name, metrics_registry=self.metrics_registry)
+                results = agent.evaluate(normalized_problem, metrics_registry=self.metrics_registry)
 
                 # Stop problem timer
                 problem_duration_ms = self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
-
+                
                 duration_ms = results.get("execution_time_ms", problem_duration_ms)
                 score = results.get("score", 0)
                 is_correct = score == 1
-
+                
                 # Update statistics
                 total_duration += duration_ms
                 if is_correct:
                     correct_count += 1
-
+                    
                 # Record problem result
                 self.metrics_collector.record_metric(
                     "benchmark.problem.result",
@@ -308,10 +234,10 @@ class BenchmarkRunner:
                         "benchmark": benchmark_name,
                         "agent_system": agent_system,
                         "correct": is_correct,
-                        "duration_ms": duration_ms,
-                    },
+                        "duration_ms": duration_ms
+                    }
                 )
-
+                
                 # Create result entry
                 result_entry = {
                     "problem_id": problem_id,
@@ -326,7 +252,7 @@ class BenchmarkRunner:
                     "summary": {
                         "correct": is_correct,
                         "duration_ms": duration_ms,
-                        "total_tokens": results.get("llm_usage", {}).get("total_tokens", 0),
+                        "total_tokens": results.get("llm_usage", {}).get("total_tokens", 0)
                     },
                 }
 
@@ -340,7 +266,7 @@ class BenchmarkRunner:
             except Exception as e:
                 # Stop problem timer
                 self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
-
+                
                 # Record error in metrics
                 error_count += 1
                 self.metrics_collector.record_error(
@@ -350,8 +276,8 @@ class BenchmarkRunner:
                         "problem_id": problem_id,
                         "benchmark": benchmark_name,
                         "agent_system": agent_system,
-                        "error_type": type(e).__name__,
-                    },
+                        "error_type": type(e).__name__
+                    }
                 )
 
                 if verbose:
@@ -377,7 +303,7 @@ class BenchmarkRunner:
 
         # Stop benchmark timer
         benchmark_duration_ms = self.metrics_collector.stop_timer("benchmark.execution")
-
+        
         # Record final benchmark statistics
         self.metrics_collector.record_system_metrics(
             {
@@ -388,7 +314,10 @@ class BenchmarkRunner:
                 "total_duration_ms": total_duration,
                 "avg_duration_per_problem": total_duration / len(problems) if problems else 0,
             },
-            {"benchmark": benchmark_name, "agent_system": agent_system},
+            {
+                "benchmark": benchmark_name,
+                "agent_system": agent_system
+            }
         )
 
         # Save results to file
@@ -406,7 +335,7 @@ class BenchmarkRunner:
         # Generate inference metrics using UnifiedEvaluator
         evaluator = UnifiedEvaluator()
         inference_metrics = evaluator.evaluate_inference_metrics([str(output_file)])
-
+        
         # Summary
         summary = {
             "benchmark": benchmark_name,
@@ -419,7 +348,7 @@ class BenchmarkRunner:
             "results_file": str(output_file),
             "metrics_dir": str(metrics_output),
             "timestamp": self.timestamp,
-            "inference_metrics": inference_metrics.get(agent_system, {}),
+            "inference_metrics": inference_metrics.get(agent_system, {})
         }
 
         # Save summary with inference metrics to a separate file
@@ -433,20 +362,18 @@ class BenchmarkRunner:
 
         if verbose:
             print("\nBenchmark complete!")
-
+            
             print("\n" + "=" * 80)
             print("Benchmark Summary")
             print("=" * 80)
-
+            
             print(f"Agent system: {agent_system}")
             print(f"Accuracy: {accuracy:.2%} ({correct}/{total})")
             print(f"Total duration: {benchmark_duration_ms:.0f}ms")
             print(f"Results saved to: {output_file}")
             # print(f"Metrics saved to: {metrics_output}")
             print(f"Summary saved to: {summary_file}")
-            print(
-                f"Run visualization: $ python benchmark/src/visualization/visualize_benchmark.py visualize --summary {summary_file}"
-            )
+            print(f"Run visualization: $ python benchmark/src/visualization/visualize_benchmark.py visualize --summary {summary_file}")
 
         # Stop metrics collection
         self.metrics_registry.stop_all_collectors()
@@ -460,7 +387,7 @@ class BenchmarkRunner:
         Args:
             output_dir: Directory to save visualizations (defaults to metrics_dir/benchmark_timestamp/viz)
         """
-        pass
+        pass 
 
 
 def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_agent", visualize=True):
@@ -508,7 +435,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     summary = run_simple_benchmark(
-        benchmark_name=args.benchmark, limit=args.limit, agent_system=args.agent_system, visualize=not args.no_viz
+        benchmark_name=args.benchmark, 
+        limit=args.limit, 
+        agent_system=args.agent_system, 
+        visualize=not args.no_viz
     )
 
     print(f"\nAccuracy: {summary['accuracy']:.2%}")
