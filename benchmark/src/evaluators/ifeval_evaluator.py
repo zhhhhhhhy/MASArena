@@ -102,6 +102,12 @@ class IFEvalEvaluator:
         The score is based on whether the prompt is fully followed in strict mode.
         """
         # 1. Retrieve and clean the model's answer (remove BOM/whitespace)
+        # The 'final_ans' variable here represents the model's generated output,
+        # which corresponds to the "Predicted" value in evaluation logs.
+        # If 'run_result' (from the agent/model) does not contain a 'final_answer' key,
+        # or if its value is empty, 'final_ans' will default to an empty string.
+        # This means an empty "Predicted" field in logs indicates an empty or missing
+        # 'final_answer' from the agent's execution.
         final_ans = run_result.get("final_answer", "")
         try:
             final_ans = final_ans.encode("utf-8").decode("utf-8-sig").strip()
@@ -132,7 +138,7 @@ class IFEvalEvaluator:
         score = 1.0 if strict_metrics["prompt_followed"] else 0.0
 
         return {
-            "final_answer": final_ans,
+            "extracted_answer": final_ans[:100]+'...' if len(final_ans) > 100 else final_ans,  # For benchmark_runner.py compatibility
             "score": score,
             "strict_evaluation": strict_metrics,
             "loose_evaluation": loose_metrics,
