@@ -762,8 +762,6 @@ class MASVisualizer:
         agent_system = visualization_data.get("agent_system", "unknown")
         title = title or f"Agent Interactions - {agent_system} - Problem {problem_id}"
         
-        # Make sure responses are present and in the correct format
-        responses = visualization_data.get("responses", [])
         
         # Escape JSON for embedding in HTML - ensure we're properly serializing the data
         json_data = json.dumps(viz_data)

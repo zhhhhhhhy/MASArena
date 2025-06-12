@@ -811,7 +811,7 @@ class AgentSystem(abc.ABC):
             if mock_mode:
                 print(f"[{self.name}] Initialized ToolManager in mock mode")
         except ImportError:
-            print(f"Warning: Could not import ToolManager. MCP tools will not be available.")
+            print("Warning: Could not import ToolManager. MCP tools will not be available.")
             self.tool_manager = None
 
 
@@ -915,7 +915,7 @@ def create_agent_system(name: str, config: Dict[str, Any] = None) -> Optional[Ag
             return ToolIntegrationWrapper(inst, mcp_servers, mock_mode)
         except ImportError as e:
             print(f"Warning: Could not import ToolIntegrationWrapper: {e}")
-            print(f"Continuing without tool integration.")
+            print("Continuing without tool integration.")
             # Remove tool related configs to avoid unexpected behavior
             if hasattr(inst.config, "use_mcp_tools"):
                 del inst.config["use_mcp_tools"]

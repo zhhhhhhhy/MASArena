@@ -347,7 +347,7 @@ class UnifiedEvaluator:
          
         # Determine system type
         system_type = "single_agent"
-        if "supervisor" in system_name.lower() or "supervisor_mas" == system_name.lower():
+        if "supervisor" in system_name.lower() or system_name.lower() == "supervisor_mas":
             system_type = "supervisor_mas"
         elif "swarm" in system_name.lower():
             system_type = "swarm"

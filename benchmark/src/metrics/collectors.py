@@ -269,7 +269,7 @@ class BaseMetricsCollector(ABC):
         # Use a lock timeout to avoid deadlocks
         lock_acquired = self._lock.acquire(timeout=1.0)  # 1-second timeout
         if not lock_acquired:
-            print(f"WARNING: Could not acquire lock for retrieving metrics. Returning partial result.")
+            print("WARNING: Could not acquire lock for retrieving metrics. Returning partial result.")
             return result
             
         try:

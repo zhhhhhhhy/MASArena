@@ -430,7 +430,7 @@ class EvoAgent(AgentSystem):
             score, _ = self.evaluator.calculate_score(problem.get("solution", ""), extracted_answer)
             
             return score
-        except Exception as e:
+        except Exception:
             return 0.0
     
     async def _summarize_results(self, problem: str, results: List[Dict[str, Any]]) -> Tuple[str, Dict[str, Any]]:
@@ -516,7 +516,6 @@ class EvoAgent(AgentSystem):
         
         # 提取问题文本和问题ID
         problem_text = problem.get("problem", "")
-        problem_id = problem.get("id", f"problem_{hash(problem_text)}")
         
         # 显示问题
         print_step("问题", Colors.GREEN)
@@ -584,7 +583,7 @@ class EvoAgent(AgentSystem):
                 
             crossover_agents.append(result)
             print_agent_info(result)
-            print(f"  父代: 随机选择")
+            print("  父代: 随机选择")
         
         # 异步运行交叉智能体
         print_step("运行交叉智能体")
@@ -641,7 +640,7 @@ class EvoAgent(AgentSystem):
                 
             mutation_agents.append(result)
             print_agent_info(result)
-            print(f"  父代: 随机选择")
+            print("  父代: 随机选择")
         
         # 异步运行变异智能体
         print_step("运行变异智能体")

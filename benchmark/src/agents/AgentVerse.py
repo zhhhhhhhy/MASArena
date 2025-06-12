@@ -157,8 +157,6 @@ class RecruiterAgent:
                     print(f"Error parsing recruiter response: {str(parse_err)}")
                     structured_data = {"agents": self._create_default_experts()}
             
-            # 获取usage_metadata
-            usage_metadata = raw_response.usage_metadata if hasattr(raw_response, "usage_metadata") else None
             
             # 设置名称
             raw_response.name = f"recruiter_{self.agent_id}"
@@ -286,8 +284,6 @@ class WorkAgent:
             if "confidence" not in structured_data:
                 structured_data["confidence"] = 3  # 默认中等信心
             
-            # 获取usage_metadata
-            usage_metadata = raw_response.usage_metadata if hasattr(raw_response, "usage_metadata") else None
             
             # 设置名称
             raw_response.name = f"expert_{self.agent_id}"
@@ -666,7 +662,7 @@ class AgentVerse(AgentSystem):
                     ExpertProfile(
                         id=str(i),
                         name=f"General Expert {i}",
-                        description=f"A general expert who can solve various aspects of the problem."
+                        description="A general expert who can solve various aspects of the problem."
                     )
                 )
         
@@ -709,7 +705,6 @@ class AgentVerse(AgentSystem):
             Dictionary of run results including messages with usage metadata
         """
         problem_text = problem["problem"]
-        problem_id = problem.get("id", f"problem_{hash(problem_text)}")
         
         # Initialize messages and solutions
         all_messages = []

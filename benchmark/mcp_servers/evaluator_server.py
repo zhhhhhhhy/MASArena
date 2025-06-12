@@ -600,7 +600,7 @@ def handle_verify_fix(args: Dict[str, Any]) -> None:
 
 def handle_get_evaluation_results(args: Dict[str, Any]) -> None:
     """Handle get evaluation results request"""
-    evaluation_id = args.get("evaluation_id")
+    # evaluation_id = args.get("evaluation_id")
     
     # This is just a placeholder, in a real application, you might need to retrieve evaluation results from persistent storage
     # Since MCP is stateless, this function might need to connect to a database or read from a file

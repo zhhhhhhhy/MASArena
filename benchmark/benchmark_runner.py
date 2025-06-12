@@ -415,7 +415,7 @@ def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_ag
         Benchmark summary dictionary
     """
     benchmark = BenchmarkRunner()
-    summary = benchmark.run(benchmark_name=benchmark_name, limit=limit, agent_system=agent_system)
+    summary = benchmark.run(benchmark_name=benchmark_name, limit=limit, agent_system=agent_system, verbose=True)
 
     if visualize:
         benchmark.visualize_results()
