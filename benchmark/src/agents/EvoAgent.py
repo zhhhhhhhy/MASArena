@@ -9,7 +9,6 @@ from dataclasses import dataclass, field
 from typing import Dict, TypedDict, Any, List, Optional, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain.callbacks.manager import AsyncCallbackManager
 from langchain_community.callbacks.openai_info import OpenAICallbackHandler
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
@@ -69,7 +68,7 @@ class Agent:
         ]
         
         start_time = time.time()
-        response = await self.llm.ainvoke(messages, callbacks=[callback_handler])
+        response = await self.llm.ainvoke(messages, config={"callbacks": [callback_handler]})
         end_time = time.time()
         
         execution_time_ms = (end_time - start_time) * 1000
@@ -187,11 +186,9 @@ class EvoAgent(AgentSystem):
             async with asyncio.timeout(30):  # 设置30秒超时
                 # 使用LLM进行交叉，添加回调以收集token用量
                 callback_handler = OpenAICallbackHandler()
-                callback_manager = AsyncCallbackManager([callback_handler])
                 
                 llm = ChatOpenAI(
-                    model=self.model_name,
-                    callback_manager=callback_manager
+                    model=self.model_name
                 )
                 
                 prompt = f"""
@@ -217,7 +214,7 @@ class EvoAgent(AgentSystem):
                 请确保返回的是有效的JSON格式，不要添加任何额外的文本或解释。
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
                 
                 # 添加token用量元数据
                 if isinstance(response, AIMessage):
@@ -310,15 +307,13 @@ class EvoAgent(AgentSystem):
             async with asyncio.timeout(30):  # 设置30秒超时
                 # 使用LLM进行变异，添加回调以收集token用量
                 callback_handler = OpenAICallbackHandler()
-                callback_manager = AsyncCallbackManager([callback_handler])
                 
                 llm = ChatOpenAI(
-                    model=self.model_name,
-                    callback_manager=callback_manager
+                    model=self.model_name
                 )
                 
                 prompt = f"""
-                你正在对AI智能体配置执行变异操作，以创建一个变异的版本。
+            你正在对AI智能体配置执行变异操作，以创建一个变异的版本。
 
                 父代配置:
                 - 名称: {parent.name}
@@ -335,7 +330,7 @@ class EvoAgent(AgentSystem):
                 请确保返回的是有效的JSON格式，不要添加任何额外的文本或解释。
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
                 
                 # 添加token用量元数据
                 if isinstance(response, AIMessage):
@@ -451,11 +446,9 @@ class EvoAgent(AgentSystem):
             async with asyncio.timeout(60):  # 设置60秒超时
                 # 添加回调以收集token用量
                 callback_handler = OpenAICallbackHandler()
-                callback_manager = AsyncCallbackManager([callback_handler])
                 
                 llm = ChatOpenAI(
-                    model=self.model_name,
-                    callback_manager=callback_manager
+                    model=self.model_name
                 )
                 
                 # 构建汇总提示
@@ -477,7 +470,7 @@ class EvoAgent(AgentSystem):
                 {self.format_prompt}
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
                 
                 # 创建token使用情况元数据
                 usage_metadata = {

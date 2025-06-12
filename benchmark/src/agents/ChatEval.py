@@ -7,6 +7,7 @@ from typing import Dict, List, Any, Optional, TypedDict
 from dataclasses import dataclass
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
+from langchain_community.callbacks.openai_info import OpenAICallbackHandler
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
 # 定义结构化输出类，使用TypedDict代替Pydantic
@@ -45,12 +46,24 @@ class Agent:
         
         # 使用结构化输出
         try:
+            callback_handler = OpenAICallbackHandler()
+            config = {"callbacks": [callback_handler]}
             llm_with_schema = self.llm.with_structured_output(schema=AgentResponse, include_raw=True)
-            response = llm_with_schema.invoke(messages)
+            response = llm_with_schema.invoke(messages, config=config)
             
             # 获取结构化数据和原始响应
             structured_data = response["parsed"]
             raw_response = response["raw"]
+            
+            # Attach usage metadata
+            if isinstance(raw_response, AIMessage):
+                raw_response.usage_metadata = {
+                    "input_tokens": callback_handler.prompt_tokens,
+                    "output_tokens": callback_handler.completion_tokens,
+                    "total_tokens": callback_handler.total_tokens,
+                    "input_token_details": {},
+                    "output_token_details": {"reasoning": callback_handler.completion_tokens}
+                }
             
             # 确保structured_data是字典而不是对象
             if hasattr(structured_data, "dict"):
@@ -82,8 +95,20 @@ class Agent:
             print(f"结构化输出失败: {str(e)}，回退到标准输出")
             
             # 回退到标准输出
-            response = self.llm.invoke(messages)
+            callback_handler = OpenAICallbackHandler()
+            config = {"callbacks": [callback_handler]}
+            response = self.llm.invoke(messages, config=config)
             response.name = self.name
+            
+            # Attach usage metadata for fallback
+            if isinstance(response, AIMessage):
+                response.usage_metadata = {
+                    "input_tokens": callback_handler.prompt_tokens,
+                    "output_tokens": callback_handler.completion_tokens,
+                    "total_tokens": callback_handler.total_tokens,
+                    "input_token_details": {},
+                    "output_token_details": {"reasoning": callback_handler.completion_tokens}
+                }
             
             self.chat_history.append({
                 "role": "human",
@@ -101,8 +126,9 @@ class Agent:
 
 class ResultExtractor:
     """从对话历史中提取最终结果"""
-    def __init__(self, model_name: str = None):
+    def __init__(self, model_name: str = None, format_prompt: str = ""):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
+        self.format_prompt = format_prompt
         self.llm = ChatOpenAI(
             model=self.model_name,
             request_timeout=60,  # 设置请求超时为60秒
@@ -124,7 +150,7 @@ Below are the discussion histories of multiple AI agents:
 Please analyze the above discussions and provide a final answer. Requirements:
 - Synthesize all agents' viewpoints.
 - Choose the most reasonable solution/option.
-{self.format_promt}
+{self.format_prompt}
 """
   
         messages = [
@@ -133,8 +159,21 @@ Please analyze the above discussions and provide a final answer. Requirements:
         ]
         
         try:
-            response = self.llm.invoke(messages)
+            callback_handler = OpenAICallbackHandler()
+            config = {"callbacks": [callback_handler]}
+            response = self.llm.invoke(messages, config=config)
             response.name = "evaluator"
+            
+            # Attach usage metadata
+            if isinstance(response, AIMessage):
+                response.usage_metadata = {
+                    "input_tokens": callback_handler.prompt_tokens,
+                    "output_tokens": callback_handler.completion_tokens,
+                    "total_tokens": callback_handler.total_tokens,
+                    "input_token_details": {},
+                    "output_token_details": {"reasoning": callback_handler.completion_tokens}
+                }
+                
             return {
                 "message": response
             }
@@ -195,7 +234,7 @@ class ChatEval(AgentSystem):
             debate_agents.append(agent)
         
         # Create and assign the extractor here
-        extractor = ResultExtractor(self.model_name)
+        extractor = ResultExtractor(self.model_name, self.format_prompt)
         # self.extractor = extractor # Assign to self if needed elsewhere before run_agent completes,
                                  # but __init__ already handles setting self.extractor.
 
@@ -237,7 +276,6 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
     def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """运行迭代辩论过程"""
         problem_text = problem["problem"]
-        start_time = time.time()
 
         # 存储所有LLM响应对象
         all_messages = []
@@ -267,18 +305,14 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
         agent_histories = [agent.chat_history for agent in self.agents]
         
         # 提取最终答案
-        extractor_result = self.extractor.extract(agent_histories, problem_text, options)
+        extractor_result = self.extractor.extract(agent_histories, problem_text)
         
         # 添加评估器消息
         if "message" in extractor_result and extractor_result["message"]:
             all_messages.append(extractor_result["message"])
-        
-        end_time = time.time()
-        duration_ms = (end_time - start_time) * 1000
-        
         return {
             "messages": all_messages,  # 包含所有LLM响应对象
-            "execution_time_ms": duration_ms
+            "final_answer": extractor_result,
         }
 
     def _build_context(self, problem: str, agent_index: int, round_num: int) -> str:

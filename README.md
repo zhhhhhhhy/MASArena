@@ -139,3 +139,8 @@ Use the `--use-mcp-tools` and `--mcp-config-file` flags when running benchmarks:
 - [ ] Remove or replace the in-process mock tools in `ToolManager._create_mock_tools()`.  
 - [ ] Validate and test against live MCP endpoints for each tool.  
 
+
+
+### Supported Benchmarks
+
+- [x] Math  agent_system_list=(✅"single_agent" ✅"supervisor_mas" ✅"swarm" ✅"agentverse" ✅"chateval" ✅"evoagent" ✅"jarvis")
