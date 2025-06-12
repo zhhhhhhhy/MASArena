@@ -312,7 +312,7 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
             all_messages.append(extractor_result["message"])
         return {
             "messages": all_messages,  # 包含所有LLM响应对象
-            "final_answer": extractor_result,
+            "final_answer": extractor_result["message"].content
         }
 
     def _build_context(self, problem: str, agent_index: int, round_num: int) -> str:

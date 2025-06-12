@@ -7,6 +7,7 @@ This module provides a simplified interface for running benchmarks on multi-agen
 
 import os
 import json
+import random
 import time
 from pathlib import Path
 from datetime import datetime
@@ -171,7 +172,8 @@ class BenchmarkRunner:
             raise FileNotFoundError(f"Data file not found: {data_path}")
 
         # Limit problems
-        problems = problems[:limit]
+        # random sample
+        problems = random.sample(problems, limit)
         
         # Record problem count
         self.metrics_collector.record_metric(
