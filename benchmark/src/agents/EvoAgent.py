@@ -71,7 +71,7 @@ class Agent:
         ]
         
         start_time = time.time()
-        response = await self.llm.ainvoke(messages, callbacks=[callback_handler])
+        response = await self.llm.ainvoke(messages, config={'callbacks': [callback_handler]})
         end_time = time.time()
         
         execution_time_ms = (end_time - start_time) * 1000
@@ -191,8 +191,7 @@ class EvoAgent(AgentSystem):
                 callback_handler = OpenAICallbackHandler()
                 
                 llm = ChatOpenAI(
-                    model=self.model_name,
-                    callbacks=[callback_handler]
+                    model=self.model_name
                 )
                 
                 prompt = f"""
@@ -218,7 +217,7 @@ class EvoAgent(AgentSystem):
                 请确保返回的是有效的JSON格式，不要添加任何额外的文本或解释。
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
                 
                 # 添加token用量元数据
                 if isinstance(response, AIMessage):
@@ -313,8 +312,7 @@ class EvoAgent(AgentSystem):
                 callback_handler = OpenAICallbackHandler()
                 
                 llm = ChatOpenAI(
-                    model=self.model_name,
-                    callbacks=[callback_handler]
+                    model=self.model_name
                 )
                 
                 prompt = f"""
@@ -335,7 +333,7 @@ class EvoAgent(AgentSystem):
                 请确保返回的是有效的JSON格式，不要添加任何额外的文本或解释。
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
                 
                 # 添加token用量元数据
                 if isinstance(response, AIMessage):
@@ -453,8 +451,7 @@ class EvoAgent(AgentSystem):
                 callback_handler = OpenAICallbackHandler()
                 
                 llm = ChatOpenAI(
-                    model=self.model_name,
-                    callbacks=[callback_handler]
+                    model=self.model_name
                 )
                 
                 # 构建汇总提示
@@ -476,7 +473,7 @@ class EvoAgent(AgentSystem):
                 {self.format_prompt}
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}])
+                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
                 
                 # 创建token使用情况元数据
                 usage_metadata = {
