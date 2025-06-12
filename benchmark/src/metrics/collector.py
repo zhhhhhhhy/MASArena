@@ -236,12 +236,20 @@ class MetricsCollector:
         }
         
         # Add detailed token metrics if provided
-        if input_token_details:
-            for detail_type, count in input_token_details.items():
+        input_details = input_token_details
+        if hasattr(input_token_details, 'model_dump'):
+            input_details = input_token_details.model_dump()
+
+        if input_details:
+            for detail_type, count in input_details.items():
                 metrics[f"llm.tokens.input.{detail_type}.{agent_id}"] = count
                 
-        if output_token_details:
-            for detail_type, count in output_token_details.items():
+        output_details = output_token_details
+        if hasattr(output_token_details, 'model_dump'):
+            output_details = output_token_details.model_dump()
+            
+        if output_details:
+            for detail_type, count in output_details.items():
                 metrics[f"llm.tokens.output.{detail_type}.{agent_id}"] = count
         
         for metric_name, value in metrics.items():

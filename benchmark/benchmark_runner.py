@@ -291,8 +291,9 @@ class BenchmarkRunner:
                 )
 
                 if verbose:
-                    # print(f"Error: {e}")
+                    import traceback
                     print(f"Error processing problem {problem_id} in benchmark {benchmark_name}: {e}")
+                    traceback.print_exc()
 
                 all_results.append(
                     {

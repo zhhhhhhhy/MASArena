@@ -11,7 +11,7 @@ import os
 import json
 from typing import Dict, Any
 
-from langchain_openai import ChatOpenAI
+from openai import OpenAI
 from dotenv import load_dotenv
 
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
@@ -31,15 +31,12 @@ class SingleAgent(AgentSystem):
         """Initialize the Single Agent System"""
         super().__init__(name, config)
         self.config = config or {}
-        self.evaluator_name = self.config.get("evaluator", "bbh")  # Default to bbh
         
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")  # Use qwen-plus
         self.system_prompt = self.config.get("system_prompt", "") + self.format_prompt
 
         # Initialize evaluator and metrics collector through base class methods
-        self._initialize_evaluator()
-        self._initialize_metrics_collector()
-        self.llm = ChatOpenAI(model=self.model_name)
+        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
 
     def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -55,33 +52,38 @@ class SingleAgent(AgentSystem):
         """
         problem_text = problem["problem"]
     
-
         # Prepare messages
         messages = [
             {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": f"Problem: {problem_text}"},
         ]
 
-        # Get solution from LLM and track usage
-        response = self.llm.invoke(messages)
+        # Get solution from OpenAI API
+        response = self.client.chat.completions.create(
+            model=self.model_name,
+            messages=messages
+        )
         
-        # Clean response content
-        response_content = response.content.replace('\r\n', '\n').replace('\r', '\n').strip()
+        # Extract content from response
+        response_content = response.choices[0].message.content
+        response_content = response_content.replace('\r\n', '\n').replace('\r', '\n').strip()
         try:
             response_content = response_content.encode('utf-8').decode('utf-8-sig')  # Remove BOM
         except UnicodeDecodeError:
             pass  # Ignore if already clean
         
-        # print("模型返回结果:", response)  # Keep original print
-        # print(f"[Debug] Cleaned response content: {repr(response_content)}")  # Debugging
-        
-        ai_message = response
-        ai_message.name = "single_agent"
+
+        # Create message object with usage metadata
+        ai_message = type('AIMessage', (), {
+            'content': response_content,
+            'name': 'single_agent',
+            'usage_metadata': response.usage if hasattr(response, 'usage') else None
+        })
         
         # Return the response and message with usage metadata for the evaluate method
         return {
             "messages": [ai_message],
-            "final_answer": response_content  # Use cleaned content
+            "final_answer": response_content
         }
 
 

@@ -14,7 +14,7 @@ import datetime
 import importlib
 import glob
 from benchmark.src.agents.format_prompts import get_format_prompt
-
+from openai.types.completion_usage import CompletionUsage
 
 class AgentSystem(abc.ABC):
     """Base class for all agent systems in the benchmark framework
@@ -164,21 +164,31 @@ class AgentSystem(abc.ABC):
         usage_metrics = []
         
         for message in messages:
-            if isinstance(message, AIMessage) and hasattr(message, 'usage_metadata') and message.usage_metadata:
+            if hasattr(message, 'usage_metadata') and message.usage_metadata:
                 message_count += 1
                 usage_metadata = message.usage_metadata
                 agent_id = message.name if hasattr(message, 'name') and message.name else message.id if hasattr(message, 'id') and message.id else f"agent_{hash(message)}"
+                if isinstance(usage_metadata, CompletionUsage):
+                    input_tokens = usage_metadata.prompt_tokens
+                    output_tokens = usage_metadata.completion_tokens
+                    reasoning_tokens = usage_metadata.completion_tokens_details.reasoning_tokens
+                    total_tokens_msg = usage_metadata.total_tokens
+                    
+                    input_token_details = usage_metadata.prompt_tokens_details
+                    output_token_details = usage_metadata.completion_tokens_details
+                    
+                else:
+                    # Extract metrics from usage_metadata
+                    input_tokens = usage_metadata.get('input_tokens', 0)
+                    output_tokens = usage_metadata.get('output_tokens', 0)
+                    reasoning_tokens = usage_metadata["output_token_details"].get("reasoning", 0)
+                    total_tokens_msg = usage_metadata.get('total_tokens', input_tokens + output_tokens)
+                    
+                    
+                    input_token_details = usage_metadata.get('input_token_details', {})
+                    output_token_details = usage_metadata.get('output_token_details', {})
                 
-                # Extract metrics from usage_metadata
-                input_tokens = usage_metadata.get('input_tokens', 0)
-                output_tokens = usage_metadata.get('output_tokens', 0)
-                reasoning_tokens = usage_metadata["output_token_details"].get("reasoning", 0)
-                total_tokens_msg = usage_metadata.get('total_tokens', input_tokens + output_tokens)
-                total_tokens += total_tokens_msg
-                
-                input_token_details = usage_metadata.get('input_token_details', {})
-                output_token_details = usage_metadata.get('output_token_details', {})
-                
+                total_tokens += total_tokens_msg  
                 # Record detailed token metrics directly from the message's usage_metadata
                 self.metrics_collector.record_llm_usage(
                     agent_id=agent_id,
@@ -203,7 +213,7 @@ class AgentSystem(abc.ABC):
                     "total_tokens": total_tokens_msg,
                     "latency_ms": execution_time_ms / message_count if message_count > 0 else 0
                 })
-            
+
             # Record agent interactions from tuple-style messages
             elif isinstance(message, tuple) and len(message) > 1:
                 agent_id, content = message
@@ -310,6 +320,7 @@ class AgentSystem(abc.ABC):
                 })
                 
                 # Include any additional fields from the dict
+                print("debug message._record_agent_responses", message )
                 for key, value in message.items():
                     if key not in response_data:
                         response_data[key] = value
