@@ -11,18 +11,28 @@ from pathlib import Path
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
-class AIMEEvaluator:
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
+
+@register_benchmark(
+    name="aime",
+    normalization_keys={
+        "problem": "question",
+        "solution": "answer",
+    }
+)
+class AIMEEvaluator(BaseEvaluator):
     """
     Evaluator for AIME-style math problems.
     Extracts answers and compares with expected answers (numeric/string match).
     """
     def __init__(self, name: str = "aime", config: Dict[str, Any] = None):
-        self.name = name
-        self.config = config or {}
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
+        super().__init__(name, config)
         self.run_evaluator = RunEvaluator()
+
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
 
     def extract_answer(self, text: str) -> str:
         """
@@ -55,11 +65,11 @@ class AIMEEvaluator:
         return Run(
             id=str(uuid.uuid4()),
             name=f"{self.name.upper()}_Evaluation",
-            inputs={"question": problem["question"]},
+            inputs={"question": problem["problem"]},
             outputs={
                 "prediction": final_answer,
                 "extracted_answer": extracted_answer,
-                "expected": problem["answer"],
+                "expected": problem["solution"],
                 "score": score,
                 "passed": score == 1,
             },
@@ -70,12 +80,11 @@ class AIMEEvaluator:
 
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
         final_answer = run_result.get("final_answer", "")
-        score, extracted_answer = self.calculate_score(problem["answer"], final_answer)
+        score, extracted_answer = self.calculate_score(problem["solution"], final_answer)
         run = self.create_run(problem, final_answer, extracted_answer, score)
-        run_evaluation = self.run_evaluator.evaluate_run(run=run)
+        self.run_evaluator.evaluate_run(run=run)
         return {
             "final_answer": final_answer,
             "extracted_answer": extracted_answer,
             "score": score,
-            "run_evaluation": run_evaluation,
         } 

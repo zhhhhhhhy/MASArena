@@ -8,6 +8,8 @@ from typing import Dict, Any
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
 from benchmark.src.evaluators.utils.ifeval.evaluation_lib import (
     test_instruction_following_strict,
     test_instruction_following_loose,
@@ -16,13 +18,26 @@ from benchmark.src.evaluators.utils.ifeval.evaluation_lib import (
 )
 
 
-class IFEvalEvaluator:
+@register_benchmark(
+    name="ifeval",
+    normalization_keys={
+        "id": "key",
+        "solution": "instruction_id_list",
+        "problem": "prompt",
+        "instruction_id_list": "instruction_id_list",
+        "kwargs": "kwargs",
+    }
+)
+class IFEvalEvaluator(BaseEvaluator):
     """Evaluates LLM outputs on IFEval tasks (strict & loose modes)."""
 
     def __init__(self, name: str = "ifeval", config: Dict[str, Any] | None = None):
-        self.name = name
-        self.config = config or {}
+        super().__init__(name, config)
         self.run_evaluator = RunEvaluator()
+
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
 
     def preprocess_input(self, problem: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -138,8 +153,11 @@ class IFEvalEvaluator:
         score = 1.0 if strict_metrics["prompt_followed"] else 0.0
 
         return {
+            "final_answer": final_ans,
             "extracted_answer": final_ans[:100]+'...' if len(final_ans) > 100 else final_ans,  # For benchmark_runner.py compatibility
             "score": score,
-            "strict_evaluation": strict_metrics,
-            "loose_evaluation": loose_metrics,
+            "details": {
+                "strict_evaluation": strict_metrics,
+                "loose_evaluation": loose_metrics,
+            }
         }

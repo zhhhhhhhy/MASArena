@@ -14,8 +14,19 @@ import uuid
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
 
-class BBHEvaluator:
+
+@register_benchmark(
+    name="bbh",
+    normalization_keys={
+        "id": "task_id",
+        "problem": "input",
+        "solution": "target",
+    }
+)
+class BBHEvaluator(BaseEvaluator):
     """
     Evaluator for Big-Bench Hard (BBH) problems.
 
@@ -30,18 +41,12 @@ class BBHEvaluator:
             name: Name of the evaluator (default: "bbh")
             config: Configuration parameters
         """
-        self.name = name
-        self.config = config or {}
-
-        # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-
-        # Create log directory
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
-
-        # Initialize run evaluator
+        super().__init__(name, config)
         self.run_evaluator = RunEvaluator()
+
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
 
     def extract_answer(self, text: str) -> str:
         """
@@ -217,14 +222,13 @@ class BBHEvaluator:
 
         # Create LangSmith run
         run = self.create_run(problem, final_answer, extracted_answer, score, message)
-        run_evaluation = self.run_evaluator.evaluate_run(run=run)
+        self.run_evaluator.evaluate_run(run=run)
 
         return {
             "final_answer": final_answer,
             "extracted_answer": extracted_answer,
             "score": score,
             "message": message,
-            "run_evaluation": run_evaluation,
         }
 
 

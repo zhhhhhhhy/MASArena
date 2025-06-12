@@ -24,6 +24,7 @@ from benchmark.src.metrics import (
 )
 from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
+from benchmark.src.evaluators import BENCHMARKS
 from benchmark.src.evaluators.utils.normalization import normalize_problem_keys
 
 class BenchmarkRunner:
@@ -93,6 +94,12 @@ class BenchmarkRunner:
         Returns:
             Dictionary of benchmark results
         """
+        # Validate benchmark name
+        if benchmark_name not in BENCHMARKS:
+            raise ValueError(f"Unknown benchmark: {benchmark_name}. Supported: {', '.join(BENCHMARKS.keys())}")
+        
+        benchmark_config = BENCHMARKS[benchmark_name]
+
         if verbose:
             print(f"Available agent systems: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
 
@@ -192,8 +199,9 @@ class BenchmarkRunner:
         total_duration = 0
 
         for i, problem in enumerate(problems):
-            # Normalize problem dictionary
-            normalized_problem = normalize_problem_keys(problem, benchmark_name, i)
+            # Normalize problem dictionary using the config from the registry
+            key_mapping = benchmark_config.get("normalization_keys", {})
+            normalized_problem = normalize_problem_keys(problem, key_mapping, i)
 
             problem_id = normalized_problem["id"]
 

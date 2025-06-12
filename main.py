@@ -12,14 +12,14 @@ def main():
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Run benchmarks for multi-agent systems")
 
-    # Import available agent systems
+    # Import available agent systems and benchmarks
     from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
-    from benchmark.src.evaluators import AVAILABLE_EVALUATORS
+    from benchmark.src.evaluators import BENCHMARKS
     parser.add_argument(
         "--benchmark",
         type=str,
         default="math",
-        choices=list(AVAILABLE_EVALUATORS.keys()),
+        choices=list(BENCHMARKS.keys()),
         help="Benchmark to run (default: math)",
     )
 
