@@ -105,7 +105,7 @@ class BaseCodeEvaluator(BaseEvaluator):
     ) -> Run:
         """Create a LangSmith Run object for evaluation tracking."""
         return Run(
-            id=str(time.time_ns()),  # Using timestamp for id
+            id=str(uuid.uuid4()),
             name=f"{self.name.upper()}_Evaluation",
             inputs={"problem": problem["problem"], "task_id": problem["id"]},
             outputs={
@@ -118,7 +118,7 @@ class BaseCodeEvaluator(BaseEvaluator):
             },
             run_type="evaluation",
             start_time=time.strftime("%Y-%m-%dT%H:%M:%S"),
-            trace_id=str(time.time_ns()),  # Using timestamp for trace_id
+            trace_id=str(uuid.uuid4()),
         )
 
     @abstractmethod

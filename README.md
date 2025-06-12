@@ -142,13 +142,21 @@ Use the `--use-mcp-tools` and `--mcp-config-file` flags when running benchmarks:
 
 
 ### Supported Benchmarks
-
-- [x] Math  agent_system_list=(✅"single_agent" ✅"supervisor_mas" ✅"swarm" ✅"agentverse" ✅"chateval" ✅"evoagent" ✅"jarvis")
-- [ ] HumanEval
-- [ ] MBPP
-- [x] IFEval agent_system_list=(✅"single_agent" ✅"supervisor_mas" ✅"swarm" ✅"agentverse" ✅"chateval" ✅"evoagent" ✅"jarvis")
-- [x] AIME 2025 agent_system_list=(✅"single_agent" ✅"supervisor_mas" ✅"swarm" ✅"agentverse" ✅"chateval" ✅"evoagent" ✅"jarvis")
-- [x] BBH  agent_system_list=(✅"single_agent" ✅"supervisor_mas" ✅"swarm" ✅"agentverse" ✅"chateval" ✅"evoagent" ✅"jarvis")
+- [x] Math 
+- [x] HumanEval
+- [x] MBPP
+- [x] IFEval 
+- [x] AIME 2025 
+- [x] BIG-Bench Hard (BBH) 
 - [ ] MMLU-Pro
-- [ ] BIG-Bench Hard
-- [ ] DROP
+- [x] DROP 
+
+### Supported Agent Systems
+✅"single_agent" 
+✅"supervisor_mas" 
+✅"swarm" 
+✅"agentverse" 
+✅"chateval" 
+✅"evoagent" 
+✅"jarvis"
+
