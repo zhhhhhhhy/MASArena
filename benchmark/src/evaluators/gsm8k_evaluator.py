@@ -12,12 +12,22 @@ from pathlib import Path
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
-class GSM8KEvaluator:
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
+
+@register_benchmark(
+    name="gsm8k",
+    normalization_keys={
+        "id": "id",
+        "problem": "question",
+        "solution": "answer",
+    }
+)
+class GSM8KEvaluator(BaseEvaluator):
     """Evaluator for GSM8K problems"""
     
     def __init__(self, name: str = "gsm8k", config: Dict[str, Any] = None):
-        self.name = name
-        self.config = config or {}
+        super().__init__(name, config)
         
         # Set up paths
         self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
@@ -115,3 +125,7 @@ class GSM8KEvaluator:
             "score": score,
             "run_evaluation": run_evaluation,
         }
+
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)

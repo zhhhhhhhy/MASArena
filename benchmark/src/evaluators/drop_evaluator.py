@@ -17,23 +17,31 @@ from typing import Dict, Any, Tuple, List
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
+
 _ANS_TAG_RE   = re.compile(r"<answer>\s*([\s\S]*?)\s*</answer>", re.IGNORECASE)
 _FINAL_RE     = re.compile(r"(?:^|\n)\s*(?:final\s+answer|answer)\s*[:\-]?\s*([\s\S]+)", re.IGNORECASE)
 
 
-class DROPEvaluator:
+@register_benchmark(
+    name="drop",
+    normalization_keys={
+        "id": "id",
+        "problem": "context",
+        "solution": "ref_text",
+    }
+)
+class DROPEvaluator(BaseEvaluator):
     """Evaluator for DROP benchmark problems."""
 
     def __init__(self, name: str = "drop", config: Dict[str, Any] | None = None):
-        self.name   = name
-        self.config = config or {}
-
-        self.data_path = self.config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path  = self.config.get("log_path",  f"benchmark/data/results/{name.upper()}")
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
-
+        super().__init__(name, config)
         self.run_evaluator = RunEvaluator()
 
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
 
     def _extract_answer(self, raw: Any) -> str:
         """
@@ -136,7 +144,7 @@ class DROPEvaluator:
 
         Returns
         -------
-        Dictionary with keys {final_answer, extracted_answer, score, run_evaluation}
+        Dictionary with keys {final_answer, extracted_answer, score}
         """
         raw_out          = run_result.get("final_answer", "")
         extracted_answer = self._extract_answer(raw_out)
@@ -164,7 +172,7 @@ class DROPEvaluator:
 
         # Create LangSmith run and structure the return value
         run = self._make_run(problem, str(raw_out), extracted_answer, best_f1)
-        run_eval = self.run_evaluator.evaluate_run(run=run)
+        self.run_evaluator.evaluate_run(run=run)
 
         # Final score: 1.0 if F1 >= 0.3, else use the F1 score directly
         final_score = 1 if best_f1 >= 0.3 else best_f1
@@ -173,5 +181,4 @@ class DROPEvaluator:
             "final_answer"    : str(raw_out),
             "extracted_answer": extracted_answer,
             "score"           : final_score,
-            "run_evaluation"  : run_eval,
         }

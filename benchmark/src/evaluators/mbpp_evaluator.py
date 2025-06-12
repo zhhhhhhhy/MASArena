@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Tuple
 
 from benchmark.src.evaluators.base_code_evaluator import BaseCodeEvaluator
 from benchmark.src.evaluators.utils.sanitize import sanitize
+from benchmark.src.evaluators.registry import register_benchmark
 
 
 class TimeoutError(Exception):
@@ -37,6 +38,17 @@ def run_with_timeout(func, args: tuple[Any, ...] = (), timeout: int = 15):
     return result[0] if result else None
 
 
+@register_benchmark(
+    name="mbpp",
+    normalization_keys={
+        "id": "task_id",
+        "problem": "prompt",
+        "solution": "code",
+        "test": "test",
+        "entry_point": "entry_point",
+        "test_imports": "test_imports"
+    }
+)
 class MBPPEvaluator(BaseCodeEvaluator):
     """Evaluator for MBPP code-generation tasks."""
 

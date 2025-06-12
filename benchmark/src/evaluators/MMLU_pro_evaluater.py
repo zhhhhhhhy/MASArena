@@ -16,8 +16,17 @@ import warnings
 import re
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
 
 
+@register_benchmark(
+    name="mmlu_pro",
+    normalization_keys={
+        "id": "id",
+        "problem": "question",
+        "solution": "answer",
+    }
+)
 class MMLU_ProEvaluator(BaseEvaluator):
     """
     Evaluator for the MMLU Professional benchmark.
@@ -38,28 +47,16 @@ class MMLU_ProEvaluator(BaseEvaluator):
         """
         super().__init__(name, config or {})
         
-        # Set up configuration with defaults
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        
         # Weight for exact match score is always 1.0 as it's the only metric
         self.exact_match_weight = 1.0
-        
-        # Set up logging
-        os.makedirs(self.log_path, exist_ok=True)
-        logging.basicConfig(
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            handlers=[
-                logging.FileHandler(f"{self.log_path}/mmlu_pro_eval.log"),
-                logging.StreamHandler()
-            ]
-        )
-        self.logger = logging.getLogger("MMLU_ProEvaluator")
         
         # Load the dataset
         self._load_dataset()
     
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
+
     def _load_dataset(self):
         """Load the MMLU_pro dataset."""
         try:
@@ -150,54 +147,32 @@ class MMLU_ProEvaluator(BaseEvaluator):
         # 如果没有找到标签，返回原始响应
         return response.strip()
     
-    def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluate an agent's solution to a MMLU_pro problem.
         
         Args:
-            problem: Problem dictionary containing:
-                - question: Problem text
-                - options: List of options
-                - answer: Correct answer (letter)
-                - answer_index: Index of correct answer
-                - response: Agent's response
+            problem: Normalized problem dictionary
+            run_result: The result from running the agent system
             
         Returns:
             Evaluation results
         """
-        metrics_registry = kwargs.get("metrics_registry", None)
-        start_time = kwargs.get("start_time", None)
+        final_answer = run_result.get("final_answer", "")
+        reference_letter = problem.get("solution", "")
         
-        problem_id = problem.get("id", problem.get("question_id", "unknown"))
-        problem_text = problem.get("problem", problem.get("question", ""))
-        reference_letter = problem.get("solution", problem.get("answer", ""))
-        
-        # Get the full text of the correct answer
-        reference_text = self.get_correct_answer_text(problem)
-        
-        # Get the agent's response and extract the answer
-        raw_response = problem.get("response", "")
-        agent_response = self.extract_answer_from_response(raw_response)
+        # Extract the final letter from the agent's response
+        extracted_answer = self.extract_answer_from_response(final_answer)
         
         # Calculate exact match score (letter-based)
-        exact_match = self.check_exact_match(reference_letter, agent_response)
+        score = self.check_exact_match(reference_letter, extracted_answer)
         
         # Record evaluation results
-        results = {
-            "problem_id": problem_id,
-            "exact_match": exact_match,
-            "combined_score": exact_match,  # Combined score is just the exact match
-            "extracted_answer": agent_response,
-            "reference_answer": reference_letter,
-            "reference_text": reference_text,
-            "execution_time_ms": 0,  # Will be updated by the benchmark runner
-            "math_score": 1.0 if exact_match >= 0.9 else 0.0  # For compatibility with benchmark runner
+        return {
+            "final_answer": final_answer,
+            "extracted_answer": extracted_answer,
+            "score": score,
         }
-        
-        # Log the results
-        self.logger.info(f"Problem {problem_id}: Exact={exact_match:.1f}, Combined={exact_match:.4f}")
-        
-        return results
     
     def verify_answer(self, prediction: str, reference: Dict[str, Any]) -> bool:
         """

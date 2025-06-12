@@ -16,8 +16,18 @@ from sympy.parsing.sympy_parser import parse_expr
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
 
-class MathEvaluator:
+@register_benchmark(
+    name="math",
+    normalization_keys={
+        "id": "id",
+        "problem": "problem",
+        "solution": "solution",
+    }
+)
+class MathEvaluator(BaseEvaluator):
     """
     Math Evaluator for evaluating math problems.
     
@@ -33,8 +43,7 @@ class MathEvaluator:
             name: Name of the evaluator
             config: Configuration parameters
         """
-        self.name = name
-        self.config = config or {}
+        super().__init__(name, config)
         
         # Set up paths
         self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
@@ -45,6 +54,10 @@ class MathEvaluator:
         
         # Initialize run evaluator for LangSmith compatibility
         self.run_evaluator = RunEvaluator()
+    
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
     
     def extract_answer(self, text: str) -> str:
         """
@@ -248,6 +261,5 @@ class MathEvaluator:
         return {
             "final_answer": final_answer,
             "score": score,
-            "run_evaluation": run_evaluation,
-            "extracted_answer": extracted_answer,
+            "extracted_answer": extracted_answer
         } 

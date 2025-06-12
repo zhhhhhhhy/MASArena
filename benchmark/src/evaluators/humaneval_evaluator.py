@@ -13,8 +13,19 @@ from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 from benchmark.src.evaluators.base_code_evaluator import BaseCodeEvaluator
 from benchmark.src.evaluators.utils.sanitize import sanitize, code_extract
+from benchmark.src.evaluators.registry import register_benchmark
 
 
+@register_benchmark(
+    name="humaneval",
+    normalization_keys={
+        "id": "task_id",
+        "problem": "prompt",
+        "solution": "canonical_solution",
+        "test": "test",
+        "entry_point": "entry_point",
+    }
+)
 class HumanEvalEvaluator(BaseCodeEvaluator):
     """Evaluator for HumanEval problems"""
 

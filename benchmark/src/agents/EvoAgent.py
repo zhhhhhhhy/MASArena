@@ -12,6 +12,9 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_community.callbacks.openai_info import OpenAICallbackHandler
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
+import nest_asyncio
+nest_asyncio.apply()
+
 # 禁用LangSmith跟踪
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGCHAIN_ENDPOINT"] = ""
@@ -68,7 +71,7 @@ class Agent:
         ]
         
         start_time = time.time()
-        response = await self.llm.ainvoke(messages, config={"callbacks": [callback_handler]})
+        response = await self.llm.ainvoke(messages, callbacks=[callback_handler])
         end_time = time.time()
         
         execution_time_ms = (end_time - start_time) * 1000
@@ -188,7 +191,8 @@ class EvoAgent(AgentSystem):
                 callback_handler = OpenAICallbackHandler()
                 
                 llm = ChatOpenAI(
-                    model=self.model_name
+                    model=self.model_name,
+                    callbacks=[callback_handler]
                 )
                 
                 prompt = f"""
@@ -214,7 +218,7 @@ class EvoAgent(AgentSystem):
                 请确保返回的是有效的JSON格式，不要添加任何额外的文本或解释。
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
+                response = await llm.ainvoke([{"role": "user", "content": prompt}])
                 
                 # 添加token用量元数据
                 if isinstance(response, AIMessage):
@@ -309,11 +313,12 @@ class EvoAgent(AgentSystem):
                 callback_handler = OpenAICallbackHandler()
                 
                 llm = ChatOpenAI(
-                    model=self.model_name
+                    model=self.model_name,
+                    callbacks=[callback_handler]
                 )
                 
                 prompt = f"""
-            你正在对AI智能体配置执行变异操作，以创建一个变异的版本。
+                你正在对AI智能体配置执行变异操作，以创建一个变异的版本。
 
                 父代配置:
                 - 名称: {parent.name}
@@ -330,7 +335,7 @@ class EvoAgent(AgentSystem):
                 请确保返回的是有效的JSON格式，不要添加任何额外的文本或解释。
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
+                response = await llm.ainvoke([{"role": "user", "content": prompt}])
                 
                 # 添加token用量元数据
                 if isinstance(response, AIMessage):
@@ -448,7 +453,8 @@ class EvoAgent(AgentSystem):
                 callback_handler = OpenAICallbackHandler()
                 
                 llm = ChatOpenAI(
-                    model=self.model_name
+                    model=self.model_name,
+                    callbacks=[callback_handler]
                 )
                 
                 # 构建汇总提示
@@ -470,7 +476,7 @@ class EvoAgent(AgentSystem):
                 {self.format_prompt}
                 """
                 
-                response = await llm.ainvoke([{"role": "user", "content": prompt}], config={'callbacks': [callback_handler]})
+                response = await llm.ainvoke([{"role": "user", "content": prompt}])
                 
                 # 创建token使用情况元数据
                 usage_metadata = {
@@ -755,14 +761,9 @@ class EvoAgent(AgentSystem):
         Returns:
             结果字典
         """
-        # 创建一个新的事件循环
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        
         try:
-            # 运行异步版本的run_agent方法
-            result = loop.run_until_complete(self._run_agent_async(problem, **kwargs))
-            return result
+            # Use asyncio.run() for robust async execution from a sync context
+            return asyncio.run(self._run_agent_async(problem, **kwargs))
         except Exception as e:
             print(f"{Colors.RED}错误: 运行智能体时出错: {str(e)}{Colors.ENDC}")
             # 返回一个包含错误信息的结果
@@ -770,21 +771,6 @@ class EvoAgent(AgentSystem):
                 "messages": [("error", f"执行出错: {str(e)}")],
                 "execution_time_ms": 0
             }
-        finally:
-            try:
-                # 确保所有挂起的任务都被取消
-                pending = asyncio.all_tasks(loop)
-                for task in pending:
-                    task.cancel()
-                
-                # 运行事件循环直到所有任务完成
-                if pending:
-                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
-                
-                # 关闭事件循环
-                loop.close()
-            except Exception as e:
-                print(f"{Colors.YELLOW}警告: 关闭事件循环时出错: {str(e)}{Colors.ENDC}")
             
     # 为了向后兼容，将run_agent_sync方法设置为run_agent的别名
     run_agent = run_agent_sync

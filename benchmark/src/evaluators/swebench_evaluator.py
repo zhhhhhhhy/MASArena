@@ -19,10 +19,20 @@ from threading import Thread
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
 from benchmark.src.evaluators.utils.sanitize import code_extract
 
 
-class SWEBenchEvaluator:
+@register_benchmark(
+    name="swebench_lite",
+    normalization_keys={
+        "id": "instance_id",
+        "problem": "problem_statement",
+        "solution": "patch",
+    }
+)
+class SWEBenchEvaluator(BaseEvaluator):
     """
     Evaluator for SWE-bench problems
     
@@ -45,28 +55,28 @@ class SWEBenchEvaluator:
                 - use_mcp: Use MCP servers for evaluation
                 - mcp_executable: Path to MCP server executables
         """
-        self.name = name
-        self.config = config or {}
+        super().__init__(name, config)
         
         # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        self.repos_path = config.get("repos_path", "benchmark/data/repos")
+        self.repos_path = self.config.get("repos_path", "benchmark/data/repos")
         
         # Setup timeout and other configs
-        self.timeout = config.get("timeout", 600)  # 10 minutes default timeout
-        self.verbose = config.get("verbose", False)
+        self.timeout = self.config.get("timeout", 600)  # 10 minutes default timeout
+        self.verbose = self.config.get("verbose", False)
         
         # MCP server settings
-        self.use_mcp = config.get("use_mcp", True)
-        self.mcp_path = config.get("mcp_executable", "benchmark/mcp_servers")
+        self.use_mcp = self.config.get("use_mcp", True)
+        self.mcp_path = self.config.get("mcp_executable", "benchmark/mcp_servers")
         
         # Create directories
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
         Path(self.repos_path).mkdir(parents=True, exist_ok=True)
         
         # Initialize run evaluator
         self.run_evaluator = RunEvaluator()
+    
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
     
     class TimeoutError(Exception):
         """Timeout error for code execution"""
@@ -1187,22 +1197,12 @@ class SWEBenchEvaluator:
         
         # Create LangSmith run
         run = self.create_run(problem_copy, prediction, details["patch"], score, details)
-        run_evaluation = self.run_evaluator.evaluate_run(run=run)
+        self.run_evaluator.evaluate_run(run=run)
         
-        # Prepare result
-        result = {
+        # Return evaluation results
+        return {
             "final_answer": prediction,
-            "extracted_patch": details["patch"],
+            "extracted_answer": details["patch"],
             "score": score,
-            "details": details,
-            "run_evaluation": run_evaluation,
-        }
-        
-        if debug_mode:
-            print("\nDEBUG: Final evaluation result:")
-            print(f"DEBUG: Score: {result.get('score', 0)}")
-            print(f"DEBUG: Success: {result.get('details', {}).get('success', False)}")
-            print(f"DEBUG: Patch length: {len(result.get('extracted_patch', ''))}")
-            print(f"DEBUG: Patch excerpt: {result.get('extracted_patch', '')[:100]}...")
-        
-        return result 
+            "details": details
+        } 

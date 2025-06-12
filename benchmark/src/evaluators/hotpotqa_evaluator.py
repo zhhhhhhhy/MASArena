@@ -14,22 +14,28 @@ from pathlib import Path
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 
-class HotpotQAEvaluator:
+from benchmark.src.evaluators.base_evaluator import BaseEvaluator
+from benchmark.src.evaluators.registry import register_benchmark
+
+
+@register_benchmark(
+    name="hotpotqa",
+    normalization_keys={
+        "id": "id",
+        "problem": "question",
+        "solution": "answer",
+    }
+)
+class HotpotQAEvaluator(BaseEvaluator):
     """Evaluator for HotpotQA problems"""
     
     def __init__(self, name: str = "hotpotqa", config: Dict[str, Any] = None):
-        self.name = name
-        self.config = config or {}
-        
-        # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        
-        # Create log directory
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
-        
-        # Initialize run evaluator
+        super().__init__(name, config)
         self.run_evaluator = RunEvaluator()
+        
+    @classmethod
+    def from_config(cls, name: str, config: Dict[str, Any] = None):
+        return cls(name, config)
         
     def normalize_answer(self, s: str) -> str:
         """
@@ -143,6 +149,5 @@ class HotpotQAEvaluator:
             "final_answer": final_answer,
             "extracted_answer": extracted_answer,
             "score": score,
-            "run_evaluation": run_evaluation,
             "context": context_str
         }
