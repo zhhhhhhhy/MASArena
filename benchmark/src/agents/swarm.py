@@ -183,7 +183,7 @@ class SwarmSystem(AgentSystem):
             SwarmAgent(
                 agent_id=f"agent_{i + 1}", 
                 model_name=self.model_name, 
-                system_prompt=self._get_system_prompt(i)
+                system_prompt=self._get_system_prompt()
             )
             for i in range(self.num_agents)
         ]
@@ -195,22 +195,11 @@ class SwarmSystem(AgentSystem):
             "workers": swarm_agents + [aggregator]
         }
 
-    def _get_system_prompt(self, agent_index: int) -> str:
+    def _get_system_prompt(self) -> str:
         """Get system prompt for an agent based on its index"""
         base_prompt = "You are an intelligent AI assistant specialized in solving problems carefully and step by step."
 
-        # Different specializations for different agents
-        specializations = [
-            " Focus on being methodical and detailed in your approach.",
-            " Focus on finding elegant and efficient solutions.",
-            " Focus on checking edge cases and validating your answers.",
-            " Focus on breaking down complex problems into simpler parts.",
-            " Focus on applying mathematical principles rigorously.",
-        ]
-
-        # Use the agent index to select a specialization, cycling through the options
-        specialization_index = agent_index % len(specializations)
-        return base_prompt + specializations[specialization_index]
+        return base_prompt + self.format_prompt
 
     async def _solve_problem_async(self, agent: SwarmAgent, problem: str) -> Dict[str, Any]:
         """Solve a problem asynchronously"""

@@ -155,18 +155,6 @@ When receiving a task description and related parameters, you must:
 3. Show your detailed step-by-step work
 4. Provide clear execution results
 
-For mathematical calculations:
-- Always double-check your arithmetic
-- Show all intermediate steps
-- Use standard mathematical notation
-- Verify your final answer against your work
-
-For reasoning tasks:
-- Consider all relevant information
-- Apply logical inference rules correctly
-- Identify and avoid common reasoning fallacies
-- Validate your conclusions against your premises
-
 Ensure your results are accurate, your reasoning process is clear, and your output can be used for subsequent tasks."""
         )
         
@@ -175,29 +163,14 @@ Ensure your results are accurate, your reasoning process is clear, and your outp
             agent_id="generator",
             name="Response Generator",
             model_name=self.model_name,
-            system_prompt="""You are an expert response generator specialized in synthesis and precision.
+            system_prompt=f"""You are an expert response generator specialized in synthesis and precision.
 Your job is to generate a final comprehensive answer based on all previous task results.
 
 When receiving a problem description and all completed task results, you must:
-1. Synthesize and analyze all task results comprehensively
-2. Provide a clear, accurate final answer
-3. Explain your reasoning process in detail
-4. Format the final answer using \\boxed{} notation
-
-For mathematical problems:
-- Verify all calculations from previous tasks
-- Check for calculation errors or logical flaws
-- Ensure the answer has the correct units and format
-- Make sure the answer is numerically precise
-
-For reasoning problems:
-- Ensure all logical steps are valid
-- Check that the conclusion follows from the premises
-- Verify that no important information was overlooked
-- Consider potential counterarguments or edge cases
-
-Your response should be concise, logically clear, and directly answer the original question.
-Always include the final answer in \\boxed{} format."""
+- Synthesize and analyze all task results comprehensively
+- Provide a clear, accurate final answer, and step-by-step solution
+{self.format_prompt}
+"""
         )
 
     def _parse_tasks_from_text(self, text: str) -> List[Task]:
@@ -346,39 +319,6 @@ Always include the final answer in \\boxed{} format."""
         
         return execution_result
 
-    def _extract_boxed_answer(self, text: str) -> str:
-        """Extract answer from \boxed{} in text"""
-        try:
-            # Try multiple regex patterns to catch different boxed answer formats
-            box_patterns = [
-                r'\\boxed{(.*?)}',
-                r'boxed{(.*?)}',
-                r'\\boxed\s*{(.*?)}',
-                r'The answer is[:\s]+\s*\\boxed{(.*?)}',
-                r'Final answer[:\s]+\s*\\boxed{(.*?)}'
-            ]
-            
-            for pattern in box_patterns:
-                match = re.search(pattern, text, re.DOTALL)
-                if match:
-                    return match.group(1).strip()
-                    
-            # If no boxed answer found, try to find a clear "answer is" statement
-            answer_patterns = [
-                r'The answer is[:\s]+\s*([^\.]+)',
-                r'Final answer[:\s]+\s*([^\.]+)',
-                r'Therefore,\s+([^\.]+)'
-            ]
-            
-            for pattern in answer_patterns:
-                match = re.search(pattern, text, re.DOTALL)
-                if match:
-                    return match.group(1).strip()
-                    
-            return ""
-        except:
-            return ""
-
     async def _generate_final_response_async(self, problem: str, task_results: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
         """Generate final response asynchronously"""
         if not self.response_generator_agent:
@@ -399,10 +339,8 @@ Always include the final answer in \\boxed{} format."""
         Based on all the information above, please generate a comprehensive final answer.
         
         Your response must:
-        1. Verify all calculations from the previous tasks
-        2. Check for any calculation errors or logical flaws
-        3. Provide a clear, step-by-step solution
-        4. Present the final answer using \\boxed{{}} notation
+        - Verify all calculations from the previous tasks
+        - {self.format_prompt}
         
         Make sure your answer is concise, logically clear, and directly answers the original problem.
         Double-check all mathematical operations for accuracy.
@@ -411,12 +349,8 @@ Always include the final answer in \\boxed{} format."""
         response = await self.response_generator_agent.generate_response_async(prompt)
         content = response.get("content", "")
         
-        # Extract boxed answer
-        boxed_answer = self._extract_boxed_answer(content)
-        
         return {
             "final_answer": content,
-            "extracted_answer": boxed_answer,
             "message": response.get("message", None)  # Preserve complete message object with metadata
         }
 
@@ -536,22 +470,13 @@ Always include the final answer in \\boxed{} format."""
         duration_ms = (end_time - start_time) * 1000
         print(f"Processing complete, took {duration_ms:.2f}ms")
         
-        # Extract boxed answer
-        answer = final_response.get("extracted_answer", "")
-        print(f"Extracted answer: {answer}")
-        
-        # Create final answer text in required evaluation format
-        boxed_answer_text = f"$\\boxed{{{answer}}}$"
-        
         # Build result
         result = {
             "problem_id": problem.get("id", ""),
             "problem": problem_text,
             "messages": all_messages,  # Preserve complete AIMessage object list
-            "answer": answer,
-            "response": final_response.get("final_answer", ""),
+            "final_answer": final_response.get("final_answer", ""),
             "execution_time_ms": duration_ms,
-            "extracted_answer": boxed_answer_text
         }
         
         # Record agent responses - pass complete AIMessage object list to preserve usage_metadata

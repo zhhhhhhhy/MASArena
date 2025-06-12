@@ -1,107 +1,208 @@
 # Multi-Agent Benchmark System Architecture
 
-This document provides an overview of the Multi-Agent Benchmark system architecture, explaining how the various components interact to benchmark different agent systems.
+This document provides a detailed overview of the Multi-Agent Benchmark system's architecture. It explains the core components, their interactions, and the overall data flow when running a benchmark.
 
-## System Components
+## High-Level Architecture
 
-The Multi-Agent Benchmark system consists of several key components:
+The system is designed to be modular and extensible, allowing for easy addition of new agent systems and benchmarks. The core components are the `BenchmarkRunner`, `AgentSystem`, and `Evaluator`. The `BenchmarkRunner` orchestrates the process, while the `AgentSystem` encapsulates the logic for both solving a problem and evaluating its own solution.
 
-- **Agent Systems**: Different implementations of agent architectures (single-agent, supervisor-based, swarm-based)
-- **Evaluators**: Task-specific modules for evaluating agent performance
-- **Tools**: External capabilities that can be integrated with agents
-- **Metrics**: Collection and analysis of performance data
-- **Instrumentation**: Monitoring agent behavior during benchmark execution (Future work)
+```mermaid
+graph TD
+    subgraph User Interaction
+        A[run_benchmark.sh]
+    end
 
+    subgraph Core Orchestration
+        B[main.py]
+        C[BenchmarkRunner]
+    end
 
-## Data Flow
+    subgraph Agent System Abstraction
+        D[agents.create_agent_system]
+        E[agents.AgentSystemRegistry]
+        F[agents.base.AgentSystem]
+        G[agents.run_agent]
+    end
+    
+    subgraph Concrete Agent Systems
+        direction LR
+        H[MetaGPT]
+        I[AgentVerse]
+        J[Swarm]
+        K[...]
+    end
+
+    subgraph Evaluator Abstraction
+        L[evaluators.base_evaluator.BaseEvaluator]
+        M[evaluators.evaluate]
+    end
+
+    subgraph Concrete Evaluators
+        direction LR
+        N[HumanEvalEvaluator]
+        O[MBPPEvaluator]
+        P[SWEBenchEvaluator]
+        Q[...]
+    end
+    
+    subgraph Data
+        R[Benchmark Datasets]
+    end
+    
+    subgraph Results
+        S[Results]
+        T[Metrics]
+    end
+
+    A -- "Executes with args (agent, benchmark)" --> B
+    B -- "Instantiates & calls" --> C
+    
+    C -- "Calls with agent name" --> D
+    D -- "Looks up in" --> E
+    E -- "Instantiates" --> F
+    
+    F -- "Is subclassed by" --> H
+    F -- "Is subclassed by" --> I
+    F -- "Is subclassed by" --> J
+    F -- "Is subclassed by" --> K
+
+    F -- "Initializes" --> L
+    L -- "Is subclassed by" --> N
+    L -- "Is subclassed by" --> O
+    L -- "Is subclassed by" --> P
+    L -- "Is subclassed by" --> Q
+    
+    C -- "Loads" --> R
+    C -- "For each problem in dataset, calls" --> F
+    
+    F -- "evaluate(problem) calls" --> G
+    G -- "Gets result, then calls" --> M
+    
+    C -- "Saves" --> S
+    C -- "Saves" --> T
+
+    style F fill:#f9f,stroke:#333,stroke-width:2px
+    style L fill:#ccf,stroke:#333,stroke-width:2px
+```
+
+## Execution Workflow
+
+The following sequence diagram illustrates the step-by-step workflow when a benchmark is executed. A key design choice is that the `AgentSystem` is responsible for its own evaluation. It creates an appropriate `Evaluator` during its initialization and uses it to score the solutions it generates.
 
 ```mermaid
 sequenceDiagram
-    participant CLI as Benchmark CLI
-    participant Runner as BenchmarkRunner
-    participant Agent as AgentSystem
-    participant Tools as ToolManager
-    participant Eval as Evaluator
-    participant Metrics as MetricsCollector
+    participant User
+    participant run_benchmark.sh
+    participant main.py
+    participant BenchmarkRunner
+    participant AgentSystem
+    participant Evaluator
+
+    User->>run_benchmark.sh: Execute with args
+    run_benchmark.sh->>main.py: Run Python script
+    main.py->>BenchmarkRunner: Instantiate(results_dir, metrics_dir)
+    main.py->>BenchmarkRunner: run(benchmark, agent_system, ...)
+
+    BenchmarkRunner->>AgentSystem: create_agent_system(agent_system, config)
+    activate AgentSystem
     
-    CLI->>Runner: Run benchmark(benchmark_name, agent_system, limit)
-    Runner->>Agent: Initialize agent system
+    AgentSystem->>Evaluator: Instantiate(evaluator_name)
+    activate Evaluator
+    Note over AgentSystem, Evaluator: Agent creates its own Evaluator
+    deactivate Evaluator
     
-    alt Tools Enabled
-        Runner->>Tools: Initialize tool manager
-        Tools->>Agent: Integrate tools with agent
+    BenchmarkRunner-->>AgentSystem: Returns created agent instance
+
+    loop For each problem in dataset
+        BenchmarkRunner->>AgentSystem: evaluate(problem)
+        AgentSystem->>AgentSystem: run_agent(problem)
+        Note right of AgentSystem: Core agent logic to generate solution
+        AgentSystem->>Evaluator: evaluate(solution, ground_truth)
+        activate Evaluator
+        Evaluator-->>AgentSystem: Return score & metrics
+        deactivate Evaluator
+        AgentSystem-->>BenchmarkRunner: Return evaluation results
     end
     
-    loop For each problem
-        Runner->>Agent: run_agent(problem)
-        
-        alt Tools Integrated
-            Agent->>Tools: Request tools for problem
-            Tools->>Agent: Return bound tools
-        end
-        
-        Agent->>Agent: Generate solution
-        Agent->>Runner: Return solution
-        
-        Runner->>Eval: evaluate(problem, solution)
-        Eval->>Runner: Return evaluation
-        
-        Runner->>Metrics: collect_metrics(agent, problem, solution, evaluation)
-    end
+    deactivate AgentSystem
     
-    Runner->>Metrics: generate_report()
-    Metrics->>CLI: Return benchmark results
+    BenchmarkRunner->>main.py: Return summary
+    main.py->>User: Print summary and exit
 ```
 
-## Component Responsibilities
+## Core Components Decomposition
+
+The framework's modularity comes from its use of abstract base classes and registries for dynamic discovery.
 
 ### Agent Systems
 
-Agent systems are responsible for:
+All agent systems inherit from the `AgentSystem` abstract base class. This ensures they conform to a common interface, which includes the `run_agent()` and `evaluate()` methods. The `AgentSystemRegistry` is used to discover and list available agents.
 
-1. Implementing a specific agent architecture (single agent, multi-agent, swarm)
-2. Processing benchmark problems
-3. Generating solutions
-4. Providing interfaces for tool integration
+```mermaid
+classDiagram
+    direction LR
+    class AgentSystem {
+        <<Abstract>>
+        +name: str
+        +config: dict
+        +evaluator: BaseEvaluator
+        +run_agent(problem) dict
+        +evaluate(problem) dict
+    }
 
+    class MetaGPT {
+    }
+    
+    class AgentVerse {
+    }
+    
+    class Swarm {
+    }
+
+    AgentSystem <|-- MetaGPT
+    AgentSystem <|-- AgentVerse
+    AgentSystem <|-- Swarm
+```
 
 ### Evaluators
 
-Evaluators are responsible for:
+Similarly, all evaluators inherit from a `BaseEvaluator` class (though not strictly enforced as an ABC in the current implementation, it serves this role conceptually). The `AVAILABLE_EVALUATORS` dictionary in `benchmark/src/evaluators/__init__.py` acts as a registry.
 
-1. Assessing the quality of agent solutions
-2. Calculating performance metrics
-3. Normalizing scores across different benchmarks
+```mermaid
+classDiagram
+    direction LR
+    class BaseEvaluator {
+        <<Interface>>
+        +name: str
+        +config: dict
+        +evaluate(prediction, expected) dict
+    }
 
-Evaluator implementations:
+    class HumanEvalEvaluator {
+    }
+    
+    class MBPPEvaluator {
+    }
+    
+    class SWEBenchEvaluator {
+    }
 
-- `benchmark/src/evaluators/`: Task-specific evaluators
+    BaseEvaluator <|-- HumanEvalEvaluator
+    BaseEvaluator <|-- MBPPEvaluator
+    BaseEvaluator <|-- SWEBenchEvaluator
+```
 
-### Tools
+## Extensibility
 
-The tools subsystem is responsible for:
+Adding a new agent or evaluator to the system is straightforward.
 
-1. Managing external tool integration with agents
-2. Selecting appropriate tools for problems
-3. Binding tools to agent LLMs
-4. Tracking tool usage and performance
+### Adding a New Agent
+1.  Create a new Python file in `benchmark/src/agents/`.
+2.  Implement a new class that inherits from `agents.base.AgentSystem`.
+3.  Implement the abstract `run_agent()` method with the agent's unique logic.
+4.  Register the new agent in `benchmark/src/agents/__init__.py` by adding it to the `AVAILABLE_AGENT_SYSTEMS` dictionary and the `__all__` list.
 
-Tool-related implementations:
-
-- `benchmark/src/tools/tool_manager.py`: Tool management and creation
-- `benchmark/src/tools/tool_selector.py`: Intelligent tool selection
-- `benchmark/src/tools/tool_integration.py`: Agent system tool integration
-
-### Metrics & Instrumentation
-
-The metrics and instrumentation subsystems are responsible for:
-
-1. Collecting performance data during benchmark execution
-2. Monitoring agent behavior
-3. Tracking resource usage
-4. Generating reports and visualizations
-
-Metrics and instrumentation implementations:
-
-- `benchmark/src/metrics/`: Metrics collection [Incomplete]
-- `benchmark/src/instrumentation/`: Agent instrumentation [Incomplete]
+### Adding a New Evaluator
+1.  Create a new Python file in `benchmark/src/evaluators/`.
+2.  Implement a new class that provides an `evaluate()` method.
+3.  Register the new evaluator in `benchmark/src/evaluators/__init__.py` by adding it to the `AVAILABLE_EVALUATORS` dictionary.

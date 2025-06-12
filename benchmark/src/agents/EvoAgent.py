@@ -473,7 +473,8 @@ class EvoAgent(AgentSystem):
                 {results_text}
 
                 请提供一个综合的答案，结合所有智能体的优点，并解决任何冲突或矛盾。
-                你的回答应该是最完整、最准确的。
+                Remember the following rules:
+                {self.format_prompt}
                 """
                 
                 response = await llm.ainvoke([{"role": "user", "content": prompt}])
@@ -739,6 +740,7 @@ class EvoAgent(AgentSystem):
         # 返回结果，包含消息、执行时间和进化指标
         return {
             "messages": messages,
+            "final_answer": summary,
             "execution_time_ms": execution_time_ms,
             "evolution_metrics": {
                 "initial_agents": len(base_agents),

@@ -68,9 +68,10 @@ def create_supervisor(model_name: str):
 
 
 class AgentNode:
-    def __init__(self, name: str, model_name: str):
+    def __init__(self, name: str, model_name: str, prompt: str):
         self.name = name
         self.model_name = model_name
+        self.prompt = prompt
         self.llm = ChatOpenAI(model=os.getenv("MODEL_NAME", self.model_name))
         self.agent = None
 
@@ -80,7 +81,7 @@ class AgentNode:
         else:
             effective_tool_objects = [t.get("tool_object") for t in self.tools if t.get("tool_object")]
 
-        self.agent = create_react_agent(self.llm, tools=effective_tool_objects)
+        self.agent = create_react_agent(self.llm, tools=effective_tool_objects, prompt=self.prompt)
         return self.agent
 
     @traceable
@@ -132,8 +133,16 @@ class SupervisorMAS(AgentSystem):
         researcher_model = self.config.get("researcher_model_name", self.config.get("model_name", default_model))
         coder_model = self.config.get("coder_model_name", self.config.get("model_name", default_model))
 
-        researcher = AgentNode(name="researcher", model_name=researcher_model)
-        coder = AgentNode(name="coder", model_name=coder_model)
+        researcher = AgentNode(name="researcher", model_name=researcher_model, prompt=f"""You are a helpful expert researcher,
+Use your expertise to help with tasks and provide information. Requirement:
+- {self.format_prompt}
+        """
+        )
+        coder = AgentNode(name="coder", model_name=coder_model, prompt=f"""You are a helpful expert coder,
+Use your expertise to help with tasks and provide information. Requirement:
+- {self.format_prompt}
+        """
+        )
         
         return {
             "researcher": researcher,
@@ -182,23 +191,11 @@ class SupervisorMAS(AgentSystem):
         Run the agent system on a problem.
         """
         # Get problem content based on evaluator type
-        if self.evaluator_name == "math":
-            problem_content = problem.get("problem", "")
-        elif self.evaluator_name in ["humaneval", "mbpp"]:
-            problem_content = problem.get("prompt", "")
-        elif self.evaluator_name in ["gsm8k", "hotpotqa"]:
-            problem_content = problem.get("question", "")
-        elif self.evaluator_name == "drop":
-            problem_content = problem.get("context", "")
-        elif self.evaluator_name == "ifeval":
-            problem_content = problem.get("prompt", "")
-        else:
-            problem_content = problem.get("problem", "")  # default fallback
-
-        self._init_graph_if_needed(problem_input=problem_content)
+        problem_text = problem["problem"]
+        self._init_graph_if_needed(problem_input=problem_text)
         
         initial_state = {
-            "messages": [("user", problem_content)],
+            "messages": [("user", problem_text)],
         }
 
         thread_id = str(uuid.uuid4())
@@ -209,6 +206,7 @@ class SupervisorMAS(AgentSystem):
         
         return {
             "messages": run_result.get("messages", []),
+            "final_answer": run_result.get("messages", [])[-1].content if run_result.get("messages", []) else "",
         }
 
 

@@ -16,12 +16,6 @@ class AgentResponse(TypedDict):
     solution: str  # 解决方案
     confidence: int  # 解答信心程度，范围1-5
 
-class EvaluatorResponse(TypedDict):
-    """评估器的结构化输出"""
-    final_answer: str  # 最终答案
-    reasoning: str  # 推理过程
-    answer_boxed: str  # 用\boxed{}格式输出的答案
-
 @dataclass
 class Agent:
     """代表一个LLM代理"""
@@ -116,42 +110,23 @@ class ResultExtractor:
         )
         self.name = "result_extractor"
         
-    def extract(self, all_histories: List[List[Dict[str, str]]], problem: str, options: str = None) -> Dict[str, Any]:
+    def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> Dict[str, Any]:
         """
         从所有代理的对话历史中提取最终答案
         """
         # 根据问题类型选择不同的提示
-        if self.evaluator_name.lower() == "mmlu_pro" and options:
-            prompt = f"""Original problem: {problem}
-
-Options:
-{options}
+        prompt = f"""Original problem: {problem}
 
 Below are the discussion histories of multiple AI agents:
 
 {self._format_histories(all_histories)}
 
 Please analyze the above discussions and provide a final answer. Requirements:
-1. Synthesize all agents' viewpoints.
-2. Choose the most reasonable solution/option.
-3. Provide ONLY a single letter answer (A, B, C, D, etc.) from the given options in the format: <answer>X</answer>
-
-DO NOT provide any explanation or reasoning in your final output. Just the single letter answer in the specified format.
+- Synthesize all agents' viewpoints.
+- Choose the most reasonable solution/option.
+{self.format_promt}
 """
-        else:  # math 或其他类型
-            prompt = f"""Original problem: {problem}
-
-Below are the discussion histories of multiple AI agents:
-
-{self._format_histories(all_histories)}
-
-Please analyze the above discussions and provide a final answer. Requirements:
-1. Synthesize all agents' viewpoints
-2. Choose the most reasonable solution
-3. Provide detailed reasoning for your answer
-4. Output the answer in standard mathematical format: \\boxed{{answer}}
-"""
-        
+  
         messages = [
             SystemMessage(content="You are a professional result analyzer, responsible for extracting the final answer from discussions of multiple AI agents."),
             HumanMessage(content=prompt)
@@ -182,11 +157,6 @@ Please analyze the above discussions and provide a final answer. Requirements:
                     formatted.append(f"Answer: {msg['ai']}")
         return "\n".join(formatted)
         
-    def _extract_boxed_answer(self, text: str) -> str:
-        """从文本中提取 \boxed{} 中的答案"""
-        import re
-        match = re.search(r'\\boxed{(.*?)}', text)
-        return match.group(1) if match else text
 
 class ChatEval(AgentSystem):
     """基于迭代辩论的多智能体评估系统"""
@@ -268,18 +238,7 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
         """运行迭代辩论过程"""
         problem_text = problem["problem"]
         start_time = time.time()
-        
-        # 获取选项（如果是 MMLU_pro 类型）
-        options = None
-        if self.evaluator_name.lower() == "mmlu_pro":
-            options = problem.get("options", None)
-            if options and isinstance(options, list):
-                options_text = ""
-                for i, option in enumerate(options):
-                    letter = chr(65 + i)  # A, B, C, D...
-                    options_text += f"{letter}. {option}\n"
-                options = options_text
-        
+
         # 存储所有LLM响应对象
         all_messages = []
         agent_histories = []
@@ -289,7 +248,7 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
         for t in range(self.num_rounds):
             for n, agent in enumerate(self.agents):
                 # 生成当前代理的响应
-                context = self._build_context(problem_text, n, t, options)
+                context = self._build_context(problem_text, n, t)
                 response_data = agent.generate_response(context)
                 
                 # 保存响应对象
@@ -322,14 +281,13 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
             "execution_time_ms": duration_ms
         }
 
-    def _build_context(self, problem: str, agent_index: int, round_num: int, options: Optional[str] = None) -> str:
+    def _build_context(self, problem: str, agent_index: int, round_num: int) -> str:
         """构建当前代理的上下文"""
         agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         agent_name = agent_names[agent_index]
         
         problem_statement = f"Original problem: {problem}"
-        if self.evaluator_name.lower() == "mmlu_pro" and options:
-            problem_statement += f"\n\nOptions:\n{options}"
+        problem_statement += self.format_prompt
 
         if round_num == 0 and agent_index == 0:
             return f"Please solve this problem or select the best option based on your expertise:\n{problem_statement}"

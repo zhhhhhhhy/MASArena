@@ -32,12 +32,10 @@ class SingleAgent(AgentSystem):
         super().__init__(name, config)
         self.config = config or {}
         self.evaluator_name = self.config.get("evaluator", "bbh")  # Default to bbh
+        
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")  # Use qwen-plus
-        self.system_prompt = (
-            self.config.get("system_prompt")
-            or self.format_prompt()
-        )
-                
+        self.system_prompt = self.config.get("system_prompt", "") + self.format_prompt
+
         # Initialize evaluator and metrics collector through base class methods
         self._initialize_evaluator()
         self._initialize_metrics_collector()
@@ -56,10 +54,7 @@ class SingleAgent(AgentSystem):
             Dictionary of run results including messages with usage metadata
         """
         problem_text = problem["problem"]
-        problem_id = problem.get("id", f"problem_{hash(problem_text)}")
-        
-        # Initialize the language model
-        llm = self.llm
+    
 
         # Prepare messages
         messages = [
@@ -68,7 +63,7 @@ class SingleAgent(AgentSystem):
         ]
 
         # Get solution from LLM and track usage
-        response = llm.invoke(messages)
+        response = self.llm.invoke(messages)
         
         # Clean response content
         response_content = response.content.replace('\r\n', '\n').replace('\r', '\n').strip()

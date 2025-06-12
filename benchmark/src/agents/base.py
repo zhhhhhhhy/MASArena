@@ -58,7 +58,8 @@ class AgentSystem(abc.ABC):
         # Create directories if they don't exist
         self.responses_dir.mkdir(parents=True, exist_ok=True)
         self.visualizations_dir.mkdir(parents=True, exist_ok=True)
-        
+       
+        self.format_prompt = self.format_prompt()
         # Initialize tool manager if MCP tools are enabled
         self.tool_manager = None
         if self.config.get("use_mcp_tools"):
@@ -80,14 +81,10 @@ class AgentSystem(abc.ABC):
             return IFEVAL_PROMPT
         if self.evaluator_name == "drop":
             return DROP_PROMPT
-        if self.evaluator_name == "humaneval":
-            return HUMANEVAL_PROMPT
-        if self.evaluator_name == "mbpp":
-            return MBPP_PROMPT
         if self.evaluator_name == "mmlu_pro":
             return MMLU_PROMPT
         else:
-            return MATH_PROMPT
+            return "" 
 
  
 
