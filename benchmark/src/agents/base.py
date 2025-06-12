@@ -6,7 +6,6 @@ This module provides the base classes and interfaces for agent systems.
 
 import abc
 from typing import Dict, Any, Optional, Type, Callable, List
-from benchmark.src.agents.utils import *
 import uuid
 import os
 import json
@@ -14,6 +13,7 @@ from pathlib import Path
 import datetime
 import importlib
 import glob
+from benchmark.src.agents.format_prompts import get_format_prompt
 
 
 class AgentSystem(abc.ABC):
@@ -70,23 +70,13 @@ class AgentSystem(abc.ABC):
             # will handle patching for tool integration.
 
     def format_prompt(self) -> str:
-        # todo: format prompts for different benchmarks
-
         """
-        Format the prompt for different benchmarks. 
+        Format the prompt for different benchmarks.
+        
+        Returns:
+            The appropriate format prompt string for the current evaluator
         """
-        if self.evaluator_name == "bbh":
-            return BBH_PROMPT
-        if self.evaluator_name == "ifeval":
-            return IFEVAL_PROMPT
-        if self.evaluator_name == "drop":
-            return DROP_PROMPT
-        if self.evaluator_name == "mmlu_pro":
-            return MMLU_PROMPT
-        else:
-            return "" 
-
- 
+        return get_format_prompt(self.evaluator_name) or ""
 
     def _initialize_evaluator(self, evaluator_type: Type = None):
         """
