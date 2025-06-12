@@ -118,9 +118,6 @@ class SupervisorMAS(AgentSystem):
         self.graph = None
         self.workers: Optional[Dict[str, AgentNode]] = None
         
-        # Initialize evaluator and metrics collector through base class methods
-        self._initialize_evaluator()
-        self._initialize_metrics_collector()
 
     def _create_agents(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None) -> Dict[str, AgentNode]:
         # This method will be called by ToolIntegrationWrapper if this system is wrapped.
