@@ -57,9 +57,13 @@ class HumanEvalEvaluator(BaseCodeEvaluator):
         and abort if it does not finish within *timeout* seconds.
         """
         result: list[Any] = []
+        exception: list[BaseException] = []
 
         def target():
-            result.append(func(*args))
+            try:
+                result.append(func(*args))
+            except BaseException as e:
+                exception.append(e)
 
         thread = Thread(target=target, daemon=True)
         thread.start()
@@ -67,6 +71,9 @@ class HumanEvalEvaluator(BaseCodeEvaluator):
 
         if thread.is_alive():
             raise self.TimeoutError("Execution timed out")
+
+        if exception:
+            raise exception[0]
 
         return result[0] if result else None
 
