@@ -253,9 +253,9 @@ class MathEvaluator(BaseEvaluator):
         # Calculate score
         score, extracted_answer = self.calculate_score(problem["solution"], final_answer)
         
-        # Create LangSmith run for evaluation
-        run = self.create_run(problem, final_answer, extracted_answer, score)
-        run_evaluation = self.run_evaluator.evaluate_run(run=run)
+        # # Create LangSmith run for evaluation
+        # run = self.create_run(problem, final_answer, extracted_answer, score)
+        # run_evaluation = self.run_evaluator.evaluate_run(run=run)
         
         # Return evaluation results
         return {

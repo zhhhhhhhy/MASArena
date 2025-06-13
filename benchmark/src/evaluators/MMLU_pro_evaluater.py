@@ -93,7 +93,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
                 cand_letter = chr(ord('A') + cand_index)
                 if cand_letter == ref_clean:
                     return 1.0
-        except:
+        except Exception:
             pass
             
         return 0.0
@@ -123,7 +123,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
                 idx = ord(answer_letter.upper()) - ord('A')
                 if 0 <= idx < len(options):
                     return options[idx]
-            except:
+            except Exception:
                 pass
         
         # If we can't get the answer text, just return the answer letter/index
@@ -186,10 +186,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
         Returns:
             True if the answer is correct, False otherwise
         """
-        if isinstance(reference, dict):
-            reference_letter = reference.get("answer", "")
-        else:
-            reference_letter = str(reference)
+        reference_letter = reference.get("answer", "") if isinstance(reference, dict) else str(reference)
         
         exact_match = self.check_exact_match(reference_letter, prediction)
         return exact_match >= 0.9

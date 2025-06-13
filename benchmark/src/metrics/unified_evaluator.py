@@ -147,10 +147,7 @@ class UnifiedEvaluator:
             The calculated utility value
         """
         # Extract or aggregate system-level metrics if needed
-        if 'model' in system_data:
-            metrics = self._extract_system_metrics(system_data)
-        else:
-            metrics = system_data
+        metrics = self._extract_system_metrics(system_data) if 'model' in system_data else system_data
         
         # Extract metrics
         accuracy = metrics.get('accuracy', 0.0)
@@ -179,11 +176,7 @@ class UnifiedEvaluator:
             The calculated efficiency ratio
         """
         # Extract or aggregate system-level metrics if needed
-        if 'model' in system_data:
-            metrics = self._extract_system_metrics(system_data)
-        else:
-            metrics = system_data
-        
+        metrics = self._extract_system_metrics(system_data) if 'model' in system_data else system_data
         # Extract metrics
         accuracy = metrics.get('accuracy', 0.0)
         throughput = metrics.get('throughput', 0.0)

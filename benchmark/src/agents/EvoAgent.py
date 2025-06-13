@@ -535,14 +535,12 @@ class EvoAgent(AgentSystem):
         
         # 使用简单的进度显示
         print(f"{Colors.CYAN}基础智能体进度: 0/{len(tasks)}{Colors.ENDC}")
-        completed = 0
-        for task in asyncio.as_completed(tasks):
+        for i, task in enumerate(asyncio.as_completed(tasks)):
             try:
                 await task
             except Exception as e:
                 print(f"{Colors.RED}警告: 任务执行出错: {str(e)}{Colors.ENDC}")
-            completed += 1
-            print(f"{Colors.CYAN}基础智能体进度: {completed}/{len(tasks)}{Colors.ENDC}")
+            print(f"{Colors.CYAN}基础智能体进度: {i + 1}/{len(tasks)}{Colors.ENDC}")
         
         # 按得分排序基础智能体
         base_agents.sort(key=lambda x: x.score, reverse=True)
@@ -593,14 +591,12 @@ class EvoAgent(AgentSystem):
         
         # 使用简单的进度显示
         print(f"{Colors.CYAN}交叉智能体进度: 0/{len(tasks)}{Colors.ENDC}")
-        completed = 0
-        for task in asyncio.as_completed(tasks):
+        for i, task in enumerate(asyncio.as_completed(tasks)):
             try:
                 await task
             except Exception as e:
                 print(f"{Colors.RED}警告: 任务执行出错: {str(e)}{Colors.ENDC}")
-            completed += 1
-            print(f"{Colors.CYAN}交叉智能体进度: {completed}/{len(tasks)}{Colors.ENDC}")
+            print(f"{Colors.CYAN}交叉智能体进度: {i + 1}/{len(tasks)}{Colors.ENDC}")
         
         # 按得分排序交叉智能体
         crossover_agents.sort(key=lambda x: x.score, reverse=True)
@@ -650,14 +646,12 @@ class EvoAgent(AgentSystem):
         
         # 使用简单的进度显示
         print(f"{Colors.CYAN}变异智能体进度: 0/{len(tasks)}{Colors.ENDC}")
-        completed = 0
-        for task in asyncio.as_completed(tasks):
+        for i, task in enumerate(asyncio.as_completed(tasks)):
             try:
                 await task
             except Exception as e:
                 print(f"{Colors.RED}警告: 任务执行出错: {str(e)}{Colors.ENDC}")
-            completed += 1
-            print(f"{Colors.CYAN}变异智能体进度: {completed}/{len(tasks)}{Colors.ENDC}")
+            print(f"{Colors.CYAN}变异智能体进度: {i + 1}/{len(tasks)}{Colors.ENDC}")
         
         # 按得分排序所有智能体
         mutation_agents.sort(key=lambda x: x.score, reverse=True)

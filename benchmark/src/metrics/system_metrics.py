@@ -604,7 +604,7 @@ class SystemMetricsCollector(BaseMetricsCollector):
         
         model_info = MODEL_DATA[model_name]
         parameter_count = model_info["parameter_size_b"] * 1e9
-        dtype = model_info.get("dtype", "float16").lower()
+        # dtype = model_info.get("dtype", "float16").lower()
         
         hw_config = hardware_config or {}
 
@@ -648,7 +648,7 @@ class SystemMetricsCollector(BaseMetricsCollector):
         total_time_seconds = ttft_seconds + generation_time
         
         # Calculate effective tokens per second (considering the entire process)
-        effective_tokens_per_second = output_token_count / total_time_seconds if total_time_seconds > 0 else 0
+        # effective_tokens_per_second = output_token_count / total_time_seconds if total_time_seconds > 0 else 0
         
         return {
             'ttft_seconds': ttft_seconds,

@@ -45,10 +45,7 @@ class ToolIntegrationWrapper(AgentSystem):
         """
         if num_agents is not None and num_agents > 1:
             # Multi-agent: partition tools
-            if isinstance(problem, dict):
-                problem_desc = problem.get("problem", "")
-            else:
-                problem_desc = str(problem)
+            problem_desc = problem.get("problem", "") if isinstance(problem, dict) else str(problem)
             return self.selector.select_tools(
                 problem_desc,
                 num_agents=num_agents,
@@ -56,17 +53,13 @@ class ToolIntegrationWrapper(AgentSystem):
             )
         else:
             # Single-agent: select top tools
-            if isinstance(problem, dict):
-                problem_desc = problem.get("problem", "")
-            else:
-                problem_desc = str(problem)
+            problem_desc = problem.get("problem", "") if isinstance(problem, dict) else str(problem)
             return self.selector.select_tools(problem_desc)
     
     def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Delegate to inner agent's run_agent method and log tool calls if present."""
         result = self.inner.run_agent(problem, **kwargs)
         # Check for tool call in the result (LangChain AIMessage convention)
-        tool_calls = None
         if isinstance(result, dict):
             # If result contains 'messages', check for tool_calls in each message
             messages = result.get("messages", [])

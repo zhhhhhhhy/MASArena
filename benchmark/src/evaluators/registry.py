@@ -65,7 +65,7 @@ class BenchmarkRegistry:
 
     def get_available_benchmark_names(self) -> list[str]:
         """Returns a list of names of all registered benchmarks."""
-        return sorted(list(self._benchmarks.keys()))
+        return sorted(self._benchmarks.keys())
 
 # Create a global instance of the registry for the application to use.
 benchmark_registry = BenchmarkRegistry()

@@ -201,13 +201,14 @@ class RecruiterAgent:
                                 structured_data = parsed_json
                             else:
                                 structured_data = {"agents": self._create_default_experts()}
-                        except:
+                        except Exception as e:
+                            print(f"[WARNING] Error parsing recruiter content: {str(e)}")
                             structured_data = {"agents": self._create_default_experts()}
                     else:
                         # 无法找到有效的JSON，创建默认专家
                         structured_data = {"agents": self._create_default_experts()}
             except Exception as parse_error:
-                print(f"Error parsing recruiter content: {str(parse_error)}")
+                print(f"[WARNING] Error parsing recruiter content: {str(parse_error)}")
                 structured_data = {"agents": self._create_default_experts()}
             
             return {
@@ -476,8 +477,6 @@ class Evaluator:
             # 存储当前质量评分以供下次迭代比较
             self.previous_solution_quality = current_quality
             
-            # 获取usage_metadata
-            usage_metadata = raw_response.usage_metadata if hasattr(raw_response, "usage_metadata") else None
             
             # 设置名称
             raw_response.name = "evaluator"

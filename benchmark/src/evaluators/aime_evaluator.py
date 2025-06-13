@@ -43,7 +43,7 @@ class AIMEEvaluator(BaseEvaluator):
         if matches:
             return matches[-1].replace(",", "").strip()
         # Fallback: last non-empty line
-        lines = [l.strip() for l in str(text).splitlines() if l.strip()]
+        lines = [line.strip() for line in str(text).splitlines() if line.strip()]
         return lines[-1] if lines else str(text).strip()
 
     def calculate_score(self, expected_output: str, prediction: str) -> Tuple[int, str]:

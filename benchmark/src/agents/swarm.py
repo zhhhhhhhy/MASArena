@@ -220,7 +220,6 @@ class SwarmSystem(AgentSystem):
             Dictionary of run results including messages with usage metadata
         """
         problem_text = problem["problem"]
-        problem_id = problem.get("id", f"problem_{hash(problem_text)}")
         
         # Create swarm agents and aggregator
         # _create_agents now returns a dict, extract workers

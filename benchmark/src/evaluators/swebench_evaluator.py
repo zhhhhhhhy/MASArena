@@ -399,7 +399,7 @@ class SWEBenchEvaluator(BaseEvaluator):
             # Check for the expected matrix pattern
             expected_matrix_pattern = r'\[\[\s*True,\s*True,\s*False,\s*False\s*\],\s*\[\s*True,\s*True,\s*False,\s*False\s*\],\s*\[\s*False,\s*False,\s*True,\s*False\s*\],\s*\[\s*False,\s*False,\s*False,\s*True\s*\]\]'
             if re.search(expected_matrix_pattern, text):
-                print(f"DEBUG: Found expected matrix pattern in text")
+                print("DEBUG: Found expected matrix pattern in text")
                 # Generate the expected patch for this specific problem
                 return """diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 --- a/astropy/modeling/separable.py
@@ -507,11 +507,11 @@ class SWEBenchEvaluator(BaseEvaluator):
         
         # Special handling for separability_matrix problem
         if "separability_matrix" in problem_text or "separability matrix" in problem_text or problem_id == "problem_1":
-            print(f"DEBUG: Detected separability_matrix problem")
+            print("DEBUG: Detected separability_matrix problem")
             
             # If no patch is provided, check if we should still pass the test
             if not patch or len(patch.strip()) < 10:
-                print(f"DEBUG: No valid patch provided for separability_matrix problem")
+                print("DEBUG: No valid patch provided for separability_matrix problem")
                 return {
                     "success": False,
                     "error": "No valid patch provided for separability_matrix problem",
@@ -554,10 +554,10 @@ class SWEBenchEvaluator(BaseEvaluator):
             
             # Check for diff format
             if "diff --git" in patch and "---" in patch and "+++" in patch:
-                print(f"DEBUG: Patch has proper diff format")
+                print("DEBUG: Patch has proper diff format")
                 # Check if the patch modifies the right file
                 if "separable.py" in patch:
-                    print(f"DEBUG: Patch modifies the correct file")
+                    print("DEBUG: Patch modifies the correct file")
                     return {
                         "success": True,
                         "test_result": {
@@ -591,7 +591,7 @@ class SWEBenchEvaluator(BaseEvaluator):
             if problem_id == "problem_1" or "separability_matrix" in problem.get("problem", "").lower():
                 # Check if the patch modifies the right file
                 if "separable.py" in patch:
-                    print(f"DEBUG: Patch modifies the correct file for separability_matrix problem")
+                    print("DEBUG: Patch modifies the correct file for separability_matrix problem")
                     
                     # Check for key solution patterns
                     solution_patterns = [
@@ -613,7 +613,7 @@ class SWEBenchEvaluator(BaseEvaluator):
                                 "success": True,
                                 "test_result": {
                                     "returncode": 0,
-                                    "stdout": f"Test passed (valid solution approach detected)",
+                                    "stdout": "Test passed (valid solution approach detected)",
                                     "stderr": ""
                                 },
                                 "patch": patch
@@ -633,7 +633,7 @@ class SWEBenchEvaluator(BaseEvaluator):
                 
                 # If we have any patch for problem_1, consider it a success
                 if problem_id == "problem_1" and len(patch) > 50:
-                    print(f"DEBUG: Accepting patch for problem_1 based on length")
+                    print("DEBUG: Accepting patch for problem_1 based on length")
                     return {
                         "success": True,
                         "test_result": {
@@ -759,7 +759,7 @@ class SWEBenchEvaluator(BaseEvaluator):
         """
         # Handle None or empty solutions
         if solution is None or (isinstance(solution, str) and not solution.strip()):
-            print(f"DEBUG: Empty solution received")
+            print("DEBUG: Empty solution received")
             return ""
             
         # Special handling for separability_matrix problem
@@ -778,7 +778,7 @@ class SWEBenchEvaluator(BaseEvaluator):
             
             # For separability_matrix problem, look for the expected patch
             if "separability_matrix" in solution.lower() and ("nested" in solution.lower() or "compound" in solution.lower()):
-                print(f"DEBUG: Generating expected patch for separability_matrix problem")
+                print("DEBUG: Generating expected patch for separability_matrix problem")
                 # Generate the expected patch for this specific problem
                 return """diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 --- a/astropy/modeling/separable.py
@@ -800,7 +800,7 @@ class SWEBenchEvaluator(BaseEvaluator):
                 for block in code_blocks:
                     # Check if this block contains relevant code
                     if "cright" in block and "right.shape" in block:
-                        print(f"DEBUG: Found relevant code block for separability_matrix")
+                        print("DEBUG: Found relevant code block for separability_matrix")
                         # Format as a proper diff
                         return """diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 --- a/astropy/modeling/separable.py
@@ -878,7 +878,7 @@ class SWEBenchEvaluator(BaseEvaluator):
         problem_id = problem.get("id", problem.get("problem_id", ""))
         if problem_id == "problem_1" or "separability_matrix" in problem.get("problem", "").lower():
             # Print debug information
-            print(f"DEBUG: Processing problem_1 (separability_matrix)")
+            print("DEBUG: Processing problem_1 (separability_matrix)")
             print(f"DEBUG: Prediction length: {len(prediction)}")
             
             # Check if the prediction contains key understanding indicators
@@ -918,7 +918,7 @@ class SWEBenchEvaluator(BaseEvaluator):
             # Check for the expected matrix pattern
             expected_matrix_pattern = r'\[\[\s*True,\s*True,\s*False,\s*False\s*\],\s*\[\s*True,\s*True,\s*False,\s*False\s*\],\s*\[\s*False,\s*False,\s*True,\s*False\s*\],\s*\[\s*False,\s*False,\s*False,\s*True\s*\]\]'
             if re.search(expected_matrix_pattern, prediction):
-                print(f"DEBUG: Found expected matrix pattern in prediction")
+                print("DEBUG: Found expected matrix pattern in prediction")
                 understanding_score += 3  # Give extra points for the correct matrix
             
             # Extract patch from prediction
@@ -926,7 +926,7 @@ class SWEBenchEvaluator(BaseEvaluator):
             
             # If the model shows good understanding, consider it a success
             if understanding_score >= 2:  # Lowered threshold from 3 to 2
-                print(f"DEBUG: Model shows good understanding of the problem")
+                print("DEBUG: Model shows good understanding of the problem")
                 # Generate the expected patch for consistency
                 expected_patch = """diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py
 --- a/astropy/modeling/separable.py
@@ -964,7 +964,7 @@ class SWEBenchEvaluator(BaseEvaluator):
             
             # If we have a substantial response for problem_1, give it at least some credit
             if len(prediction) > 500:
-                print(f"DEBUG: Giving partial credit for substantial response to problem_1")
+                print("DEBUG: Giving partial credit for substantial response to problem_1")
                 result = {
                     "success": False,
                     "partial_score": 0.3,
@@ -1118,11 +1118,11 @@ class SWEBenchEvaluator(BaseEvaluator):
         # Special handling for problem_1 (separability_matrix)
         problem_id = problem.get("id", problem.get("problem_id", ""))
         if problem_id == "problem_1" or "separability_matrix" in problem.get("problem", "").lower():
-            print(f"DEBUG: Special handling for problem_1 (separability_matrix)")
+            print("DEBUG: Special handling for problem_1 (separability_matrix)")
             
             # If we have any non-empty prediction for problem_1, consider it a success
             if prediction and len(prediction.strip()) > 100:  # Require at least some substantial content
-                print(f"DEBUG: Forcing success for problem_1 with substantial response")
+                print("DEBUG: Forcing success for problem_1 with substantial response")
                 
                 # Generate the expected patch for consistency
                 expected_patch = """diff --git a/astropy/modeling/separable.py b/astropy/modeling/separable.py

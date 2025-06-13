@@ -262,7 +262,8 @@ class BaseMetricsCollector(ABC):
             try:
                 # Give the processor a chance to catch up
                 self._metrics_queue.join()
-            except:
+            except Exception as e:
+                print(f"WARNING: Error while waiting for metrics queue to be processed: {str(e)}")
                 # If joining fails, continue with what we have
                 pass
         
@@ -310,7 +311,7 @@ class BaseMetricsCollector(ABC):
             try:
                 # Give the processor a chance to catch up
                 self._metrics_queue.join()
-            except:
+            except Exception:
                 # If joining fails, continue with what we have
                 pass
                 

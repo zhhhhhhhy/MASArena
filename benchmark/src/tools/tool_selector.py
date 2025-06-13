@@ -171,9 +171,7 @@ class ToolSelector:
             
             matches = [kw.lower() in name or kw.lower() in desc for kw in keywords]
             
-            if match_all and all(matches):
-                results.append(tool)
-            elif not match_all and any(matches):
+            if match_all and all(matches) or not match_all and any(matches):
                 results.append(tool)
                 
         return results

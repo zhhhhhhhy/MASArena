@@ -10,6 +10,7 @@ import uuid
 import os
 import json
 from typing import Dict, Any
+import contextlib
 
 from openai import OpenAI
 from dotenv import load_dotenv
@@ -67,10 +68,8 @@ class SingleAgent(AgentSystem):
         # Extract content from response
         response_content = response.choices[0].message.content
         response_content = response_content.replace('\r\n', '\n').replace('\r', '\n').strip()
-        try:
+        with contextlib.suppress(UnicodeDecodeError):
             response_content = response_content.encode('utf-8').decode('utf-8-sig')  # Remove BOM
-        except UnicodeDecodeError:
-            pass  # Ignore if already clean
         
 
         # Create message object with usage metadata

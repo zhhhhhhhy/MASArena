@@ -20,13 +20,7 @@ class MockTripleAgentSystem(AgentSystem):
         responses = []
         for i, worker in enumerate(self.workers):
             # Each worker uses its LLM to generate a response
-            if hasattr(worker, "llm"):
-                # In a real system, this would be: response = worker.llm.invoke(problem["problem"])
-                # For mock, simulate a response object (could be a MagicMock or a dict)
-                response = worker.llm.invoke(problem["problem"])
-            else:
-                # Fallback: just return a string
-                response = f"Worker {i} response"
+            response = worker.llm.invoke(problem["problem"]) if hasattr(worker, "llm") else f"Worker {i} response"
             responses.append(response)
         return {"messages": responses}
 

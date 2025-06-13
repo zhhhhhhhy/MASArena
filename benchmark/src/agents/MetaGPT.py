@@ -45,7 +45,7 @@ class Agent:
 class MetaGPT(AgentSystem):
     def __init__(self, name: str = None, config: Dict[str, Any] = None):
         super().__init__(name, config)
-        create_agents_result = self._create_agents()
+        self._create_agents()
         self.message_queue = []
         self.task_status = {
             "current_task": None,

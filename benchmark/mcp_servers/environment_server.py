@@ -597,7 +597,7 @@ def handle_get_system_info(args: Dict[str, Any]) -> None:
                 cpu_result = run_command(cpu_info_cmd)
                 if cpu_result["returncode"] == 0:
                     system_info["cpu_info"] = cpu_result["stdout"].splitlines()[1].strip()
-        except:
+        except Exception:
             system_info["cpu_info"] = "Unknown"
         
         # Get memory information
@@ -615,14 +615,14 @@ def handle_get_system_info(args: Dict[str, Any]) -> None:
                         mem_bytes = int(mem_result["stdout"])
                         mem_gb = mem_bytes / (1024**3)
                         system_info["memory_info"] = f"Total Memory: {mem_gb:.2f} GB"
-                    except:
+                    except Exception:
                         system_info["memory_info"] = mem_result["stdout"]
             elif platform.system() == "Windows":
                 mem_info_cmd = ["wmic", "OS", "get", "FreePhysicalMemory,TotalVisibleMemorySize"]
                 mem_result = run_command(mem_info_cmd)
                 if mem_result["returncode"] == 0:
                     system_info["memory_info"] = mem_result["stdout"]
-        except:
+        except Exception:
             system_info["memory_info"] = "Unknown"
         
         # Get Docker status
@@ -632,7 +632,7 @@ def handle_get_system_info(args: Dict[str, Any]) -> None:
             system_info["docker_available"] = docker_result["returncode"] == 0
             if system_info["docker_available"]:
                 system_info["docker_version"] = docker_result["stdout"]
-        except:
+        except Exception:
             system_info["docker_available"] = False
         
         # Get Python package information
@@ -641,7 +641,7 @@ def handle_get_system_info(args: Dict[str, Any]) -> None:
             pip_result = run_command(pip_list_cmd)
             if pip_result["returncode"] == 0:
                 system_info["python_packages"] = pip_result["stdout"]
-        except:
+        except Exception:
             system_info["python_packages"] = "Unknown"
         
         send_response("success", system_info)

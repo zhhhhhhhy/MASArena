@@ -438,7 +438,7 @@ def main():
     # Run hyperparameter experiment if requested
     if args.experiment:
         print("\nRunning hyperparameter experiment...")
-        experiment_results = experiment_with_hyperparameters(inference_metrics, args.output)
+        experiment_with_hyperparameters(inference_metrics, args.output)
     
     print(f"\nAll results saved to {args.output}")
 

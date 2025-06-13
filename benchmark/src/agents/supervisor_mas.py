@@ -86,10 +86,7 @@ class AgentNode:
 
     @traceable
     def __call__(self, state: State) -> Command[Literal["supervisor"]]:
-        if self.agent is None:
-            current_agent = self._create_and_get_agent()
-        else:
-            current_agent = self.agent
+        current_agent = self._create_and_get_agent() if self.agent is None else self.agent
         
         agent_input = {"messages": state["messages"]}
 
