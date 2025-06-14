@@ -330,7 +330,7 @@ class Evaluator:
             model=self.model_name
         )
         
-    def evaluate(self, problem: str, solutions: List[Dict[str, Any]], iteration: int, previous_solutions: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+    def evaluate(self, problem: str, solutions: List[Dict[str, Any]], iteration: int, previous_solutions: List[Dict[str, Any]] = None, format_prompt: str = "") -> Dict[str, Any]:
         """
         Evaluate solutions from multiple agents and decide whether to:
         1. Provide final solution if satisfactory
@@ -412,7 +412,7 @@ class Evaluator:
         If you decide the solutions collectively solve the problem:
         - Provide a detailed final solution combining the best insights from all experts
         - Include step-by-step reasoning
-        - {self.format_prompt} 
+        - {format_prompt} 
         
         If you decide the solutions need improvement:
         - Explain what aspects of the problem remain inadequately addressed
@@ -789,7 +789,7 @@ class AgentVerse(AgentSystem):
                 previous_solutions = all_solutions[iteration-2]["solutions"]
             
             # Evaluate solutions，传递上一轮的解决方案用于比较
-            evaluation_result = evaluator.evaluate(problem_text, agent_solutions, iteration, previous_solutions)
+            evaluation_result = evaluator.evaluate(problem_text, agent_solutions, iteration, previous_solutions, self.format_prompt)
             evaluation = evaluation_result.get("evaluation", {})
             
             # Add evaluator message
