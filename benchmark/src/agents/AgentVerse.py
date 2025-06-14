@@ -412,7 +412,7 @@ class Evaluator:
         If you decide the solutions collectively solve the problem:
         - Provide a detailed final solution combining the best insights from all experts
         - Include step-by-step reasoning
-        - For mathematical problems, include the final answer in the format: \\boxed{{answer}}
+        - {self.format_prompt} 
         
         If you decide the solutions need improvement:
         - Explain what aspects of the problem remain inadequately addressed

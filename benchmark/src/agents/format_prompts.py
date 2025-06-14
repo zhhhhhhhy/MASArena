@@ -92,6 +92,7 @@ Begin now. Remember: output only the compliant answer.
         prompt="""
 - Provide only the final answer within <answer>...</answer> tags, ensuring it matches the exact format required by the problem.
 - Ensure the final answer is a single line with no extra whitespace or formatting.
+- Only output the answer directly to the questions' options, no other text or explanations.
    <answer>
    [Your final answer here]
    </answer>
@@ -170,7 +171,8 @@ def get_format_prompt(dataset_name: str) -> Optional[str]:
     # Handle special cases for code generation tasks
     if dataset_name in ["mbpp", "humaneval"]:
         return FORMAT_PROMPTS["code"].prompt
-        
+    if dataset_name in ["mmlu_pro", "mmlu"]:
+        return FORMAT_PROMPTS["mmlu"].prompt
     # Get prompt for other datasets
     prompt_info = FORMAT_PROMPTS.get(dataset_name.lower())
     return prompt_info.prompt if prompt_info else None

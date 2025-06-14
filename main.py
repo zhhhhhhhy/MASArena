@@ -6,6 +6,9 @@ from pathlib import Path
 import os
 
 from benchmark.benchmark_runner import BenchmarkRunner
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def main():
@@ -90,6 +93,7 @@ def main():
     Path(args.metrics_dir).mkdir(exist_ok=True)
 
     # Print header
+    
     print("\n" + "=" * 80)
     print(f"Multi-Agent Benchmark Runner ({datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
     print("=" * 80)
@@ -112,6 +116,7 @@ def main():
             agent_config=agent_config if agent_config else None,
             verbose=args.verbose,
         )
+        logger.info(f"Benchmark summary: {summary}")
         return 0
 
     except Exception as e:
