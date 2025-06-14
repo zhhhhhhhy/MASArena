@@ -152,8 +152,13 @@ class MMLU_ProEvaluator(BaseEvaluator):
         Evaluate an agent's solution to a MMLU_pro problem.
         
         Args:
-            problem: Normalized problem dictionary
-            run_result: The result from running the agent system
+            problem: Problem dictionary containing:
+                - question: Problem text (with options)
+                - answer: Correct answer (letter)
+                - answer_index: Index of correct answer (optional)
+            run_result: Results from agent's execution, containing:
+                - final_answer: Agent's final answer text
+                - messages: Agent's message history
             
         Returns:
             Evaluation results
