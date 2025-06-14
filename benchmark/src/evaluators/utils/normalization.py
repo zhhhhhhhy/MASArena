@@ -3,6 +3,26 @@ Utility functions for normalizing benchmark problem data.
 """
 from typing import Dict, Any
 
+def format_options(options: list) -> str:
+    """
+    Format options list into a readable string.
+    
+    Args:
+        options: List of options
+        
+    Returns:
+        Formatted options string
+    """
+    if not options:
+        return ""
+    
+    formatted = []
+    for i, option in enumerate(options):
+        letter = chr(ord('A') + i)
+        formatted.append(f"{letter}. {option}")
+    
+    return "\n".join(formatted)
+
 def normalize_problem_keys(problem: Dict[str, Any], key_mapping: Dict[str, str], problem_index: int) -> Dict[str, Any]:
     """
     Normalizes the keys of a problem dictionary based on a provided key mapping.
@@ -35,6 +55,14 @@ def normalize_problem_keys(problem: Dict[str, Any], key_mapping: Dict[str, str],
         source_key = key_mapping.get(source_key_name)
         if source_key and source_key in problem:
             normalized_problem[standard_key] = problem[source_key]
+
+    # Handle options field for MMLU problems
+    if "options" in problem:
+        options_text = format_options(problem["options"])
+        if "problem" in normalized_problem:
+            normalized_problem["problem"] = f"{normalized_problem['problem']}\n\nOptions:\n{options_text}"
+        else:
+            normalized_problem["problem"] = f"Options:\n{options_text}"
 
     # Ensure a unique ID for the problem, generating one if not provided.
     if "id" not in normalized_problem:
