@@ -148,9 +148,9 @@ Begin now. Remember: output only the compliant answer.
     
     "math": FormatPrompt(
         name="MATH",
-        prompt="""
+        prompt=f"""
 - Check for any calculation errors or logical flaws
-- Output the final answer in the format: \boxed{{answer}} without any other text. The final answer directly answers the question.
+- Put the final answer in the format: \\boxed{{answer}} without any other text inside the box. The final answer directly answers the question.
 """,
         description="Format prompt for math problems",
         dataset_type=DatasetType.MATH

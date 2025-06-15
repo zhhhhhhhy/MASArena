@@ -8,16 +8,16 @@ from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_community.callbacks.openai_info import OpenAICallbackHandler
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
-# 定义结构化输出类，使用TypedDict代替Pydantic
+# define structured output class, use TypedDict instead of Pydantic
 class AgentResponse(TypedDict):
-    """智能体响应的结构化输出"""
-    analysis: str  # 问题分析
-    solution: str  # 解决方案
-    confidence: int  # 解答信心程度，范围1-5
+    """Structured output for agent responses"""
+    analysis: str  # Problem analysis
+    solution: str  # Solution
+    confidence: int  # Confidence level in the solution, range 1-5
 
 @dataclass
 class Agent:
-    """代表一个LLM代理"""
+    """Represents an LLM agent"""
     agent_id: str
     name: str
     model_name: str
@@ -28,12 +28,12 @@ class Agent:
         self.chat_history = []
         self.llm = ChatOpenAI(
             model=self.model_name,
-            request_timeout=60,  # 设置请求超时为60秒
-            max_retries=2        # 设置最大重试次数为2
+            request_timeout=60,  # Set request timeout to 60 seconds
+            max_retries=2        # Set maximum retry attempts to 2
         )
 
     def generate_response(self, context: str) -> Any:
-        """生成代理响应"""
+        """Generate agent response"""
         messages = [
             SystemMessage(content=self.system_prompt),
             *[HumanMessage(content=msg["human"]) if msg.get("role") == "human" 
@@ -42,14 +42,14 @@ class Agent:
             HumanMessage(content=context)
         ]
         
-        # 使用结构化输出
+        # Use structured output
         try:
             callback_handler = OpenAICallbackHandler()
             config = {"callbacks": [callback_handler]}
             llm_with_schema = self.llm.with_structured_output(schema=AgentResponse, include_raw=True)
             response = llm_with_schema.invoke(messages, config=config)
             
-            # 获取结构化数据和原始响应
+            # Get structured data and raw response
             structured_data = response["parsed"]
             raw_response = response["raw"]
             
@@ -63,16 +63,16 @@ class Agent:
                     "output_token_details": {"reasoning": callback_handler.completion_tokens}
                 }
             
-            # 确保structured_data是字典而不是对象
+            # Ensure structured_data is a dictionary, not an object
             if hasattr(structured_data, "dict"):
                 structured_data = structured_data.dict()
             elif hasattr(structured_data, "model_dump"):
                 structured_data = structured_data.model_dump()
             
-            # 设置AI消息的名字
+            # Set AI message name
             raw_response.name = self.name
             
-            # 更新聊天历史
+            # Update chat history
             self.chat_history.append({
                 "role": "human",
                 "human": context
@@ -82,7 +82,7 @@ class Agent:
                 "ai": raw_response.content
             })
             
-            # 返回原始响应对象，保留usage_metadata
+            # Return raw response object, preserving usage_metadata
             return {
                 "message": raw_response,
                 "structured_solution": structured_data,
@@ -90,9 +90,9 @@ class Agent:
             }
             
         except Exception as e:
-            print(f"结构化输出失败: {str(e)}，回退到标准输出")
+            print(f"Structured output failed: {str(e)}, falling back to standard output")
             
-            # 回退到标准输出
+            # Fallback to standard output
             callback_handler = OpenAICallbackHandler()
             config = {"callbacks": [callback_handler]}
             response = self.llm.invoke(messages, config=config)
@@ -123,22 +123,22 @@ class Agent:
             }
 
 class ResultExtractor:
-    """从对话历史中提取最终结果"""
+    """Extract final results from conversation history"""
     def __init__(self, model_name: str = None, format_prompt: str = ""):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.format_prompt = format_prompt
         self.llm = ChatOpenAI(
             model=self.model_name,
-            request_timeout=60,  # 设置请求超时为60秒
-            max_retries=2        # 设置最大重试次数为2
+            request_timeout=60,  # Set request timeout to 60 seconds
+            max_retries=2        # Set maximum retry attempts to 2
         )
         self.name = "result_extractor"
         
     def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> Dict[str, Any]:
         """
-        从所有代理的对话历史中提取最终答案
+        Extract final answer from all agents' conversation histories
         """
-        # 根据问题类型选择不同的提示
+        # Select different prompts based on problem type
         prompt = f"""Original problem: {problem}
 
 Below are the discussion histories of multiple AI agents:
@@ -176,13 +176,13 @@ Please analyze the above discussions and provide a final answer. Requirements:
                 "message": response
             }
         except Exception as e:
-            print(f"调用 LLM 失败: {str(e)}")
+            print(f"LLM call failed: {str(e)}")
             return {
                 "message": None
             }
 
     def _format_histories(self, all_histories: List[List[Dict[str, str]]]) -> str:
-        """格式化所有对话历史"""
+        """Format all conversation histories"""
         formatted = []
         agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         for i, history in enumerate(all_histories):
@@ -196,7 +196,7 @@ Please analyze the above discussions and provide a final answer. Requirements:
         
 
 class ChatEval(AgentSystem):
-    """基于迭代辩论的多智能体评估系统"""
+    """Multi-agent evaluation system based on iterative debate"""
     
     def __init__(self, name: str = "chateval", config: Dict[str, Any] = None):
         super().__init__(name, config)
@@ -205,7 +205,7 @@ class ChatEval(AgentSystem):
         self.num_rounds = self.config.get("num_rounds", 2)
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         
-        # 初始化代理 and extractor via _create_agents
+        # Initialize agents and extractor via _create_agents
         # self.agents and self.extractor will be set by _create_agents
         agent_components = self._create_agents()
         self.agents = [w for w in agent_components["workers"] if isinstance(w, Agent)]
@@ -215,7 +215,7 @@ class ChatEval(AgentSystem):
         self.extractor = extractors[0]
 
     def _create_agents(self) -> List[Agent]:
-        """创建多个代理实例和结果提取器"""
+        """Create multiple agent instances and result extractor"""
         # This method will be patched by ToolIntegrationWrapper if this system is wrapped.
         # The wrapper expects a dictionary: {"workers": [worker1, worker2, ...]}
         # Each worker should have a .name and .llm attribute.
@@ -241,8 +241,8 @@ class ChatEval(AgentSystem):
         }
 
     def _get_agent_prompt(self, agent_index: int) -> str:
-        """为每个代理生成特定的系统提示"""
-        # 为三个不同角色设置不同的prompt
+        """Generate specific system prompt for each agent"""
+        # Set different prompts for three different roles
         if agent_index == 0:
             return """You are a Mathematics Expert, focused on solving mathematical problems. You need to:
 1. Carefully analyze the key points of mathematical problems
@@ -272,26 +272,26 @@ You are the Logic Expert, focused on providing logical perspective analysis."""
 You are the Critical Thinking Expert, focused on providing multi-angle perspective analysis."""
 
     def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """运行迭代辩论过程"""
+        """Run iterative debate process"""
         problem_text = problem["problem"]
 
-        # 存储所有LLM响应对象
+        # store all LLM response objects
         all_messages = []
         agent_histories = []
         
-        # 迭代讨论过程
+        # iterative discussion process
         agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         for t in range(self.num_rounds):
             for n, agent in enumerate(self.agents):
-                # 生成当前代理的响应
+                # generate response for current agent
                 context = self._build_context(problem_text, n, t)
                 response_data = agent.generate_response(context)
                 
-                # 保存响应对象
+                # save response object
                 if "message" in response_data:
                     all_messages.append(response_data["message"])
                 
-                # 将响应添加到后续代理的上下文
+                # add response to context of subsequent agents
                 solution_text = response_data.get("solution", "")
                 for m in range(n + 1, len(self.agents)):
                     self.agents[m].chat_history.append({
@@ -299,22 +299,22 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
                         "human": f"{agent_names[n]}'s response: {solution_text}"
                     })
         
-        # 提取所有代理的聊天历史
+        # extract all agent chat histories
         agent_histories = [agent.chat_history for agent in self.agents]
         
-        # 提取最终答案
+        # extract final answer
         extractor_result = self.extractor.extract(agent_histories, problem_text)
         
-        # 添加评估器消息
+        # add evaluator message
         if "message" in extractor_result and extractor_result["message"]:
             all_messages.append(extractor_result["message"])
         return {
-            "messages": all_messages,  # 包含所有LLM响应对象
+            "messages": all_messages,  # contains all LLM response objects
             "final_answer": extractor_result["message"].content
         }
 
     def _build_context(self, problem: str, agent_index: int, round_num: int) -> str:
-        """构建当前代理的上下文"""
+        """Build context for current agent"""
         agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
         agent_name = agent_names[agent_index]
         
@@ -336,7 +336,7 @@ Please provide your insights based on previous discussions. You can:
 5. Do not overly expand to other problems
 If the problem is multiple choice, please indicate your chosen option clearly in your response."""
 
-# 注册代理系统
+# register agent system
 AgentSystemRegistry.register(
     "chateval",
     ChatEval,
@@ -345,9 +345,9 @@ AgentSystemRegistry.register(
 )
 
 if __name__ == "__main__":
-    # 测试
+    # test
     problem = {
-        "problem": "一个正整数，它的平方根是 452，求这个正整数。"
+        "problem": "A positive integer, its square root is 452, find this positive integer."
     }
     agent = ChatEval(name="chateval", config={"num_agents": 3, "num_rounds": 2})
     result = agent.run_agent(problem)

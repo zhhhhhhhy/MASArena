@@ -11,25 +11,25 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
-# 为结构化输出定义TypedDict类
+# Define TypedDict classes for structured output
 class ExpertTeam(TypedDict):
-    """专家团队配置"""
+    """Expert team configuration"""
     agents: List[Dict[str, Any]]
 
 class ExpertSolution(TypedDict):
-    """专家解决方案"""
+    """Expert solution"""
     analysis: str
     solution: str
-    confidence: int  # 1-5分表示专家对自己解答的信心
+    confidence: int  # 1-5 score indicating expert's confidence in their answer
 
 class EvaluationResult(TypedDict):
-    """评估结果"""
-    status: str  # "complete" 或 "need_new_experts"
-    final_solution: str  # 最终解决方案
-    feedback: str  # 反馈意见（如果需要新专家）
-    reasoning: str  # 评估理由
-    improvement_score: float  # 与上次迭代相比的改进程度（0-1）
-    solution_quality: float  # 解决方案质量评分（0-1）
+    """Evaluation result"""
+    status: str  # "complete" or "need_new_experts"
+    final_solution: str  # final solution
+    feedback: str  # feedback (if new experts are needed)
+    reasoning: str  # evaluation reasoning
+    improvement_score: float  # improvement degree compared to last iteration (0-1)
+    solution_quality: float  # solution quality score (0-1)
 
 # Load environment variables
 load_dotenv()
@@ -62,15 +62,16 @@ class RecruiterAgent:
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.num_agents = num_agents
         self.system_prompt = (
-            "You are a professional AI recruitment expert who needs to generate the right work team configuration based on the needs of the problem."
-            """Please strictly follow the following rules:
-            1. Generate expert descriptions in different fields based on problem requirements
-            2. If feedback is provided, adapt the team composition to address the feedback
-            3. Each expert should have specialized knowledge relevant to the problem
-            4. Each expert should have a clearly defined role with specific responsibilities
-            5. The team should collectively cover all aspects of the problem"""
+            "You are the leader of a group of experts who needs to recruit the right team configuration to solve complex problems.\n\n"
+            "Your responsibilities:\n"
+            "1. Analyze the problem and identify necessary expertise areas\n"
+            "2. Generate diverse expert descriptions with complementary specializations\n"
+            "3. Ensure each expert has clearly defined roles and responsibilities\n"
+            "4. Adapt team composition based on feedback when provided\n\n"
+            "Each expert should have specialized knowledge directly relevant to the problem, "
+            "and the team should collectively be capable of solving the complete problem."
         )
-        # 使用结构化输出初始化LLM
+        # Initialize LLM with structured output
         self.llm = ChatOpenAI(
             model=self.model_name
         )
@@ -82,28 +83,24 @@ class RecruiterAgent:
             Previous evaluation feedback:
             {feedback}
             
-            IMPORTANT: Consider this feedback when forming your new team of experts.
-            You may need to completely change the experts or adjust their roles and responsibilities.
+            Please consider this feedback when forming your new team of experts.
             """
             
         return f"""
-            Generate the configuration of {self.num_agents} expert agents based on the following problem requirements:
+            Generate the configuration of {self.num_agents} expert agents based on the following problem:
 
-            Problem description:
+            Problem:
             {problem}
             
             {feedback_section}
 
-            Please analyze the problem carefully and identify what specialized knowledge would be needed to solve it.
-            Then create a team of experts with complementary skills that together can address all aspects of the problem.
+            What experts will you recruit to better solve this problem?
 
             For each expert, provide:
-            1. A descriptive name reflecting their expertise area
-            2. A detailed description of their role and responsibilities
-            3. An ID number (starting from 1)
+            1. Agent ID (starting from 1)
+            2. Expert name reflecting their expertise area  
+            3. Detailed description of their role and responsibilities
 
-            Think step by step about different aspects of the problem and how each expert will contribute.
-            If feedback was provided, make sure your new team addresses those specific concerns.
 
             Agent ID: {self.agent_id}
         """
@@ -115,26 +112,26 @@ class RecruiterAgent:
         ]
 
         start_time = time.time()
-        end_time = start_time  # 初始化end_time，防止异常情况下未定义
+        end_time = start_time  # Initialize end_time to prevent undefined errors
         
         try:
-            # 使用结构化输出调用LLM
+            # Use structured output to call LLM
             llm_with_schema = self.llm.with_structured_output(schema=ExpertTeam, include_raw=True)
             response = llm_with_schema.invoke(messages)
-            end_time = time.time()  # 更新end_time
+            end_time = time.time()  # Update end_time
             
-            # 从结构化响应中提取内容
+            # Extract content from structured response
             structured_data = response["parsed"]
             raw_response = response["raw"]
             
-            # 验证结构化数据
+            # Validate structured data
             if not isinstance(structured_data, dict) or "agents" not in structured_data or not structured_data["agents"]:
                 print(f"Warning: Invalid or empty response from recruiter. Raw content: {raw_response.content[:200]}...")
-                # 从原始响应尝试提取专家信息
+                # Try to extract expert information from raw response
                 try:
-                    # 尝试解析JSON
+                    # Try to parse JSON
                     import re
-                    # 查找可能的JSON对象
+                    # Look for possible JSON objects
                     json_match = re.search(r'(\{.*\})', raw_response.content.replace('\n', ' '), re.DOTALL)
                     if json_match:
                         potential_json = json_match.group(1)
@@ -142,7 +139,7 @@ class RecruiterAgent:
                         if "agents" in parsed_data and parsed_data["agents"]:
                             structured_data = parsed_data
                         else:
-                            # 创建默认专家团队
+                            # Create default expert team
                             structured_data = {"agents": self._create_default_experts()}
                     else:
                         structured_data = {"agents": self._create_default_experts()}
@@ -151,30 +148,30 @@ class RecruiterAgent:
                     structured_data = {"agents": self._create_default_experts()}
             
             
-            # 设置名称
+            # Set name
             raw_response.name = f"recruiter_{self.agent_id}"
             
             return {
                 "agent_id": self.agent_id,
                 "solution": structured_data,
-                "message": raw_response,  # 保存原始消息以保留usage_metadata
+                "message": raw_response,  # Save original message to preserve usage_metadata
                 "latency_ms": (end_time - start_time) * 1000,
             }
             
         except Exception as e:
-            # 如果结构化输出失败，回退到标准模式
+            # If structured output fails, fall back to standard mode
             print(f"Structured output failed for recruiter: {str(e)}. Falling back to standard output.")
             
-            # 重新调用模型，不使用结构化输出
+            # Re-invoke model without structured output
             response = self.llm.invoke(messages)
             end_time = time.time()
             
-            # 设置名称
+            # Set name
             response.name = f"recruiter_{self.agent_id}"
             
-            # 尝试从响应内容中提取JSON
+            # Try to extract JSON from response content
             try:
-                # 尝试直接解析为JSON
+                # Try to parse directly as JSON
                 content_text = response.content
                 try:
                     content_json = json.loads(content_text)
@@ -183,7 +180,7 @@ class RecruiterAgent:
                     else:
                         structured_data = {"agents": self._create_default_experts()}
                 except json.JSONDecodeError:
-                    # 尝试在文本中查找JSON部分
+                    # Try to find JSON part in text
                     import re
                     json_match = re.search(r'(\{.*\})', content_text.replace('\n', ' '), re.DOTALL)
                     if json_match:
@@ -198,7 +195,7 @@ class RecruiterAgent:
                             print(f"[WARNING] Error parsing recruiter content: {str(e)}")
                             structured_data = {"agents": self._create_default_experts()}
                     else:
-                        # 无法找到有效的JSON，创建默认专家
+                        # If no valid JSON found, create default experts
                         structured_data = {"agents": self._create_default_experts()}
             except Exception as parse_error:
                 print(f"[WARNING] Error parsing recruiter content: {str(parse_error)}")
@@ -212,15 +209,15 @@ class RecruiterAgent:
             }
     
     def _create_default_experts(self) -> List[Dict[str, Any]]:
-        """创建默认专家团队，当结构化输出失败时使用"""
+        """Create default expert team when structured output fails"""
         default_experts = []
         expert_types = [
-            {"name": "数学专家", "describe": "专门处理数学问题、计算和证明的专家。"},
-            {"name": "问题分析专家", "describe": "负责分析问题结构、拆解复杂问题的专家。"},
-            {"name": "解决方案专家", "describe": "整合分析结果，提供完整解决方案的专家。"}
+            {"name": "Mathematics Expert", "describe": "Expert specialized in mathematical problems, calculations and proofs."},
+            {"name": "Problem Analysis Expert", "describe": "Expert responsible for analyzing problem structure and breaking down complex problems."},
+            {"name": "Solution Expert", "describe": "Expert who integrates analysis results and provides complete solutions."}
         ]
         
-        # 根据设置的数量创建专家
+        # Create experts based on configured number
         for i in range(1, min(self.num_agents + 1, len(expert_types) + 1)):
             expert = expert_types[i-1].copy()
             expert["agent_id"] = i
@@ -230,16 +227,19 @@ class RecruiterAgent:
 
 class WorkAgent:
     """Work agent that solves specific aspects of a problem"""
-    def __init__(self, agent_id: str, system_prompt: str = None):
+    def __init__(self, agent_id: str, system_prompt: str = None, format_prompt: str = ""):
         self.agent_id = agent_id
         self.model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.system_prompt = (
-            f"{system_prompt}\n"
-            "## Output Requirements:\n"
-            "1. Analyze the problem from your expert perspective\n"
-            "2. Provide a detailed solution for your specific part of the problem\n"
-            "3. Rate your confidence in your solution (1-5 scale, with 5 being highest)\n"
-            "4. Structure your response logically with clear reasoning"
+            f"{system_prompt}\n\n"
+            f"You are a specialized expert participating in a collaborative problem-solving team.\n"
+            f"Your task is to analyze the problem from your expertise area and provide a detailed solution.\n\n"
+            f"Output requirements:\n"
+            f"- Analyze the problem from your expert perspective\n"
+            f"- Provide a detailed solution with clear reasoning\n"
+            f"- Rate your confidence in the solution (1-5 scale, 5 = highest confidence)\n"
+            f"- Explain your approach and methodology\n"
+            f"{format_prompt}"
         )
         self.llm = ChatOpenAI(
             model=self.model_name,
@@ -248,60 +248,75 @@ class WorkAgent:
 
     def solve(self, problem: str, feedback: str = None):
         """Solve a problem with optional feedback"""
-        problem_content = problem
+        feedback_section = ""
         if feedback:
-            problem_content += f"\n\nFeedback from previous evaluation:\n{feedback}\nPlease address this feedback in your solution."
+            feedback_section = f"""
+            Feedback from previous evaluation:
+            {feedback}
             
+            Please consider this feedback when analyzing the problem.
+            """
+            
+        problem_content = f"""
+        Problem to solve:
+        {problem}
+        
+        {feedback_section}
+        
+        As the expert described in your role, please analyze this problem from your specialized perspective and provide your solution. 
+        Include your reasoning process and rate your confidence in the solution.
+        """
+        
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=problem_content)
         ]
 
         start_time = time.time()
-        end_time = start_time  # 初始化end_time，防止异常情况下未定义
+        end_time = start_time  # Initialize end_time to prevent undefined errors
         
         try:
-            # 尝试使用结构化输出
+            # Try to use structured output
             llm_with_schema = self.llm.with_structured_output(schema=ExpertSolution, include_raw=True)
             response = llm_with_schema.invoke(messages)
-            end_time = time.time()  # 更新end_time
+            end_time = time.time()  # Update end_time
             
-            # 从结构化响应中提取内容
+            # Extract content from structured response
             structured_data = response["parsed"]
             raw_response = response["raw"]
             
-            # 确保structured_data中包含所需的所有字段
+            # Ensure structured_data contains all required fields
             if "solution" not in structured_data:
                 structured_data["solution"] = raw_response.content
             if "analysis" not in structured_data:
                 structured_data["analysis"] = "No analysis provided"
             if "confidence" not in structured_data:
-                structured_data["confidence"] = 3  # 默认中等信心
+                structured_data["confidence"] = 3  # Default medium confidence
             
             
-            # 设置名称
+            # Set name
             raw_response.name = f"expert_{self.agent_id}"
             
             return {
                 "agent_id": self.agent_id,
-                "solution": structured_data["solution"],  # 为了兼容现有代码，直接提取solution字段
-                "structured_solution": structured_data,  # 保存完整的结构化数据
-                "message": raw_response,  # 保存原始消息以保留usage_metadata
+                "solution": structured_data["solution"],  # Extract solution field directly for compatibility with existing code
+                "structured_solution": structured_data,  # Save complete structured data
+                "message": raw_response,  # Save original message to preserve usage_metadata
                 "latency_ms": (end_time - start_time) * 1000,
             }
             
         except Exception as e:
-            # 如果结构化输出失败，回退到标准模式
+            # If structured output fails, fall back to standard mode
             print(f"Structured output failed for agent {self.agent_id}: {str(e)}. Falling back to standard output.")
             
-            # 重新调用模型，不使用结构化输出
-            end_time = time.time()  # 记录之前尝试的时间
-            start_time = time.time()  # 重新计时
+            # Re-invoke model without structured output
+            end_time = time.time()  # Record time from previous attempt
+            start_time = time.time()  # Reset timer
             
             response = self.llm.invoke(messages)
             end_time = time.time()
             
-            # 设置名称
+            # Set name
             response.name = f"expert_{self.agent_id}"
             
             return {
@@ -316,9 +331,9 @@ class Evaluator:
     def __init__(self, model_name: str = None, max_iterations: int = 3, min_quality_threshold: float = 0.7, min_improvement_threshold: float = 0.1):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.max_iterations = max_iterations
-        self.min_quality_threshold = min_quality_threshold  # 最低解决方案质量阈值
-        self.min_improvement_threshold = min_improvement_threshold  # 最低改进阈值
-        self.previous_solution_quality = 0  # 上一轮解决方案的质量
+        self.min_quality_threshold = min_quality_threshold  # Minimum solution quality threshold
+        self.min_improvement_threshold = min_improvement_threshold  # Minimum improvement threshold
+        self.previous_solution_quality = 0  # Quality of previous round's solution
         self.llm = ChatOpenAI(
             model=self.model_name
         )
@@ -338,12 +353,12 @@ class Evaluator:
         Returns:
             Dictionary with evaluation results
         """
-        # 提取结构化解决方案（如果可用）
+        # Extract structured solutions (if available)
         solutions_details = []
         for sol in solutions:
             try:
                 if "structured_solution" in sol:
-                    # 使用结构化解决方案
+                    # Use structured solution
                     structured = sol["structured_solution"]
                     solutions_details.append(
                         f"Expert {sol['agent_id']}:\n"
@@ -352,7 +367,7 @@ class Evaluator:
                         f"Confidence: {structured.get('confidence', 3)}/5\n"
                     )
                 else:
-                    # 使用普通解决方案
+                    # Use regular solution
                     solutions_details.append(f"Expert {sol['agent_id']} solution:\n{sol.get('solution', 'No solution provided')}\n")
             except Exception as e:
                 print(f"Error processing solution from agent {sol.get('agent_id', 'unknown')}: {str(e)}")
@@ -360,7 +375,7 @@ class Evaluator:
                 
         solutions_text = "\n\n".join(solutions_details)
         
-        # 如果有上一轮的解决方案，添加到提示中进行比较
+        # If there are previous round solutions, add them to prompt for comparison
         previous_solutions_text = ""
         if previous_solutions and len(previous_solutions) > 0:
             prev_details = []
@@ -383,37 +398,73 @@ class Evaluator:
                 previous_solutions_text = "\n\nPrevious iteration solutions:\n" + "\n\n".join(prev_details)
         
         prompt = f"""
-        I need you to analyze multiple expert solutions to the same problem.
+        # Evaluation Task: Multi-Expert Solution Assessment
         
-        Original problem:
+        You are an expert evaluator responsible for analyzing multiple expert solutions and making critical decisions about the problem-solving process.
+        
+        ## Problem Context
+        **Original Problem:**
         {problem}
         
-        Current expert solutions:
+        **Current Iteration:** {iteration} of {self.max_iterations}
+        
+        ## Expert Solutions Analysis
+        **Current Expert Solutions:**
         {solutions_text}
         {previous_solutions_text}
         
-        This is iteration {iteration} out of {self.max_iterations}.
+        ## Your Evaluation Mission
+        As the lead evaluator, you must:
         
-        Your task:
-        1. Analyze each expert's solution and their confidence level
-        2. Determine if the solutions collectively solve the problem satisfactorily
-        3. If solutions are adequate, compile them into a comprehensive final solution
-        4. If solutions need improvement, provide specific feedback for recruiting better experts
-        5. Rate the overall quality of the current solutions (0-1 scale, with 1 being perfect)
-        6. If there are previous solutions, rate the improvement from previous to current solutions (0-1 scale)
+        ### 1. **Solution Quality Assessment**
+        - Analyze each expert's contribution and confidence level
+        - Identify strengths and weaknesses in the proposed solutions
+        - Evaluate how well the solutions collectively address the problem
+        - Rate the overall solution quality (0-1 scale, where 1 = perfect solution)
         
-        If you decide the solutions collectively solve the problem:
-        - Provide a detailed final solution combining the best insights from all experts
-        - Include step-by-step reasoning
-        - {format_prompt} 
+        ### 2. **Progress Evaluation** 
+        - Compare current solutions with previous iterations (if applicable)
+        - Assess the degree of improvement from previous rounds
+        - Rate the improvement score (0-1 scale, where 1 = major improvement)
         
-        If you decide the solutions need improvement:
-        - Explain what aspects of the problem remain inadequately addressed
-        - Provide specific feedback on what expertise is missing or needs enhancement
+        ### 3. **Decision Making**
+        Choose one of the following decisions:
         
-        In addition to deciding whether to continue or stop, you must provide two numerical scores:
-        1. solution_quality (0-1): How good is the current solution? (1 = perfect solution, 0 = no progress)
-        2. improvement_score (0-1): How much improvement compared to previous iteration? (1 = major improvement, 0 = no improvement)
+        **Option A: Complete the Process**
+        - If solutions collectively solve the problem satisfactorily
+        - If quality meets acceptable standards
+        - If maximum iterations reached
+        
+        **Option B: Continue with New Experts**
+        - If solutions have significant gaps or errors
+        - If specific expertise is missing
+        - If improvement potential remains high
+        
+        ## Response Requirements
+        
+        ### If Completing (status: "complete"):
+        - Provide a comprehensive final solution combining the best insights
+        - Include step-by-step reasoning and methodology
+        - Ensure the solution directly answers the original problem
+        {format_prompt}
+        
+        ### If Continuing (status: "need_new_experts"):
+        - Explain specific shortcomings in current solutions
+        - Identify what types of expertise are needed
+        - Provide actionable feedback for expert recruitment
+        
+        ## Quality Metrics
+        You must provide two numerical scores:
+        1. **solution_quality** (0-1): Overall quality of current solutions
+        2. **improvement_score** (0-1): Improvement compared to previous iteration
+        
+        ## Evaluation Standards
+        - Be objective and thorough in your analysis
+        - Consider both correctness and completeness of solutions
+        - Balance perfectionism with practical problem-solving needs
+        - Provide constructive feedback that guides improvement
+        
+        Your evaluation will determine whether the problem-solving process continues or concludes.
         """
         
         messages = [
@@ -422,19 +473,19 @@ class Evaluator:
         ]
         
         start_time = time.time()
-        end_time = start_time  # 初始化end_time，防止异常情况下未定义
+        end_time = start_time  # Initialize end_time to prevent undefined errors
         
         try:
-            # 使用结构化输出调用LLM
+            # Use structured output to call LLM
             llm_with_schema = self.llm.with_structured_output(schema=EvaluationResult, include_raw=True)
             response = llm_with_schema.invoke(messages)
-            end_time = time.time()  # 更新end_time
+            end_time = time.time()  # Update end_time
             
-            # 从结构化响应中提取内容
+            # Extract content from structured response
             structured_data = response["parsed"]
             raw_response = response["raw"]
             
-            # 确保structured_data中包含所需的所有字段
+            # Ensure all required fields exist in structured_data
             if "status" not in structured_data:
                 structured_data["status"] = "need_new_experts" if iteration < self.max_iterations else "complete"
             if "final_solution" not in structured_data:
@@ -444,77 +495,76 @@ class Evaluator:
             if "reasoning" not in structured_data:
                 structured_data["reasoning"] = "No reasoning provided"
             if "solution_quality" not in structured_data:
-                structured_data["solution_quality"] = 0.5  # 默认中等质量
+                structured_data["solution_quality"] = 0.5  # Default medium quality
             if "improvement_score" not in structured_data:
-                structured_data["improvement_score"] = 0.1  # 默认微小改进
+                structured_data["improvement_score"] = 0.1  # Default minimal improvement
                 
-            # 智能终止决策逻辑
+            # Smart termination decision logic
             current_quality = structured_data["solution_quality"]
             improvement = structured_data["improvement_score"]
             
-            # 条件1: 如果质量已经超过阈值，可以提前完成
+            # Condition 1: If quality exceeds threshold, complete early
             if current_quality >= self.min_quality_threshold:
                 structured_data["status"] = "complete"
                 print(f"Solution quality {current_quality} exceeds threshold {self.min_quality_threshold}, completing early.")
             
-            # 条件2: 如果改进低于阈值且不是首次迭代，可能陷入停滞
+            # Condition 2: If improvement below threshold and not first iteration, may be stuck
             if iteration > 1 and improvement < self.min_improvement_threshold:
                 structured_data["status"] = "complete"
                 print(f"Improvement {improvement} below threshold {self.min_improvement_threshold}, stopping iterations.")
             
-            # 条件3: 如果已达到最大迭代次数，必须完成
+            # Condition 3: If reached max iterations, must complete
             if iteration >= self.max_iterations:
                 structured_data["status"] = "complete"
                 print(f"Reached maximum iterations ({self.max_iterations}), completing.")
             
-            # 存储当前质量评分以供下次迭代比较
+            # Store current quality score for next iteration comparison
             self.previous_solution_quality = current_quality
             
-            
-            # 设置名称
+            # Set name
             raw_response.name = "evaluator"
             
             return {
                 "final_solution": structured_data["final_solution"],
-                "message": raw_response,  # 保存原始消息以保留usage_metadata
+                "message": raw_response,  # Save original message to preserve usage_metadata
                 "latency_ms": (end_time - start_time) * 1000,
                 "evaluation": structured_data,
             }
             
         except Exception as e:
-            # 如果结构化输出失败，回退到标准模式并尝试解析JSON
+            # If structured output fails, fall back to standard mode and try JSON parsing
             print(f"Structured output failed for evaluator: {str(e)}. Falling back to standard output and JSON parsing.")
             
-            # 重新调用模型，不使用结构化输出
+            # Re-invoke model without structured output
             response = self.llm.invoke(messages)
             end_time = time.time()
             
-            # 设置名称
+            # Set name
             response.name = "evaluator"
             
-            # 尝试从响应中解析JSON
+            # Try to parse JSON from response
             try:
-                # 清理响应，移除markdown代码块
+                # Clean response, remove markdown code blocks
                 content = response.content
                 import re
                 content = re.sub(r'```(?:json)?', '', content)
                 content = content.strip()
                 content = re.sub(r'```$', '', content).strip()
                 
-                # 尝试直接解析JSON
+                # Try direct JSON parsing
                 try:
                     evaluation = json.loads(content)
                 except json.JSONDecodeError:
-                    # 如果解析失败，尝试使用正则表达式提取JSON对象
+                    # If parsing fails, try regex to extract JSON object
                     json_match = re.search(r'({.*})', content.replace('\n', ' '), re.DOTALL)
                     
                     if json_match:
                         json_str = json_match.group(1)
-                        # 处理转义序列
+                        # Handle escape sequences
                         json_str = json_str.replace('\\', '\\\\')
                         evaluation = json.loads(json_str)
                     else:
-                        # 如果仍然无法提取，创建默认评估
+                        # If still can't extract, create default evaluation
                         evaluation = {
                             "status": "need_new_experts" if iteration < self.max_iterations else "complete",
                             "final_solution": response.content,
@@ -525,7 +575,7 @@ class Evaluator:
                         }
             except Exception as parse_error:
                 print(f"Error parsing evaluator response: {str(parse_error)}")
-                # 创建默认评估
+                # Create default evaluation
                 evaluation = {
                     "status": "need_new_experts" if iteration < self.max_iterations else "complete",
                     "final_solution": response.content,
@@ -535,7 +585,7 @@ class Evaluator:
                     "improvement_score": 0.1
                 }
             
-            # 确保所有必须的字段都存在
+            # Ensure all required fields exist
             if "status" not in evaluation:
                 evaluation["status"] = "need_new_experts" if iteration < self.max_iterations else "complete"
             if "final_solution" not in evaluation:
@@ -549,26 +599,26 @@ class Evaluator:
             if "improvement_score" not in evaluation:
                 evaluation["improvement_score"] = 0.1
             
-            # 智能终止决策逻辑
+            # Smart termination decision logic
             current_quality = evaluation["solution_quality"]
             improvement = evaluation["improvement_score"]
             
-            # 条件1: 如果质量已经超过阈值，可以提前完成
+            # Condition 1: If quality exceeds threshold, complete early
             if current_quality >= self.min_quality_threshold:
                 evaluation["status"] = "complete"
                 print(f"Solution quality {current_quality} exceeds threshold {self.min_quality_threshold}, completing early.")
             
-            # 条件2: 如果改进低于阈值且不是首次迭代，可能陷入停滞
+            # Condition 2: If improvement below threshold and not first iteration, may be stuck
             if iteration > 1 and improvement < self.min_improvement_threshold:
                 evaluation["status"] = "complete"
                 print(f"Improvement {improvement} below threshold {self.min_improvement_threshold}, stopping iterations.")
             
-            # 条件3: 如果已达到最大迭代次数，必须完成
+            # Condition 3: If reached max iterations, must complete
             if iteration >= self.max_iterations:
                 evaluation["status"] = "complete"
                 print(f"Reached maximum iterations ({self.max_iterations}), completing.")
             
-            # 存储当前质量评分以供下次迭代比较
+            # Store current quality score for next iteration comparison
             self.previous_solution_quality = current_quality
                 
             return {
@@ -596,11 +646,11 @@ class AgentVerse(AgentSystem):
         self.use_parallel = self.config.get("parallel", True)
         self.max_iterations = self.config.get("max_iterations", 3)
         
-        # 新增的质量控制与早停配置
+        # New quality control and early stopping configuration
         self.min_quality_threshold = self.config.get("min_quality_threshold", 0.7)
         self.min_improvement_threshold = self.config.get("min_improvement_threshold", 0.1)
         self.early_stopping_rounds = self.config.get("early_stopping_rounds", 2)
-        self.max_runtime = self.config.get("max_runtime", 300)  # 默认最大运行时间5分钟
+        self.max_runtime = self.config.get("max_runtime", 300)  # Default maximum runtime 5 minutes
         
         # Initialize evaluator and metrics collector through base class methods
         self._initialize_evaluator()
@@ -625,14 +675,14 @@ class AgentVerse(AgentSystem):
         )
         response_dict = recruiter.describe(problem, feedback)
         
-        # 从结构化输出获取专家配置
+        # Get expert configuration from structured output
         expert_config = response_dict.get("solution", {})
         agents_list = expert_config.get("agents", [])
         
-        # 创建专家团队
+        # Create expert team
         expert_team = []
         for idx, agent in enumerate(agents_list, 1):
-            # 确保字典中有必要的字段
+            # Ensure dictionary has necessary fields
             if isinstance(agent, dict):
                 agent_id = agent.get("agent_id", str(idx))
                 if not isinstance(agent_id, str):
@@ -642,11 +692,11 @@ class AgentVerse(AgentSystem):
                     ExpertProfile(
                         id=agent_id,
                         name=agent.get("name", f"Expert {agent_id}"),
-                        description=agent.get("describe", agent.get("description", ""))[:500]  # 支持不同的字段名并截断长描述
+                        description=agent.get("describe", agent.get("description", ""))[:500]  # Support different field names and truncate long descriptions
                     )
                 )
         
-        # 如果没有获取到专家，创建默认专家
+        # If no experts are found, create default experts
         if not expert_team:
             print("Warning: No experts found in recruiter response, creating default experts")
             for i in range(1, self.num_agents + 1):
@@ -664,7 +714,8 @@ class AgentVerse(AgentSystem):
             workers.append(
                 WorkAgent(
                     agent_id=expert.id,
-                    system_prompt=expert.description
+                    system_prompt=expert.description,
+                    format_prompt=self.format_prompt
                 )
             )
         return {"workers": workers, "message": response_dict.get("message", None)}
@@ -704,16 +755,16 @@ class AgentVerse(AgentSystem):
         feedback = None
         final_solution = None
         
-        # 跟踪上一轮的解决方案，用于比较改进
+        # Track previous round solutions for improvement comparison
         previous_solutions = None
         
-        # 使用类属性而非从config获取
+        # Use class attributes instead of config
         min_quality = self.min_quality_threshold
         min_improvement = self.min_improvement_threshold
         early_stopping_rounds = self.early_stopping_rounds
         max_runtime = self.max_runtime
         
-        # 跟踪连续几轮没有明显改进
+        # Track consecutive rounds without significant improvement
         no_improvement_count = 0
         start_runtime = time.time()
         
@@ -727,7 +778,7 @@ class AgentVerse(AgentSystem):
         
         # Run iterations until evaluator is satisfied or max iterations reached
         for iteration in range(1, self.max_iterations + 1):
-            # 检查是否超过最大运行时间
+            # Check if exceeded maximum runtime
             current_runtime = time.time() - start_runtime
             if current_runtime > max_runtime:
                 print(f"Reached maximum runtime ({max_runtime}s), stopping at iteration {iteration}")
@@ -777,11 +828,11 @@ class AgentVerse(AgentSystem):
                 "solutions": agent_solutions
             })
             
-            # 获取上一轮的专家解决方案（如果有）
+            # Get previous round expert solutions (if any)
             if iteration > 1 and len(all_solutions) > 1:
                 previous_solutions = all_solutions[iteration-2]["solutions"]
             
-            # Evaluate solutions，传递上一轮的解决方案用于比较
+            # Evaluate solutions, pass previous solutions for comparison
             evaluation_result = evaluator.evaluate(problem_text, agent_solutions, iteration, previous_solutions, self.format_prompt)
             evaluation = evaluation_result.get("evaluation", {})
             
@@ -789,17 +840,17 @@ class AgentVerse(AgentSystem):
             if "message" in evaluation_result:
                 all_messages.append(evaluation_result["message"])
             
-            # 获取改进分数，如果低于阈值则增加无改进计数
+            # Get improvement score, increment no-improvement count if below threshold
             improvement_score = evaluation.get("improvement_score", 0)
             if iteration > 1 and improvement_score < min_improvement:
                 no_improvement_count += 1
             else:
-                no_improvement_count = 0  # 重置计数
+                no_improvement_count = 0  # Reset count
             
-            # 检查是否达到早停条件
+            # Check if early stopping condition met
             if no_improvement_count >= early_stopping_rounds:
                 print(f"Early stopping after {no_improvement_count} rounds with no significant improvement")
-                # 使用当前最佳解决方案
+                # Use current best solution
                 final_solution = evaluation.get("final_solution", "")
                 break
             
@@ -830,13 +881,13 @@ class AgentVerse(AgentSystem):
         
         # Return final answer and all messages
         return {
-            "messages": messages_with_metadata,  # 只返回带有usage_metadata的消息
+            "messages": messages_with_metadata,  # Only return messages with usage_metadata
             "final_answer": final_solution,
             "agent_solutions": all_solutions,
         }
 
 # Register the agent system with default parameters
-# 确保这些默认值与AgentVerse类中的默认值保持一致
+# Ensure these defaults match those in the AgentVerse class
 AgentSystemRegistry.register("agentverse", AgentVerse, num_agents=3, parallel=True, max_iterations=3)
 
 if __name__ == "__main__":
