@@ -31,6 +31,8 @@ dependencies = [
     "pytest>=8.3.5",
     "pandas>=2.2.3",
     "nest-asyncio>=1.6.0",
+    "langsmith>=0.3.11",
+    "math-verify[antlr4-13-2]>=0.7.0",
 ]
 
 [tool.ruff]

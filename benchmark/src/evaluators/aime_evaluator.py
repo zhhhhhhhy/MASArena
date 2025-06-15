@@ -1,7 +1,7 @@
 """
 AIME Evaluator
 
-Standalone evaluator for AIME-style math problems.
+Standalone evaluator for AIME-style math problems using Math-Verify for robust mathematical expression evaluation.
 """
 
 import re
@@ -13,6 +13,7 @@ from langsmith.schemas import Run
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator
 from benchmark.src.evaluators.registry import register_benchmark
+from benchmark.src.evaluators.utils.math_equal import calculate_score
 
 @register_benchmark(
     name="aime",
@@ -24,7 +25,7 @@ from benchmark.src.evaluators.registry import register_benchmark
 class AIMEEvaluator(BaseEvaluator):
     """
     Evaluator for AIME-style math problems.
-    Extracts answers and compares with expected answers (numeric/string match).
+    Uses Math-Verify for robust mathematical expression evaluation.
     """
     def __init__(self, name: str = "aime", config: Dict[str, Any] = None):
         super().__init__(name, config)
@@ -33,32 +34,6 @@ class AIMEEvaluator(BaseEvaluator):
     @classmethod
     def from_config(cls, name: str, config: Dict[str, Any] = None):
         return cls(name, config)
-
-    def extract_answer(self, text: str) -> str:
-        """
-        Extract the answer from model output text (last number or string).
-        """
-        # Try to extract the last number (int/float)
-        matches = re.findall(r"[-+]?\d+(?:,\d{3})*(?:\.\d+)?|\d+\.\d+", str(text))
-        if matches:
-            return matches[-1].replace(",", "").strip()
-        # Fallback: last non-empty line
-        lines = [line.strip() for line in str(text).splitlines() if line.strip()]
-        return lines[-1] if lines else str(text).strip()
-
-    def calculate_score(self, expected_output: str, prediction: str) -> Tuple[int, str]:
-        expected = self.extract_answer(expected_output)
-        pred = self.extract_answer(prediction)
-        # Try numeric comparison
-        try:
-            if float(pred) == float(expected):
-                return 1, pred
-        except Exception:
-            pass
-        # Fallback: string match (ignore whitespace)
-        if str(pred).strip() == str(expected).strip():
-            return 1, pred
-        return 0, pred
 
     def create_run(self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: int) -> Run:
         import uuid
@@ -87,4 +62,4 @@ class AIMEEvaluator(BaseEvaluator):
             "final_answer": final_answer,
             "extracted_answer": extracted_answer,
             "score": score,
-        } 
+        }
