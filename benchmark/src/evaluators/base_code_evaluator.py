@@ -28,10 +28,7 @@ class BaseCodeEvaluator(BaseEvaluator):
         super().__init__(name, config)
         self.run_evaluator = RunEvaluator()
         
-        # Default paths can be overridden via `config`
-        self.data_path = self.config.get("data_path", f"benchmark/data/{name}.jsonl")
-        self.log_path = self.config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        
+        # Create log directory if it doesn't exist
         Path(self.log_path).mkdir(parents=True, exist_ok=True)
         
         logging.basicConfig(

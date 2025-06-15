@@ -32,13 +32,14 @@ class HumanEvalEvaluator(BaseCodeEvaluator):
     class TimeoutError(Exception):
         """Raised when execution exceeds the allowed time limit."""
 
-    def __init__(self, name: str = "humaneval", config: Dict[str, Any] | None = None):
+    def __init__(self, name: str, config: Dict[str, Any] = None):
         super().__init__(name, config)
 
         # Path to the test data and directory for logs/results
-        self.data_path = self.config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = self.config.get("log_path", f"benchmark/data/results/{name.upper()}")
+        self.data_path = self.config.get("data_path", f"data/{name}_test.jsonl")
+        self.log_path = self.config.get("log_path", f"data/results/{name.upper()}")
 
+        # Create log directory if it doesn't exist
         Path(self.log_path).mkdir(parents=True, exist_ok=True)
 
         logging.basicConfig(

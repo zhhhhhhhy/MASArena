@@ -103,8 +103,8 @@ class AgentSystem(abc.ABC):
         self.evaluator = evaluator_type(
             name=self.evaluator_name,
             config={
-                "data_path": self.config.get("data_path", f"benchmark/data/{self.evaluator_name}_test.jsonl"),
-                "log_path": self.config.get("log_path", f"benchmark/data/results/{self.evaluator_name.upper()}")
+                "data_path": self.config.get("data_path", f"data/{self.evaluator_name}_test.jsonl"),
+                "log_path": self.config.get("log_path", f"data/results/{self.evaluator_name.upper()}")
             }
         )
 

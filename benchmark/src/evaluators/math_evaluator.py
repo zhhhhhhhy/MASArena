@@ -35,7 +35,7 @@ class MathEvaluator(BaseEvaluator):
     using various mathematical equivalence techniques.
     """
     
-    def __init__(self, name: str = "math", config: Dict[str, Any] = None):
+    def __init__(self, name: str, config: Dict[str, Any] = None):
         """
         Initialize the Math Evaluator.
         
@@ -44,10 +44,6 @@ class MathEvaluator(BaseEvaluator):
             config: Configuration parameters
         """
         super().__init__(name, config)
-        
-        # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
         
         # Create log directory if it doesn't exist
         Path(self.log_path).mkdir(parents=True, exist_ok=True)

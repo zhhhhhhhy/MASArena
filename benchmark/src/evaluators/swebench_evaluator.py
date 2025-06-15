@@ -58,7 +58,7 @@ class SWEBenchEvaluator(BaseEvaluator):
         super().__init__(name, config)
         
         # Set up paths
-        self.repos_path = self.config.get("repos_path", "benchmark/data/repos")
+        self.repos_path = self.config.get("repos_path", "data/repos")
         
         # Setup timeout and other configs
         self.timeout = self.config.get("timeout", 600)  # 10 minutes default timeout

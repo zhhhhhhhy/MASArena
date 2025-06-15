@@ -598,7 +598,7 @@ class SystemMetricsCollector(BaseMetricsCollector):
                 'tokens_per_second': Estimated token generation rate
                 'memory_usage_bytes': Total memory usage in bytes
         """
-        from benchmark.data.model_data import MODEL_DATA 
+        from data.model_data import MODEL_DATA 
         if model_name not in MODEL_DATA:
             return None
         

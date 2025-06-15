@@ -27,7 +27,7 @@ def main():
     )
 
     parser.add_argument(
-        "--data", type=str, default=None, help="Path to benchmark data (default: benchmark/data/{benchmark}_test.jsonl)"
+        "--data", type=str, default=None, help="Path to benchmark data (default: data/{benchmark}_test.jsonl)"
     )
 
     parser.add_argument("--limit", type=int, default=10, help="Maximum number of problems to process (default: 10)")

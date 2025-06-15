@@ -2,7 +2,7 @@
 Utility functions for instrumentation and metrics collection.
 """
 
-from benchmark.data.model_data import MODEL_DATA
+from data.model_data import MODEL_DATA
 
 DTY_TYPE_SIZES = {
     "float32": 4,

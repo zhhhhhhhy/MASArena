@@ -26,14 +26,10 @@ from benchmark.src.evaluators.registry import register_benchmark
 class GSM8KEvaluator(BaseEvaluator):
     """Evaluator for GSM8K problems"""
     
-    def __init__(self, name: str = "gsm8k", config: Dict[str, Any] = None):
+    def __init__(self, name: str, config: Dict[str, Any] = None):
         super().__init__(name, config)
         
-        # Set up paths
-        self.data_path = config.get("data_path", f"benchmark/data/{name}_test.jsonl")
-        self.log_path = config.get("log_path", f"benchmark/data/results/{name.upper()}")
-        
-        # Create log directory
+        # Create log directory if it doesn't exist
         Path(self.log_path).mkdir(parents=True, exist_ok=True)
         
         # Initialize run evaluator

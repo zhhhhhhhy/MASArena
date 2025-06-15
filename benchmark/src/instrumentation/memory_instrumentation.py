@@ -28,7 +28,7 @@ Collected Metrics:
 - Semantic drift tracking (for long-running systems)
 """
 
-from benchmark.data.model_data import MODEL_DATA
+from data.model_data import MODEL_DATA
 from benchmark.src.instrumentation.utils import calculate_kv_cache_size, DTY_TYPE_SIZES
 
 class MemoryInstrumenter:

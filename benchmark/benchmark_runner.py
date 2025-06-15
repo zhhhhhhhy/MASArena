@@ -109,9 +109,9 @@ class BenchmarkRunner:
         # Determine data path
         if data_path is None:
             if benchmark_name.lower() == "aime":
-                data_path = f"benchmark/data/{benchmark_name}_aime2025-i_test.jsonl"
+                data_path = f"data/{benchmark_name}_aime2025-i_test.jsonl"
             else:
-                data_path = f"benchmark/data/{benchmark_name}_test.jsonl"
+                data_path = f"data/{benchmark_name}_test.jsonl"
 
         output_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}.json"
         metrics_output = Path(self.metrics_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}"
