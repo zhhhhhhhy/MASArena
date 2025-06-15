@@ -2,7 +2,7 @@
 
 A comprehensive framework for benchmarking single and multi-agent systems across various tasks, evaluating their performance, accuracy, and efficiency.
 
-## Quick Start
+## 🚀Quick Start
 
 ### Setup
 
@@ -23,6 +23,14 @@ uv add [package]
 ```
 
 The packages installed by `pip` would NOT be added into project dependencies.
+
+Set your environmental variable at .env
+```bash
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY
+MODEL_NAME=gpt-4o-mini
+OPENAI_API_BASE=https://api.openai.com/v1
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key_here
+```
 
 ### Running Benchmarks
 
@@ -141,22 +149,32 @@ Use the `--use-mcp-tools` and `--mcp-config-file` flags when running benchmarks:
 
 
 
-### Supported Benchmarks
-- [x] Math 
-- [x] HumanEval
-- [x] MBPP
-- [x] IFEval 
-- [x] AIME 2025 
-- [x] BIG-Bench Hard (BBH) 
-- [ ] MMLU-Pro
-- [x] DROP 
+## 📊 Supported Benchmarks
 
-### Supported Agent Systems
-✅"single_agent" 
-✅"supervisor_mas" 
-✅"swarm" 
-✅"agentverse" 
-✅"chateval" 
-✅"evoagent" 
-✅"jarvis"
+| Benchmark | Description | Data File |
+|-----------|-------------|-----------|
+| `math` | Mathematical problem solving | `math_test.jsonl` |
+| `humaneval` | Python code generation | `humaneval_test.jsonl` |
+| `mbpp` | Python programming problems | `mbpp_test.jsonl` |
+| `gsm8k` | Elementary math problems | `gsm8k_test.jsonl` |
+| `drop` | Reading comprehension | `drop_test.jsonl` |
+| `bbh` | Complex reasoning tasks | `bbh_test.jsonl` |
+| `hotpotqa` | Multi-hop question answering | `hotpotqa_test.jsonl` |
+| `ifeval` | Instruction following | `ifeval_test.jsonl` |
+| `aime` | Math competition problems | `aime_*_test.jsonl` |
+| `mmlu_pro` | Multi-domain knowledge | `mmlu_pro_test.jsonl` |
+| `swebench` | Software engineering | `swebench_lite_test.jsonl` |
+
+## 🤖 Supported Agent Systems
+
+| Agent System | File Location | Description |
+|--------------|---------------|-------------|
+| `single_agent` | `single_agent.py` | Single LLM agent |
+| `supervisor_mas` | `supervisor_mas.py` | Supervisor-based multi-agent system |
+| `swarm` | `swarm.py` | Swarm-based multi-agent system |
+| `agentverse` | `AgentVerse.py` | Dynamic recruitment agent system |
+| `chateval` | `ChatEval.py` | Debate-based multi-agent system |
+| `evoagent` | `EvoAgent.py` | Evolutionary agent system |
+| `jarvis` | `JARVIS.py` | Task planning agent system |
+| `metagpt` | `MetaGPT.py` | Code generation agent system |
 
