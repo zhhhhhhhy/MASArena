@@ -126,20 +126,24 @@ class MMLU_ProEvaluator(BaseEvaluator):
     
     def extract_answer_from_response(self, response: str) -> str:
         """
-        从agent响应中提取答案。
+        Extract the answer from the agent's response.
         
         Args:
-            response: agent的完整响应文本
+            response: The complete response text from the agent
             
         Returns:
-            提取出的答案字母
+            The extracted answer
         """
-        # 尝试从<answer>标签中提取答案
-        match = re.search(r'<answer>([A-Za-z])</answer>', response)
+        if not response:
+            return ""
+            
+        # First try to extract from <answer> tags
+        match = re.search(r'<answer>\s*(.*?)\s*</answer>', response, re.MULTILINE)
         if match:
-            return match.group(1)
-        
-        # 如果没有找到标签，返回原始响应
+            return match.group(1).strip()
+            
+        # If no tags found, try to find the answer in the response
+        # This handles cases where the answer is just the answer without tags
         return response.strip()
     
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
