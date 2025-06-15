@@ -6,7 +6,7 @@ import random
 import uuid
 from dotenv import load_dotenv
 from dataclasses import dataclass, field
-from typing import Dict, TypedDict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Tuple
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langchain_community.callbacks.openai_info import OpenAICallbackHandler

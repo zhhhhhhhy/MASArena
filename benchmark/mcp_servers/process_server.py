@@ -3,12 +3,11 @@ import json
 import sys
 import os
 import subprocess
-import signal
 import time
 import threading
 import traceback
 import shlex
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List
 
 """
 Process Execution Server - Communicates with client via stdio

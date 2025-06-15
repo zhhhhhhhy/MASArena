@@ -9,9 +9,9 @@ import re
 import time
 import logging
 import uuid
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from pathlib import Path
-from typing import Dict, Any, Tuple, List, Union
+from typing import Dict, Any, Tuple, Union
 
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run

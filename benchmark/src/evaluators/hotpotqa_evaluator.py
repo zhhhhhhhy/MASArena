@@ -8,8 +8,7 @@ import re
 import string
 import time
 from collections import Counter
-from typing import Dict, Any, Tuple, List
-from pathlib import Path
+from typing import Dict, Any, Tuple
 
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run

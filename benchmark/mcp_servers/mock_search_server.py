@@ -7,7 +7,7 @@ This server simulates a real MCP server providing search tools.
 import sys
 import json
 import asyncio
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 
 async def handle_mcp_messages():

@@ -8,7 +8,6 @@ This module provides the base class for all evaluators in the benchmark framewor
 import os
 import json
 import logging
-from pathlib import Path
 from typing import Dict, Any, List, Optional, Union
 
 

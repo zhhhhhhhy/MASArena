@@ -6,7 +6,6 @@ import collections
 from typing import Dict, Any
 
 from langsmith.evaluation import RunEvaluator
-from langsmith.schemas import Run
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator
 from benchmark.src.evaluators.registry import register_benchmark

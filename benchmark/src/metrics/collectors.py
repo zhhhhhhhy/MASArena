@@ -5,9 +5,9 @@ This module provides the core infrastructure for collecting, aggregating,
 and managing metrics across the benchmark framework.
 """
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Callable, Set, Union
+from typing import Dict, List, Any, Optional, Callable, Set
 import time
 import queue
 from datetime import datetime
@@ -16,7 +16,6 @@ import json
 import os
 import csv
 import copy
-from pathlib import Path
 import random
 
 

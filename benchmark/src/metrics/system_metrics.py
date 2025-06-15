@@ -5,13 +5,10 @@ This module provides metrics collection for system-level performance and resourc
 focusing on throughput, latency, and resource consumption across the entire multi-agent system.
 """
 
-from typing import Dict, List, Any, Optional, Set, Union
+from typing import Dict, List, Any, Optional, Set
 import time
-from datetime import datetime
 from dataclasses import dataclass, field
-import threading
 import psutil
-import statistics
 import numpy as np
 from collections import defaultdict, deque
 

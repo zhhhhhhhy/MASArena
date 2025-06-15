@@ -5,11 +5,8 @@ This module provides metrics collection for individual agent performance,
 focusing on LLM usage, tool utilization, and memory operations.
 """
 
-from typing import Dict, List, Any, Optional, Set, Union
-import time
-from datetime import datetime
+from typing import Dict, List, Any, Optional, Set
 from dataclasses import dataclass, field
-import json
 
 from benchmark.src.metrics.collectors import BaseMetricsCollector, MetricsCollectionConfig
 

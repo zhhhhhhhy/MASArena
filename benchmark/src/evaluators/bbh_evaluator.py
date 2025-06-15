@@ -6,9 +6,7 @@ This module provides a standalone evaluator for Big-Bench Hard (BBH) problems.
 
 import re
 import time
-import json
 from typing import Dict, Any, Tuple
-from pathlib import Path
 import uuid
 
 from langsmith.evaluation import RunEvaluator

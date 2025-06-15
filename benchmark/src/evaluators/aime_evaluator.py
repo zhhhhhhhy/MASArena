@@ -7,7 +7,6 @@ Standalone evaluator for AIME-style math problems.
 import re
 import time
 from typing import Dict, Any, Tuple
-from pathlib import Path
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
 

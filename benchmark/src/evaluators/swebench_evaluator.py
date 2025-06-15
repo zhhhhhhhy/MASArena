@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import traceback
 from pathlib import Path
-from typing import Dict, Any, Tuple, List, Optional, Union
+from typing import Dict, Any, Tuple
 from threading import Thread
 
 from langsmith.evaluation import RunEvaluator
@@ -21,7 +21,6 @@ from langsmith.schemas import Run
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator
 from benchmark.src.evaluators.registry import register_benchmark
-from benchmark.src.evaluators.utils.sanitize import code_extract
 
 
 @register_benchmark(

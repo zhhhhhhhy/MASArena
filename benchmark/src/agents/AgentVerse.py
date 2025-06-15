@@ -5,17 +5,10 @@ import asyncio
 from dotenv import load_dotenv
 from dataclasses import dataclass
 from typing import Dict, TypedDict, Any, List
-from pathlib import Path
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from pydantic import BaseModel, Field
-from typing import Annotated, Tuple
+from pydantic import BaseModel
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
-from langchain.callbacks.manager import AsyncCallbackManager
-from langchain_community.callbacks.openai_info import OpenAICallbackHandler
-from langsmith.evaluation import RunEvaluator
-from langsmith.schemas import Run
+from langchain_core.messages import SystemMessage, HumanMessage
 from benchmark.src.agents.base import AgentSystem, AgentSystemRegistry
 
 # 为结构化输出定义TypedDict类

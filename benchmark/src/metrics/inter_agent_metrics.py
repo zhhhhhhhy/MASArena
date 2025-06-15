@@ -5,10 +5,9 @@ This module provides metrics collection for communication patterns, coordination
 and interactions between agents in a multi-agent system.
 """
 
-from typing import Dict, List, Any, Optional, Set, Union, Tuple
-import time
+from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import networkx as nx
 
 from benchmark.src.metrics.collectors import BaseMetricsCollector, MetricsCollectionConfig

@@ -1,9 +1,7 @@
 # benchmark/src/agents/ChatEval.py
 
-import time
-import json
 import os
-from typing import Dict, List, Any, Optional, TypedDict
+from typing import Dict, List, Any, TypedDict
 from dataclasses import dataclass
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage

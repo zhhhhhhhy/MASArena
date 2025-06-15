@@ -8,7 +8,7 @@ import time
 import traceback
 import shutil
 import re
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Optional
 
 """
 SWE-bench Evaluator Server - Communicates with client via stdio

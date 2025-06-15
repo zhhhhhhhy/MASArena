@@ -5,10 +5,7 @@ This module implements a simple single-agent system that uses a single LLM
 to solve problems directly.
 """
 
-import time
-import uuid
 import os
-import json
 from typing import Dict, Any
 import contextlib
 

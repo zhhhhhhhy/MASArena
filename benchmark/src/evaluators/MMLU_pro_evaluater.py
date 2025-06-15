@@ -6,13 +6,8 @@ This module provides an evaluator for the MMLU Professional benchmark.
 It evaluates agent performance by exact matching of answers.
 """
 
-import os
 import json
-import logging
-from pathlib import Path
-import numpy as np
-from typing import Dict, Any, List, Tuple, Optional, Union
-import warnings
+from typing import Dict, Any, List
 import re
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator

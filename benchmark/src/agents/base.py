@@ -5,7 +5,7 @@ This module provides the base classes and interfaces for agent systems.
 """
 
 import abc
-from typing import Dict, Any, Optional, Type, Callable, List
+from typing import Dict, Any, Optional, Type, Callable
 import uuid
 import os
 import json
@@ -151,12 +151,7 @@ class AgentSystem(abc.ABC):
             Dictionary with collected LLM usage metrics
         """
         if not self.metrics_collector:
-            return {}
-            
-        try:
-            from langchain_core.messages import AIMessage
-        except ImportError:
-            return {}
+            return {} 
         
         # Track metrics from AIMessages with usage_metadata
         total_tokens = 0

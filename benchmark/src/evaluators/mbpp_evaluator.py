@@ -4,7 +4,6 @@ MBPP Evaluator
 
 from __future__ import annotations
 
-import logging
 import traceback
 from threading import Thread
 from typing import Any, Dict, List, Tuple

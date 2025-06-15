@@ -1,4 +1,4 @@
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from benchmark.src.tools.tool_selector import ToolSelector
 from benchmark.src.agents.base import AgentSystem
 

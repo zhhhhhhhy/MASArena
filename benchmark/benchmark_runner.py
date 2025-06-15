@@ -8,12 +8,8 @@ This module provides a simplified interface for running benchmarks on multi-agen
 import os
 import json
 import random
-import time
 from pathlib import Path
 from datetime import datetime
-import matplotlib.pyplot as plt
-from typing import Optional, Dict, Any, List
-import numpy as np
 
 from benchmark.src.metrics import (
     MetricsRegistry,

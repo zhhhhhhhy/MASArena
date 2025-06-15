@@ -6,7 +6,6 @@ This script downloads the SWE-bench dataset from Hugging Face and converts it to
 format expected by the benchmark framework.
 """
 
-import os
 import json
 import argparse
 import re
@@ -111,7 +110,7 @@ def extract_files_to_edit(patch):
     return unique_files
 
 
-def download_swebench(output_dir="benchmark/data", split="dev", lite=True):
+def download_swebench(output_dir="data", split="dev", lite=True):
     """
     Download SWE-bench dataset and convert to the benchmark format.
     
@@ -198,7 +197,7 @@ def download_swebench(output_dir="benchmark/data", split="dev", lite=True):
 
 def main():
     parser = argparse.ArgumentParser(description="Download and process SWE-bench dataset")
-    parser.add_argument("--output-dir", type=str, default="benchmark/data", 
+    parser.add_argument("--output-dir", type=str, default="data", 
                         help="Directory to save the processed data")
     parser.add_argument("--split", type=str, default="dev", choices=["dev", "test"],
                         help="Dataset split to download")

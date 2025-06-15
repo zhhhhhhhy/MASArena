@@ -3,12 +3,10 @@ import json
 import sys
 import os
 import subprocess
-import tempfile
 import shutil
 import venv
-import platform
 import traceback
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 
 """
 Environment Management Server - Communicates with client via stdio

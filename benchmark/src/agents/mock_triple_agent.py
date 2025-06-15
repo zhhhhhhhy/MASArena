@@ -1,5 +1,4 @@
 from benchmark.src.agents.base import AgentSystem
-from typing import Dict, Any
 from unittest.mock import MagicMock
 from benchmark.src.agents.base import AgentSystemRegistry
 

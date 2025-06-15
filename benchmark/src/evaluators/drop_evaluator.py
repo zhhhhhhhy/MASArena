@@ -12,7 +12,7 @@ import string
 import time
 from pathlib import Path
 from collections import Counter
-from typing import Dict, Any, Tuple, List
+from typing import Dict, Any, List
 
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
