@@ -7,8 +7,6 @@ Standalone evaluator for AIME-style math problems.
 import re
 import time
 from typing import Dict, Any, Tuple
-from langsmith.evaluation import RunEvaluator
-from langsmith.schemas import Run
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator
 from benchmark.src.evaluators.registry import register_benchmark
@@ -27,7 +25,6 @@ class AIMEEvaluator(BaseEvaluator):
     """
     def __init__(self, name: str = "aime", config: Dict[str, Any] = None):
         super().__init__(name, config)
-        self.run_evaluator = RunEvaluator()
 
     @classmethod
     def from_config(cls, name: str, config: Dict[str, Any] = None):
@@ -59,29 +56,11 @@ class AIMEEvaluator(BaseEvaluator):
             return 1, pred
         return 0, pred
 
-    def create_run(self, problem: Dict[str, Any], final_answer: str, extracted_answer: str, score: int) -> Run:
-        import uuid
-        return Run(
-            id=str(uuid.uuid4()),
-            name=f"{self.name.upper()}_Evaluation",
-            inputs={"question": problem["problem"]},
-            outputs={
-                "prediction": final_answer,
-                "extracted_answer": extracted_answer,
-                "expected": problem["solution"],
-                "score": score,
-                "passed": score == 1,
-            },
-            run_type="evaluation",
-            start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            trace_id=str(uuid.uuid4()),
-        )
+ 
 
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
         final_answer = run_result.get("final_answer", "")
         score, extracted_answer = self.calculate_score(problem["solution"], final_answer)
-        run = self.create_run(problem, final_answer, extracted_answer, score)
-        self.run_evaluator.evaluate_run(run=run)
         return {
             "final_answer": final_answer,
             "extracted_answer": extracted_answer,
