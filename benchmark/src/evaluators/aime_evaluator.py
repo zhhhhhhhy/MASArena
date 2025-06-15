@@ -5,7 +5,6 @@ Standalone evaluator for AIME-style math problems using Math-Verify for robust m
 """
 
 import re
-import time
 from typing import Dict, Any, Tuple
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator

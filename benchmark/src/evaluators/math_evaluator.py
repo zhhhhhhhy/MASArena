@@ -4,9 +4,8 @@ Math Evaluator
 This module provides a standalone evaluator for mathematical problems using Math-Verify.
 """
 
-import re
 import time
-from typing import Dict, Any, Tuple
+from typing import Dict, Any
 from pathlib import Path
 
 from langsmith.evaluation import RunEvaluator

@@ -3,7 +3,6 @@ import argparse
 import datetime
 import sys
 from pathlib import Path
-import os
 
 from benchmark.benchmark_runner import BenchmarkRunner
 import logging

@@ -9,7 +9,6 @@ and then aggregating their results.
 import time
 import uuid
 import os
-import json
 from typing import Dict, Any, List
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
