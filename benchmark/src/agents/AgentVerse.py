@@ -230,16 +230,17 @@ class RecruiterAgent:
 
 class WorkAgent:
     """Work agent that solves specific aspects of a problem"""
-    def __init__(self, agent_id: str, system_prompt: str = None):
+    def __init__(self, agent_id: str, system_prompt: str = None, format_prompt: str = ""):
         self.agent_id = agent_id
         self.model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.system_prompt = (
             f"{system_prompt}\n"
             "## Output Requirements:\n"
-            "1. Analyze the problem from your expert perspective\n"
-            "2. Provide a detailed solution for your specific part of the problem\n"
-            "3. Rate your confidence in your solution (1-5 scale, with 5 being highest)\n"
-            "4. Structure your response logically with clear reasoning"
+            "- Analyze the problem from your expert perspective\n"
+            "- Provide a detailed solution for your specific part of the problem\n"
+            "- Rate your confidence in your solution (1-5 scale, with 5 being highest)\n"
+            "- Structure your response logically with clear reasoning\n"
+            f"{format_prompt}"
         )
         self.llm = ChatOpenAI(
             model=self.model_name,
@@ -664,7 +665,8 @@ class AgentVerse(AgentSystem):
             workers.append(
                 WorkAgent(
                     agent_id=expert.id,
-                    system_prompt=expert.description
+                    system_prompt=expert.description,
+                    format_prompt=self.format_prompt
                 )
             )
         return {"workers": workers, "message": response_dict.get("message", None)}
