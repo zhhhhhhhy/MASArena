@@ -1,7 +1,7 @@
 """
 AIME Evaluator
 
-Standalone evaluator for AIME-style math problems.
+Standalone evaluator for AIME-style math problems using Math-Verify for robust mathematical expression evaluation.
 """
 
 import re
@@ -10,6 +10,7 @@ from typing import Dict, Any, Tuple
 
 from benchmark.src.evaluators.base_evaluator import BaseEvaluator
 from benchmark.src.evaluators.registry import register_benchmark
+from benchmark.src.evaluators.utils.math_equal import calculate_score
 
 @register_benchmark(
     name="aime",
@@ -21,7 +22,7 @@ from benchmark.src.evaluators.registry import register_benchmark
 class AIMEEvaluator(BaseEvaluator):
     """
     Evaluator for AIME-style math problems.
-    Extracts answers and compares with expected answers (numeric/string match).
+    Uses Math-Verify for robust mathematical expression evaluation.
     """
     def __init__(self, name: str = "aime", config: Dict[str, Any] = None):
         super().__init__(name, config)
@@ -43,18 +44,7 @@ class AIMEEvaluator(BaseEvaluator):
         return lines[-1] if lines else str(text).strip()
 
     def calculate_score(self, expected_output: str, prediction: str) -> Tuple[int, str]:
-        expected = self.extract_answer(expected_output)
-        pred = self.extract_answer(prediction)
-        # Try numeric comparison
-        try:
-            if float(pred) == float(expected):
-                return 1, pred
-        except Exception:
-            pass
-        # Fallback: string match (ignore whitespace)
-        if str(pred).strip() == str(expected).strip():
-            return 1, pred
-        return 0, pred
+        return calculate_score(expected_output, prediction)
 
  
 
@@ -65,4 +55,4 @@ class AIMEEvaluator(BaseEvaluator):
             "final_answer": final_answer,
             "extracted_answer": extracted_answer,
             "score": score,
-        } 
+        }
