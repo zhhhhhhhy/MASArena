@@ -29,6 +29,7 @@ A comprehensive framework for benchmarking single and multi-agent systems across
   - [🛠 Tool Integration](#-tool-integration)
   - [🧠 Tool Selection and Distribution](#-tool-selection-and-distribution)
   - [✅ TODOs](#-todos)
+  - [🙌 Contributing](#-contributing)
 
 <!-- /TOC -->
 
@@ -272,3 +273,26 @@ See [Tool Integration Docs](docs/tools/tool_integration.md) for examples.
 * [ ] Implement failure detection in MAS workflows
 * [ ] Add more benchmarks emphasizing tool usage
 * [ ] Improve configuration for MAS and tool integration
+
+
+Certainly! Here's an additional section you can add near the end of the `README.md`, under its own heading to highlight the invitation for contributions:
+
+---
+
+## 🙌 Contributing
+
+We warmly welcome contributions from the community!
+
+You can contribute in many ways:
+
+* 🧠 **New Agent Systems (MAS):**
+  Add novel single- or multi-agent systems to expand the diversity of strategies and coordination models.
+
+* 📊 **New Benchmark Datasets:**
+  Bring in domain-specific or task-specific datasets (e.g., reasoning, planning, tool-use, collaboration) to broaden the scope of evaluation.
+
+* 🛠 **New Tools & Toolkits:**
+  Extend the framework’s tool ecosystem by integrating domain tools (e.g., search, calculators, code editors) and improving tool selection strategies.
+
+* ⚙️ **Improvements & Utilities:**
+  Help with performance optimization, failure handling, asynchronous processing, or new visualizations.
