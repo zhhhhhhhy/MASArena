@@ -62,13 +62,14 @@ class RecruiterAgent:
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.num_agents = num_agents
         self.system_prompt = (
-            "You are a professional AI recruitment expert who needs to generate the right work team configuration based on the needs of the problem."
-            """Please strictly follow the following rules:
-            1. Generate expert descriptions in different fields based on problem requirements
-            2. If feedback is provided, adapt the team composition to address the feedback
-            3. Each expert should have specialized knowledge relevant to the problem
-            4. Each expert should have a clearly defined role with specific responsibilities
-            5. The team should collectively cover all aspects of the problem"""
+            "You are the leader of a group of experts who needs to recruit the right team configuration to solve complex problems.\n\n"
+            "Your responsibilities:\n"
+            "1. Analyze the problem and identify necessary expertise areas\n"
+            "2. Generate diverse expert descriptions with complementary specializations\n"
+            "3. Ensure each expert has clearly defined roles and responsibilities\n"
+            "4. Adapt team composition based on feedback when provided\n\n"
+            "Each expert should have specialized knowledge directly relevant to the problem, "
+            "and the team should collectively be capable of solving the complete problem."
         )
         # Initialize LLM with structured output
         self.llm = ChatOpenAI(
@@ -82,28 +83,24 @@ class RecruiterAgent:
             Previous evaluation feedback:
             {feedback}
             
-            IMPORTANT: Consider this feedback when forming your new team of experts.
-            You may need to completely change the experts or adjust their roles and responsibilities.
+            Please consider this feedback when forming your new team of experts.
             """
             
         return f"""
-            Generate the configuration of {self.num_agents} expert agents based on the following problem requirements:
+            Generate the configuration of {self.num_agents} expert agents based on the following problem:
 
-            Problem description:
+            Problem:
             {problem}
             
             {feedback_section}
 
-            Please analyze the problem carefully and identify what specialized knowledge would be needed to solve it.
-            Then create a team of experts with complementary skills that together can address all aspects of the problem.
+            What experts will you recruit to better solve this problem?
 
             For each expert, provide:
-            1. A descriptive name reflecting their expertise area
-            2. A detailed description of their role and responsibilities
-            3. An ID number (starting from 1)
+            1. Agent ID (starting from 1)
+            2. Expert name reflecting their expertise area  
+            3. Detailed description of their role and responsibilities
 
-            Think step by step about different aspects of the problem and how each expert will contribute.
-            If feedback was provided, make sure your new team addresses those specific concerns.
 
             Agent ID: {self.agent_id}
         """
@@ -234,12 +231,14 @@ class WorkAgent:
         self.agent_id = agent_id
         self.model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.system_prompt = (
-            f"{system_prompt}\n"
-            "## Output Requirements:\n"
-            "- Analyze the problem from your expert perspective\n"
-            "- Provide a detailed solution for your specific part of the problem\n"
-            "- Rate your confidence in your solution (1-5 scale, with 5 being highest)\n"
-            "- Structure your response logically with clear reasoning\n"
+            f"{system_prompt}\n\n"
+            f"You are a specialized expert participating in a collaborative problem-solving team.\n"
+            f"Your task is to analyze the problem from your expertise area and provide a detailed solution.\n\n"
+            f"Output requirements:\n"
+            f"- Analyze the problem from your expert perspective\n"
+            f"- Provide a detailed solution with clear reasoning\n"
+            f"- Rate your confidence in the solution (1-5 scale, 5 = highest confidence)\n"
+            f"- Explain your approach and methodology\n"
             f"{format_prompt}"
         )
         self.llm = ChatOpenAI(
@@ -249,10 +248,25 @@ class WorkAgent:
 
     def solve(self, problem: str, feedback: str = None):
         """Solve a problem with optional feedback"""
-        problem_content = problem
+        feedback_section = ""
         if feedback:
-            problem_content += f"\n\nFeedback from previous evaluation:\n{feedback}\nPlease address this feedback in your solution."
+            feedback_section = f"""
+            Feedback from previous evaluation:
+            {feedback}
             
+            Please consider this feedback when analyzing the problem.
+            """
+            
+        problem_content = f"""
+        Problem to solve:
+        {problem}
+        
+        {feedback_section}
+        
+        As the expert described in your role, please analyze this problem from your specialized perspective and provide your solution. 
+        Include your reasoning process and rate your confidence in the solution.
+        """
+        
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=problem_content)
@@ -384,37 +398,73 @@ class Evaluator:
                 previous_solutions_text = "\n\nPrevious iteration solutions:\n" + "\n\n".join(prev_details)
         
         prompt = f"""
-        I need you to analyze multiple expert solutions to the same problem.
+        # Evaluation Task: Multi-Expert Solution Assessment
         
-        Original problem:
+        You are an expert evaluator responsible for analyzing multiple expert solutions and making critical decisions about the problem-solving process.
+        
+        ## Problem Context
+        **Original Problem:**
         {problem}
         
-        Current expert solutions:
+        **Current Iteration:** {iteration} of {self.max_iterations}
+        
+        ## Expert Solutions Analysis
+        **Current Expert Solutions:**
         {solutions_text}
         {previous_solutions_text}
         
-        This is iteration {iteration} out of {self.max_iterations}.
+        ## Your Evaluation Mission
+        As the lead evaluator, you must:
         
-        Your task:
-        1. Analyze each expert's solution and their confidence level
-        2. Determine if the solutions collectively solve the problem satisfactorily
-        3. If solutions are adequate, compile them into a comprehensive final solution
-        4. If solutions need improvement, provide specific feedback for recruiting better experts
-        5. Rate the overall quality of the current solutions (0-1 scale, with 1 being perfect)
-        6. If there are previous solutions, rate the improvement from previous to current solutions (0-1 scale)
+        ### 1. **Solution Quality Assessment**
+        - Analyze each expert's contribution and confidence level
+        - Identify strengths and weaknesses in the proposed solutions
+        - Evaluate how well the solutions collectively address the problem
+        - Rate the overall solution quality (0-1 scale, where 1 = perfect solution)
         
-        If you decide the solutions collectively solve the problem:
-        - Provide a detailed final solution combining the best insights from all experts
-        - Include step-by-step reasoning
-        - {format_prompt} 
+        ### 2. **Progress Evaluation** 
+        - Compare current solutions with previous iterations (if applicable)
+        - Assess the degree of improvement from previous rounds
+        - Rate the improvement score (0-1 scale, where 1 = major improvement)
         
-        If you decide the solutions need improvement:
-        - Explain what aspects of the problem remain inadequately addressed
-        - Provide specific feedback on what expertise is missing or needs enhancement
+        ### 3. **Decision Making**
+        Choose one of the following decisions:
         
-        In addition to deciding whether to continue or stop, you must provide two numerical scores:
-        1. solution_quality (0-1): How good is the current solution? (1 = perfect solution, 0 = no progress)
-        2. improvement_score (0-1): How much improvement compared to previous iteration? (1 = major improvement, 0 = no improvement)
+        **Option A: Complete the Process**
+        - If solutions collectively solve the problem satisfactorily
+        - If quality meets acceptable standards
+        - If maximum iterations reached
+        
+        **Option B: Continue with New Experts**
+        - If solutions have significant gaps or errors
+        - If specific expertise is missing
+        - If improvement potential remains high
+        
+        ## Response Requirements
+        
+        ### If Completing (status: "complete"):
+        - Provide a comprehensive final solution combining the best insights
+        - Include step-by-step reasoning and methodology
+        - Ensure the solution directly answers the original problem
+        {format_prompt}
+        
+        ### If Continuing (status: "need_new_experts"):
+        - Explain specific shortcomings in current solutions
+        - Identify what types of expertise are needed
+        - Provide actionable feedback for expert recruitment
+        
+        ## Quality Metrics
+        You must provide two numerical scores:
+        1. **solution_quality** (0-1): Overall quality of current solutions
+        2. **improvement_score** (0-1): Improvement compared to previous iteration
+        
+        ## Evaluation Standards
+        - Be objective and thorough in your analysis
+        - Consider both correctness and completeness of solutions
+        - Balance perfectionism with practical problem-solving needs
+        - Provide constructive feedback that guides improvement
+        
+        Your evaluation will determine whether the problem-solving process continues or concludes.
         """
         
         messages = [

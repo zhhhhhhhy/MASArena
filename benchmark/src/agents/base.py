@@ -166,9 +166,9 @@ class AgentSystem(abc.ABC):
                 if isinstance(usage_metadata, CompletionUsage):
                     input_tokens = usage_metadata.prompt_tokens
                     output_tokens = usage_metadata.completion_tokens
-                    reasoning_tokens = usage_metadata.completion_tokens_details.reasoning_tokens
+                    reasoning_tokens = getattr(usage_metadata.completion_tokens_details, 'reasoning_tokens', None)
                     total_tokens_msg = usage_metadata.total_tokens
-                    
+
                     input_token_details = usage_metadata.prompt_tokens_details
                     output_token_details = usage_metadata.completion_tokens_details
                     
