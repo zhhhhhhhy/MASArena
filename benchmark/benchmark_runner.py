@@ -74,7 +74,7 @@ class BenchmarkRunner:
         limit=10,
         agent_system="single_agent",
         agent_config=None,
-        verbose=True,
+        verbose=True
     ):
         """
         Run a benchmark with the specified configuration.
@@ -145,7 +145,7 @@ class BenchmarkRunner:
         # Create agent system with appropriate configuration
         if agent_config is None:
             agent_config = {}
-            
+
         # Add evaluator name to configuration
         agent_config["evaluator"] = benchmark_name
         

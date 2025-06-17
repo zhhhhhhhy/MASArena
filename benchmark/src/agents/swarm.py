@@ -172,7 +172,7 @@ class SwarmSystem(AgentSystem):
         self._initialize_evaluator()
         self._initialize_metrics_collector()
 
-    def _create_agents(self) -> List[SwarmAgent]:
+    def _create_agents(self, problem_input: Dict[str, Any], feedback: Dict[str, Any] = None) -> Dict[str, List]:
         """Create the swarm agents"""
         # This method will be patched by ToolIntegrationWrapper if this system is wrapped.
         # The wrapper expects a dictionary: {"workers": [worker1, worker2, ...]}
@@ -222,7 +222,7 @@ class SwarmSystem(AgentSystem):
         
         # Create swarm agents and aggregator
         # _create_agents now returns a dict, extract workers
-        agent_components_dict = self._create_agents()
+        agent_components_dict = self._create_agents(problem)
         all_workers = agent_components_dict.get("workers", [])
         
         agents = [w for w in all_workers if isinstance(w, SwarmAgent)]

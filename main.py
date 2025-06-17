@@ -61,6 +61,11 @@ def main():
         help="Path to MCP servers configuration JSON file"
     )
 
+    parser.add_argument(
+        "--use-tools", action="store_true", default=None,
+        help="Enable integration of tools (default: False)"
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -86,6 +91,9 @@ def main():
         except Exception as e:
             print(f"Failed to load MCP config file: {e}", file=sys.stderr)
             return 1
+
+    if args.use_tools:
+        agent_config["use_tools"] = True
 
     # Create directories if needed
     Path(args.results_dir).mkdir(exist_ok=True)

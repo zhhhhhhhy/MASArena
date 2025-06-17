@@ -60,14 +60,8 @@ class AgentSystem(abc.ABC):
         self.visualizations_dir.mkdir(parents=True, exist_ok=True)
        
         self.format_prompt = self.format_prompt()
-        # Initialize tool manager if MCP tools are enabled
+        # ToolManager is now initialized by the ToolIntegrationWrapper, not the base agent
         self.tool_manager = None
-        if self.config.get("use_mcp_tools"):
-            # mcp_servers may be empty dict
-            mcp_servers = self.config.get("mcp_servers", {})
-            self.init_tool_manager(mcp_servers)
-            # ToolIntegrationWrapper, if used (see create_agent_system factory),
-            # will handle patching for tool integration.
 
     def format_prompt(self) -> str:
         """
@@ -783,32 +777,6 @@ class AgentSystem(abc.ABC):
             output_file=output_file
         )
 
-    def init_tool_manager(self, mcp_servers):
-        """Initialize the tool manager with MCP server configurations"""
-        try:
-            from benchmark.src.tools.tool_manager import ToolManager
-            
-            # Check if we should use mock mode
-            mock_mode = self.config.get("mock_mcp", False)
-            # Extract tool assignment rules if present
-            tool_assignment = None
-            if isinstance(mcp_servers, dict) and "tool_assignment" in mcp_servers:
-                tool_assignment = mcp_servers.get("tool_assignment")
-                # Remove assignment rules from server configs to avoid passing them to MCP client
-                mcp_servers = {k: v for k, v in mcp_servers.items() if k != "tool_assignment"}
-            # Initialize tool manager with servers, mock flag, and assignment rules
-            self.tool_manager = ToolManager(
-                mcp_servers,
-                mock_mode=mock_mode,
-                tool_assignment_rules=tool_assignment
-            )
-            
-            if mock_mode:
-                print(f"[{self.name}] Initialized ToolManager in mock mode")
-        except ImportError:
-            print("Warning: Could not import ToolManager. MCP tools will not be available.")
-            self.tool_manager = None
-
 
 class AgentSystemRegistry:
     """Registry for agent systems available in the benchmark"""
@@ -881,38 +849,37 @@ class AgentSystemRegistry:
         # Ensure all agent systems are imported
         cls._import_agent_systems()
         
-        return {
-            name: {"class": info["class"].__name__, "default_config": info["default_config"]}
-            for name, info in cls._registry.items()
-        }
+        return {k: v.get("default_config", {}) for k, v in cls._registry.items()}
 
 
-# Factory function for creating agent systems
 def create_agent_system(name: str, config: Dict[str, Any] = None) -> Optional[AgentSystem]:
     """
     Create an agent system by name.
-
-    Args:
-        name: Name of the agent system
-        config: Configuration parameters
-
-    Returns:
-        An instance of the requested agent system
+    If 'use_tools' or 'use_mcp_tools' is in the config, the agent system
+    will be wrapped with ToolIntegrationWrapper to enable tool use.
     """
-    inst = AgentSystemRegistry.get(name, config)
-    
-    # If the config specifies using MCP tools, wrap the agent system
-    if inst and config and config.get("use_mcp_tools"):
+    AgentSystemRegistry._import_agent_systems()
+    config = config or {}
+
+    # Get an instance of the agent system from the registry
+    agent_system = AgentSystemRegistry.get(name, config=config)
+
+    if not agent_system:
+        return None
+    # Check if any tool integration should be applied
+    if config and (config.get("use_tools") or config.get("use_mcp_tools")):
         try:
-            from ..tools.tool_integration import ToolIntegrationWrapper
+            from benchmark.src.tools.tool_integration import ToolIntegrationWrapper
+            # Extract MCP server config and mock flag
             mcp_servers = config.get("mcp_servers", {})
             mock_mode = config.get("mock_mcp", False)
-            return ToolIntegrationWrapper(inst, mcp_servers, mock_mode)
-        except ImportError as e:
-            print(f"Warning: Could not import ToolIntegrationWrapper: {e}")
-            print("Continuing without tool integration.")
-            # Remove tool related configs to avoid unexpected behavior
-            if hasattr(inst.config, "use_mcp_tools"):
-                del inst.config["use_mcp_tools"]
-    
-    return inst
+
+            # Wrap the agent system
+            # The wrapper will now be responsible for initializing the ToolManager
+            agent_system = ToolIntegrationWrapper(agent_system, mcp_servers, mock=mock_mode)
+
+        except ImportError:
+            print("Warning: ToolIntegrationWrapper not found. Tool integration is disabled.")
+
+    return agent_system
+
