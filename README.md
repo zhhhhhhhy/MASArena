@@ -1,6 +1,5 @@
 
 # MAS Arena
-A comprehensive framework for benchmarking single and multi-agent systems across a wide range of tasks—evaluating performance, accuracy, and efficiency with built-in visualization and tool integration.
 
 ![MAS Arena](assets/intro.svg)
 

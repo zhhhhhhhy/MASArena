@@ -58,14 +58,14 @@
             <rect x="330" y="8" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
             <text x="362.5" y="19" class="component-v1">MetaGPT</text>
             <rect x="400" y="8" width="85" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
-            <text x="442.5" y="19" class="component-v1">evoagent</text>
+            <text x="442.5" y="19" class="component-v1">EvoAgent</text>
             <rect x="490" y="8" width="45" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
-            <text x="512.5" y="19" class="component-v1">swarm</text>
+            <text x="512.5" y="19" class="component-v1">Swarm</text>
             
             <rect x="330" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
-            <text x="362.5" y="46" class="component-v1">agentverse</text>
+            <text x="362.5" y="46" class="component-v1">AgentVerse</text>
             <rect x="400" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
-            <text x="432.5" y="46" class="component-v1">chateval</text>
+            <text x="432.5" y="46" class="component-v1">ChatEval</text>
             <rect x="470" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
             <text x="502.5" y="46" class="component-v1">...</text>
         </g>
