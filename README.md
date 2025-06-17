@@ -1,7 +1,8 @@
 
 # MAS Arena
-
 A comprehensive framework for benchmarking single and multi-agent systems across a wide range of tasks—evaluating performance, accuracy, and efficiency with built-in visualization and tool integration.
+
+![MAS Arena](assets/intro.svg)
 
 ## 🌟 Core Features
 
@@ -13,6 +14,7 @@ A comprehensive framework for benchmarking single and multi-agent systems across
 * **📂 Paired Datasets & Evaluators**: Add new benchmarks with minimal effort.
 
 ---
+## 🚀 Quick Start
 
 ### 1. Setup
 
@@ -36,9 +38,7 @@ MODEL_NAME=gpt-4o-mini
 OPENAI_API_BASE=https://api.openai.com/v1
 ```
 
----
-
-## 🧪 Running Benchmarks
+### 3. Running Benchmarks
 
 ```bash
 ./run_benchmark.sh math[benchmark] supervisor_mas[agent_system] 10[limit]

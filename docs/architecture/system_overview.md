@@ -1,6 +1,6 @@
-# Multi-Agent Benchmark System Architecture
+# MASArena's System Architecture
 
-This document provides a detailed overview of the Multi-Agent Benchmark system's architecture. It explains the core components, their interactions, and the overall data flow when running a benchmark.
+This document provides a detailed overview of the MAS Arena system's architecture. It explains the core components, their interactions, and the overall data flow when running a benchmark.
 
 ## High-Level Architecture
 
@@ -32,6 +32,20 @@ graph TD
         K[...]
     end
 
+    subgraph Tool Abstraction
+        U[tools.base.BaseTool]
+        V[tools.ToolManager]
+        W[tools.ToolSelector]
+    end
+
+    subgraph Concrete Tools
+        direction LR
+        X[ShellTool]
+        Y[BrowserTool]
+        Z[PythonExecuteTool]
+        AA[...]
+    end
+
     subgraph Evaluator Abstraction
         L[evaluators.base_evaluator.BaseEvaluator]
         M[evaluators.evaluate]
@@ -41,7 +55,7 @@ graph TD
         direction LR
         N[HumanEvalEvaluator]
         O[MBPPEvaluator]
-        P[SWEBenchEvaluator]
+        P[MathEvaluator]
         Q[...]
     end
     
@@ -66,6 +80,16 @@ graph TD
     F -- "Is subclassed by" --> J
     F -- "Is subclassed by" --> K
 
+    F -- "Uses" --> V
+
+    V -- "Uses" --> W
+    W -- "Selects from" --> U
+
+    U -- "Is subclassed by" --> X
+    U -- "Is subclassed by" --> Y
+    U -- "Is subclassed by" --> Z
+    U -- "Is subclassed by" --> AA
+
     F -- "Initializes" --> L
     L -- "Is subclassed by" --> N
     L -- "Is subclassed by" --> O
@@ -83,6 +107,7 @@ graph TD
 
     style F fill:#f9f,stroke:#333,stroke-width:2px
     style L fill:#ccf,stroke:#333,stroke-width:2px
+    style U fill:#ffc,stroke:#333,stroke-width:2px
 ```
 
 ## Execution Workflow
@@ -91,43 +116,57 @@ The following sequence diagram illustrates the step-by-step workflow when a benc
 
 ```mermaid
 sequenceDiagram
-    participant User
-    participant run_benchmark.sh
     participant main.py
     participant BenchmarkRunner
     participant AgentSystem
+    participant ToolManager
     participant Evaluator
 
-    User->>run_benchmark.sh: Execute with args
-    run_benchmark.sh->>main.py: Run Python script
-    main.py->>BenchmarkRunner: Instantiate(results_dir, metrics_dir)
-    main.py->>BenchmarkRunner: run(benchmark, agent_system, ...)
+    main.py->>BenchmarkRunner: Instantiate & run(...)
 
-    BenchmarkRunner->>AgentSystem: create_agent_system(agent_system, config)
+    BenchmarkRunner->>AgentSystem: create_agent_system(...)
     activate AgentSystem
     
-    AgentSystem->>Evaluator: Instantiate(evaluator_name)
+    AgentSystem->>ToolManager: Instantiate()
+    activate ToolManager
+    Note over AgentSystem, ToolManager: AgentSystem creates a ToolManager
+    deactivate ToolManager
+    
+    AgentSystem->>Evaluator: Instantiate(...)
     activate Evaluator
-    Note over AgentSystem, Evaluator: Agent creates its own Evaluator
+    Note over AgentSystem, Evaluator: AgentSystem creates an Evaluator
     deactivate Evaluator
     
-    BenchmarkRunner-->>AgentSystem: Returns created agent instance
+    BenchmarkRunner-->>AgentSystem: Return agent instance
 
     loop For each problem in dataset
         BenchmarkRunner->>AgentSystem: evaluate(problem)
+        
         AgentSystem->>AgentSystem: run_agent(problem)
-        Note right of AgentSystem: Core agent logic to generate solution
+        activate AgentSystem
+        
+        Note right of AgentSystem: Core agent logic starts
+        
+        AgentSystem->>ToolManager: execute_tool(tool_name, args)
+        activate ToolManager
+        ToolManager-->>AgentSystem: Return tool_output
+        deactivate ToolManager
+        
+        Note right of AgentSystem: Agent uses tool output
+        
+        deactivate AgentSystem
+        
         AgentSystem->>Evaluator: evaluate(solution, ground_truth)
         activate Evaluator
         Evaluator-->>AgentSystem: Return score & metrics
         deactivate Evaluator
+        
         AgentSystem-->>BenchmarkRunner: Return evaluation results
     end
     
     deactivate AgentSystem
     
     BenchmarkRunner->>main.py: Return summary
-    main.py->>User: Print summary and exit
 ```
 
 ## Core Components Decomposition
@@ -184,12 +223,12 @@ classDiagram
     class MBPPEvaluator {
     }
     
-    class SWEBenchEvaluator {
+    class MathEvaluator {
     }
 
     BaseEvaluator <|-- HumanEvalEvaluator
     BaseEvaluator <|-- MBPPEvaluator
-    BaseEvaluator <|-- SWEBenchEvaluator
+    BaseEvaluator <|-- MathEvaluator
 ```
 
 ## Extensibility
