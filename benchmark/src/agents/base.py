@@ -786,70 +786,50 @@ class AgentSystemRegistry:
 
     @classmethod
     def _import_agent_systems(cls):
-        """Import all agent system modules to ensure registration"""
+        """Import all agent system modules to trigger their registration."""
         if cls._initialized:
             return
-            
-        # Get the directory containing agent system modules
-        current_dir = Path(__file__).parent
-        
-        # Import all Python files in the agents directory
-        for file_path in glob.glob(str(current_dir / "*.py")):
-            if file_path == __file__:  # Skip this base.py file
-                continue
-                
-            module_name = Path(file_path).stem
-            try:
-                importlib.import_module(f"benchmark.src.agents.{module_name}")
-            except ImportError as e:
-                print(f"Warning: Failed to import agent system module {module_name}: {e}")
-                
+
+        # Import the package to trigger registration
         cls._initialized = True
 
     @classmethod
     def register(cls, name: str, agent_class, **default_config):
-        """
-        Register an agent system class with the registry.
-
-        Args:
-            name: Name to register the agent system under
-            agent_class: The agent system class
-            default_config: Default configuration parameters
-        """
-        cls._registry[name] = {"class": agent_class, "default_config": default_config}
+        """Register an agent system class with the registry."""
+        cls._registry[name] = {
+            "class": agent_class,
+            "default_config": default_config
+        }
 
     @classmethod
     def get(cls, name: str, config: Dict[str, Any] = None) -> Optional[AgentSystem]:
-        """
-        Get an instance of the specified agent system.
-
-        Args:
-            name: Name of the agent system
-            config: Configuration parameters (overrides defaults)
-
-        Returns:
-            An instance of the requested agent system or None if not found
-        """
-        # Ensure all agent systems are imported
+        """Get an instance of an agent system by name."""
         cls._import_agent_systems()
-        
         if name not in cls._registry:
-            return None
-
+            raise KeyError(f"Agent system '{name}' not found. Available: {', '.join(cls.get_available_system_names())}")
+        
         agent_info = cls._registry[name]
-        agent_config = dict(agent_info["default_config"])
-        if config:
-            agent_config.update(config)
-
+        agent_config = {**agent_info["default_config"], **(config or {})}
         return agent_info["class"](name=name, config=agent_config)
 
     @classmethod
     def list_available(cls) -> Dict[str, Any]:
-        """List all available agent systems"""
-        # Ensure all agent systems are imported
+        """List all available agent systems and their descriptions."""
         cls._import_agent_systems()
-        
-        return {k: v.get("default_config", {}) for k, v in cls._registry.items()}
+        return {name: info["default_config"].get("description", "") 
+                for name, info in cls._registry.items()}
+
+    @classmethod
+    def get_available_system_names(cls) -> list[str]:
+        """Returns a list of names of all registered agent systems."""
+        cls._import_agent_systems()
+        return sorted(cls._registry.keys())
+
+    @classmethod
+    def get_all_systems(cls) -> Dict[str, Dict[str, Any]]:
+        """Returns the complete dictionary of all registered agent systems."""
+        cls._import_agent_systems()
+        return cls._registry
 
 
 def create_agent_system(name: str, config: Dict[str, Any] = None) -> Optional[AgentSystem]:

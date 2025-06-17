@@ -13,12 +13,8 @@ from datetime import datetime
 
 from benchmark.src.metrics import (
     MetricsRegistry,
-    SystemMetricsCollector,
-    AgentMetricsCollector,
-    InterAgentMetricsCollector,
     MetricsCollector
 )
-from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
 from benchmark.src.evaluators import BENCHMARKS
 from benchmark.src.evaluators.utils.normalization import normalize_problem_keys
@@ -62,9 +58,6 @@ class BenchmarkRunner:
     def _setup_metrics(self):
         """Set up metrics collection"""
         registry = MetricsRegistry()
-        registry.register_collector("system", SystemMetricsCollector())
-        registry.register_collector("agent", AgentMetricsCollector())
-        registry.register_collector("inter_agent", InterAgentMetricsCollector())
         return registry
 
     def run(
@@ -339,10 +332,6 @@ class BenchmarkRunner:
         total = len(all_results)
         accuracy = correct / total if total > 0 else 0
 
-        # Generate inference metrics using UnifiedEvaluator
-        evaluator = UnifiedEvaluator()
-        inference_metrics = evaluator.evaluate_inference_metrics([str(output_file)])
-        
         # Summary
         summary = {
             "benchmark": benchmark_name,
@@ -355,7 +344,6 @@ class BenchmarkRunner:
             "results_file": str(output_file),
             "metrics_dir": str(metrics_output),
             "timestamp": self.timestamp,
-            "inference_metrics": inference_metrics.get(agent_system, {})
         }
 
         # Save summary with inference metrics to a separate file

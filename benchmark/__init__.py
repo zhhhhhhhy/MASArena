@@ -10,16 +10,8 @@ __version__ = "0.1.0"
 
 from benchmark.src.metrics import (
     MetricsRegistry,
-    MetricsCollectionConfig,
-    SystemMetricsCollector,
-    AgentMetricsCollector,
-    InterAgentMetricsCollector,
 )
 
 __all__ = [
     "MetricsRegistry",
-    "MetricsCollectionConfig",
-    "SystemMetricsCollector",
-    "AgentMetricsCollector",
-    "InterAgentMetricsCollector",
 ]
