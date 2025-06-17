@@ -1,7 +1,13 @@
-<h1 align="center"><b>MASArena🏟️</b></h1>
-<h3 align="center"><i>Layered Architecture & Stack & Swap & Built for Scale</i></h3>
+# <div align="center">
 
-![MAS Arena](assets/intro.svg)
+  <h1 align="center">MASArena 🏟️</h1>
+  <!-- <p align="center"><i>Multi-Agent Systems Arena</i></p> -->
+  
+  <p align="center">
+    <b>Layered Architecture</b> • <b>Stack</b> • <b>Swap</b> • <b>Built for Scale</b>
+  </p>
+  <img src="assets/intro.svg" alt="MASArena Architecture" width="800"/>
+</div>
 
 ## 🌟 Core Features
 
@@ -76,7 +82,7 @@ You can contribute in many ways:
   Bring in domain-specific or task-specific datasets (e.g., reasoning, planning, tool-use, collaboration) to broaden the scope of evaluation.
 
 * 🛠 **New Tools & Toolkits:**
-  Extend the framework’s tool ecosystem by integrating domain tools (e.g., search, calculators, code editors) and improving tool selection strategies.
+  Extend the framework's tool ecosystem by integrating domain tools (e.g., search, calculators, code editors) and improving tool selection strategies.
 
 * ⚙️ **Improvements & Utilities:**
   Help with performance optimization, failure handling, asynchronous processing, or new visualizations.

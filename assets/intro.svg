@@ -1,4 +1,4 @@
-<svg viewBox="0 0 800 410" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 800 330" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="layer1-v1" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
@@ -28,20 +28,17 @@
             </style>
         </defs>
         
-        <rect width="800" height="400" fill="#f8fafc"/>
+        <rect width="800" height="300" fill="none"/>
         
         <defs>
             <pattern id="grid-v1" width="30" height="30" patternUnits="userSpaceOnUse">
                 <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#e5e7eb" stroke-width="0.5" opacity="0.4"/>
             </pattern>
         </defs>
-        <rect width="800" height="400" fill="url(#grid-v1)"/>
-        
-        <text x="400" y="45" text-anchor="middle" class="title-v1"> MASArena</text>
-        <text x="400" y="68" text-anchor="middle" class="subtitle-v1">Layered Architecture &amp; Stack &amp; Swap &amp; Built for Scale</text>
+        <rect width="800" height="300" fill="none"/>
         
         <!-- Layer 1 -->
-        <g transform="translate(120, 100)">
+        <g transform="translate(120, 10)">
             <rect width="560" height="55" fill="url(#layer1-v1)" stroke="#1e3a8a" stroke-width="2" rx="10" filter="url(#shadow-v1)"/>
             <text x="25" y="22" class="layer-title-v1">🎯 Orchestration Layer</text>
             <text x="25" y="43" class="layer-desc-v1">Benchmark Runner &amp; Flow Control &amp; Configuration Management</text>
@@ -50,7 +47,7 @@
         </g>
         
         <!-- Layer 2 -->
-        <g transform="translate(120, 175)">
+        <g transform="translate(120, 83)">
             <rect width="560" height="65" fill="url(#layer2-v1)" stroke="#1e40af" stroke-width="2" rx="10" filter="url(#shadow-v1)"/>
             <text x="25" y="22" class="layer-title-v1">🤖 Agent Systems Layer</text>
             <text x="25" y="45" class="layer-desc-v1">Multi-Agent Orchestration &amp; Registry &amp; Lifecycle Management</text>
@@ -62,16 +59,16 @@
             <rect x="490" y="8" width="45" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
             <text x="512.5" y="19" class="component-v1">Swarm</text>
             
-            <rect x="330" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
-            <text x="362.5" y="46" class="component-v1">AgentVerse</text>
-            <rect x="400" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
-            <text x="432.5" y="46" class="component-v1">ChatEval</text>
-            <rect x="470" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
-            <text x="502.5" y="46" class="component-v1">...</text>
+            <rect x="335" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
+            <text x="367.5" y="46" class="component-v1">AgentVerse</text>
+            <rect x="405" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
+            <text x="437.5" y="46" class="component-v1">ChatEval</text>
+            <rect x="475" y="35" width="65" height="18" fill="rgba(255,255,255,0.9)" stroke="#1e40af" stroke-width="1" rx="3"/>
+            <text x="507.5" y="46" class="component-v1">...</text>
         </g>
         
         <!-- Layer 3 -->
-        <g transform="translate(120, 260)">
+        <g transform="translate(120, 165)">
             <rect width="560" height="65" fill="url(#layer3-v1)" stroke="#2563eb" stroke-width="2" rx="10" filter="url(#shadow-v1)"/>
             <text x="25" y="25" class="layer-title-v1">🔧 Tools &amp; Evaluators Layer</text>
             <text x="25" y="45" class="layer-desc-v1">Pluggable Tools &amp; Benchmarks &amp; Assessment Framework</text>
@@ -96,7 +93,7 @@
         </g>
             
             <!-- Layer 4 -->
-            <g transform="translate(120, 345)">
+            <g transform="translate(120, 245)">
                 <rect width="560" height="55" fill="url(#layer4-v1)" stroke="#3b82f6" stroke-width="2" rx="10" filter="url(#shadow-v1)"/>
                 <text x="25" y="22" class="layer-title-v1">📈 Visualization &amp; Output Layer</text>
                 <text x="25" y="42" class="layer-desc-v1">Interactive Dashboards &amp; Metrics &amp; Reports &amp; Real-time Debugging</text>
