@@ -1,4 +1,4 @@
-<h1 align="center"><b>🤖MASArena🏟️</b></h1>
+<h1 align="center"><b>MASArena🏟️</b></h1>
 <h3 align="center"><i>Layered Architecture & Stack & Swap & Built for Scale</i></h3>
 
 ![MAS Arena](assets/intro.svg)
@@ -12,7 +12,6 @@
 * **🧩 Easy Extensions**: Add agents via subclassing—no core changes.
 * **📂 Paired Datasets & Evaluators**: Add new benchmarks with minimal effort.
 
----
 ## 🚀 Quick Start
 
 ### 1. Setup
@@ -50,7 +49,6 @@ OPENAI_API_BASE=https://api.openai.com/v1
   * Single Agent: `single_agent`
   * Multi-Agent: `supervisor_mas`, `swarm`, `agentverse`, `chateval`, `evoagent`, `jarvis`, `metagpt`
 
----
 ## Additional Resources 
 - [Quick Start](docs/quick/quick_start.md): A quick start guide to get you started with MAS Arena.
 - [System Overview](docs/architecture/system_overview.md): A detailed overview of the system architecture.
@@ -64,8 +62,6 @@ OPENAI_API_BASE=https://api.openai.com/v1
 * [ ] Implement failure detection in MAS workflows
 * [ ] Add more benchmarks emphasizing tool usage
 * [ ] Improve configuration for MAS and tool integration
-
-----
 
 ## 🙌 Contributing
 
