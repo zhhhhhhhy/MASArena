@@ -1,8 +1,7 @@
 .DS_Store
 tests 
+.vscode
 
-# images
-*.png 
 
 # output
 output/
