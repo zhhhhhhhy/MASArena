@@ -1,4 +1,4 @@
-<svg viewBox="0 0 800 550" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 800 410" xmlns="http://www.w3.org/2000/svg">
         <defs>
             <linearGradient id="layer1-v1" x1="0%" y1="0%" x2="100%" y2="0%">
                 <stop offset="0%" style="stop-color:#ffffff;stop-opacity:1" />
@@ -28,14 +28,14 @@
             </style>
         </defs>
         
-        <rect width="800" height="420" fill="#f8fafc"/>
+        <rect width="800" height="400" fill="#f8fafc"/>
         
         <defs>
             <pattern id="grid-v1" width="30" height="30" patternUnits="userSpaceOnUse">
                 <path d="M 30 0 L 0 0 0 30" fill="none" stroke="#e5e7eb" stroke-width="0.5" opacity="0.4"/>
             </pattern>
         </defs>
-        <rect width="800" height="550" fill="url(#grid-v1)"/>
+        <rect width="800" height="400" fill="url(#grid-v1)"/>
         
         <text x="400" y="45" text-anchor="middle" class="title-v1"> MASArena</text>
         <text x="400" y="68" text-anchor="middle" class="subtitle-v1">Layered Architecture &amp; Stack &amp; Swap &amp; Built for Scale</text>
