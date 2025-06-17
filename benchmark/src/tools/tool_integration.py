@@ -1,6 +1,12 @@
+import logging
 from typing import Dict, Any, Optional
 from benchmark.src.tools.tool_selector import ToolSelector
+from benchmark.src.tools.tool_manager import ToolManager
 from benchmark.src.agents.base import AgentSystem
+
+# Set up a logger for tool integration
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - [%(name)s] - %(message)s')
 
 class ToolIntegrationWrapper(AgentSystem):
     """
@@ -23,17 +29,20 @@ class ToolIntegrationWrapper(AgentSystem):
         # Copy name and config from inner
         self.name = inner.name
         self.config = inner.config.copy()
-        # Initialize tool manager on wrapped agent
-        inner.config["use_mcp_tools"] = True
-        inner.config["mcp_servers"] = mcp_servers
-        inner.config["mock_mcp"] = mock
-        
-        # Initialize tool manager if it doesn't exist yet
-        if not hasattr(inner, "tool_manager") or inner.tool_manager is None:
-            inner.init_tool_manager(mcp_servers)
+
+        # Initialize the ToolManager with all necessary configs
+        self.tool_manager = ToolManager(
+            mcp_servers=mcp_servers,
+            mock_mode=mock,
+            use_local_tools=self.config.get("use_tools", False),
+            use_mcp_tools=self.config.get("use_mcp_tools", False),
+            tool_assignment_rules=self.config.get("tool_assignment_rules", None)
+        )
+        # Assign the created manager to the inner agent for reference
+        self.inner.tool_manager = self.tool_manager
             
         # Build the selector once
-        self.selector = ToolSelector(inner.tool_manager.get_tools())
+        self.selector = ToolSelector(self.tool_manager.get_tools())
         
         # Apply patches based on the type of agent system
         self._apply_patches()
@@ -65,12 +74,15 @@ class ToolIntegrationWrapper(AgentSystem):
             messages = result.get("messages", [])
             for msg in messages:
                 if hasattr(msg, 'tool_calls') and msg.tool_calls:
-                    print(f"[ToolIntegration] Tool call detected in message: {msg.tool_calls}")
-                if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs:
-                    print(f"[ToolIntegration] Additional tool message: {msg.additional_kwargs}")
+                    for tool_call in msg.tool_calls:
+                        logger.info(f"Tool call detected: {tool_call['name']}(args={tool_call['args']})")
+                if hasattr(msg, 'additional_kwargs') and msg.additional_kwargs.get('tool_calls'):
+                    for tool_call in msg.additional_kwargs['tool_calls']:
+                        logger.info(f"Tool call detected: {tool_call['function']['name']}(args={tool_call['function']['arguments']})")
             # Also check top-level result for tool_calls
-            if 'tool_calls' in result:
-                print(f"[ToolIntegration] Tool call detected in result: {result['tool_calls']}")
+            if 'tool_calls' in result and result['tool_calls']:
+                for tool_call in result['tool_calls']:
+                    logger.info(f"Tool call detected: {tool_call['name']}(args={tool_call['args']})")
         return result
     
     def _apply_patches(self):
