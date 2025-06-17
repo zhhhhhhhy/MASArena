@@ -1,5 +1,5 @@
-
-# MAS Arena
+<h1 align="center"><b>🤖MASArena🏟️</b></h1>
+<h3 align="center"><i>Layered Architecture & Stack & Swap & Built for Scale</i></h3>
 
 ![MAS Arena](assets/intro.svg)
 
