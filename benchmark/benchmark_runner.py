@@ -74,7 +74,8 @@ class BenchmarkRunner:
         limit=10,
         agent_system="single_agent",
         agent_config=None,
-        verbose=True
+        verbose=True,
+        data_id=None,
     ):
         """
         Run a benchmark with the specified configuration.
@@ -174,9 +175,12 @@ class BenchmarkRunner:
         except FileNotFoundError:
             raise FileNotFoundError(f"Data file not found: {data_path}")
 
-        # Limit problems
-        # random sample
-        problems = random.sample(problems, limit)
+        if data_id:
+            problems = [p for p in problems if p.get("task_id") == data_id]
+        else:
+            # Limit problems
+            # random sample
+            problems = random.sample(problems, limit)
         
         # Record problem count
         self.metrics_collector.record_metric(

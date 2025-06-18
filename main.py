@@ -66,6 +66,11 @@ def main():
         help="Enable integration of tools (default: False)"
     )
 
+    parser.add_argument(
+        "--data-id", type=str, default=None,
+        help="Data ID to use (default: None)"
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -122,6 +127,7 @@ def main():
             agent_system=args.agent_system,
             agent_config=agent_config if agent_config else None,
             verbose=args.verbose,
+            data_id=args.data_id
         )
         logger.info(f"Benchmark summary: {summary}")
         return 0
