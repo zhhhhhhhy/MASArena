@@ -134,10 +134,10 @@ class MMLU_ProEvaluator(BaseEvaluator):
         Returns:
             Extracted answer letter
         """
-        # Try to extract answer from <answer> tags
-        match = re.search(r'<answer>([A-Za-z])</answer>', response)
+        # Try to extract answer from <answer> tags, allowing for whitespace
+        match = re.search(r'<answer>\s*(.*?)\s*</answer>', response, re.DOTALL)
         if match:
-            return match.group(1)
+            return match.group(1).strip()
         
         # If no tags found, return original response
         return response.strip()
