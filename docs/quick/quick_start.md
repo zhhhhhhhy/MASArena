@@ -1,5 +1,7 @@
 # Quick Start
 
+This guide will help you get up and running with the Multi-Agent Benchmark framework.
+
 ## 1. Setup
 
 We recommend using [uv](https://docs.astral.sh/uv/) for dependency and virtual environment management.
@@ -9,7 +11,13 @@ We recommend using [uv](https://docs.astral.sh/uv/) for dependency and virtual e
 uv sync
 ```
 
-### Option 1: Using `main.py`
+## 2. Running Benchmarks
+
+You can run benchmarks using `main.py` or the provided shell script.
+
+### Using `main.py`
+
+#### Basic Usage
 
 ```bash
 # Run a math benchmark with a single agent
@@ -21,14 +29,47 @@ python main.py --benchmark math --agent-system supervisor_mas --limit 10
 # Run with swarm-based multi-agent system
 python main.py --benchmark math --agent-system swarm --limit 5
 ```
+### Using the Shell Runner
 
-### Option 2: Using the Shell Runner
+A convenience script `run_benchmark.sh` is provided for quick runs.
 
 ```bash
+# Syntax: ./run_benchmark.sh <benchmark_name> <agent_system> <limit>
 ./run_benchmark.sh math supervisor_mas 10
 ```
+#### Advanced Usage: Asynchronous Execution
 
-Example output:
+For benchmarks that support concurrency, you can run them asynchronously to speed up evaluation.
+
+```bash
+# Run the humaneval benchmark with a concurrency of 10
+python main.py --benchmark humaneval --async-run --concurrency 10
+```
+*Note: Benchmarks that do not support concurrency (e.g., `math`, `aime`) will automatically run in synchronous mode, even if `--async-run` is specified.*
+
+
+
+### Command-Line Arguments
+
+Here are some of the most common arguments for `main.py`:
+
+| Argument              | Description                                                              | Default                  |
+| --------------------- | ------------------------------------------------------------------------ | ------------------------ |
+| `--benchmark`         | The name of the benchmark to run.                                        | `math`                   |
+| `--agent-system`      | The agent system to use for the benchmark.                               | `single_agent`           |
+| `--limit`             | The maximum number of problems to evaluate.                              | `10`                     |
+| `--data`              | Path to a custom benchmark data file (JSONL format).                     | `data/{benchmark}_test.jsonl` |
+| `--async-run`         | Run the benchmark asynchronously for faster evaluation.                  | `False`                  |
+| `--concurrency`       | Set the concurrency level for asynchronous runs.                         | `10`                     |
+| `--results-dir`       | Directory to store detailed JSON results.                                | `results/`               |
+| `--metrics-dir`       | Directory to store performance and operational metrics.                  | `metrics/`               |
+| `--use-tools`         | Enable the agent to use integrated tools (e.g., code interpreter).       | `False`                  |
+| `--use-mcp-tools`     | Enable the agent to use tools via the Multi-Agent Communication Protocol. | `False`                  |
+| `--mcp-config-file`   | Path to the MCP server configuration file. Required if using MCP tools.  | `None`                   |
+
+### Example Output
+
+After a run, a summary is printed to the console:
 
 ```bash
 ================================================================================
@@ -47,14 +88,16 @@ $ python benchmark/src/visualization/visualize_benchmark.py visualize \
 
 ---
 
-## 4. Visualizing Agent Interactions
+## 3. Visualizing Agent Interactions
+
+You can generate an interactive HTML file to visualize agent message flows and other metadata from a completed benchmark run.
 
 ```bash
 python benchmark/src/visualization/visualize_benchmark.py visualize \
   --summary results/math_swarm_20250616_203434_summary.json
 ```
 
-This generates an interactive visualization of agent interactions and benchmark results.
+This is particularly useful for debugging and analyzing the behavior of multi-agent systems.
 
 ![visualization](../../assets/visual_1.png)
 
