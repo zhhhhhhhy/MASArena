@@ -90,7 +90,7 @@ Agent ID: {self.agent_id}
 class Aggregator:
     """Aggregates results from swarm agents to produce a final solution"""
 
-    def __init__(self, model_name: str = None):
+    def __init__(self, model_name: str = None, format_prompt: str = None):
         """
         Initialize the aggregator.
 
@@ -100,6 +100,7 @@ class Aggregator:
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.llm = ChatOpenAI(model=self.model_name)
         self.name = "aggregator"
+        self.format_prompt = format_prompt
 
     def aggregate(self, problem: str, solutions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
@@ -125,6 +126,8 @@ The solutions from different agents:
 
 Please carefully analyze these solutions, identify the correct approach, and provide the final answer.
 Make sure your final answer is clearly formatted and precise.
+
+{self.format_prompt}
 """
 
         messages = [
@@ -188,7 +191,7 @@ class SwarmSystem(AgentSystem):
         ]
         
         # Also create the aggregator here if it's to be managed for tools
-        aggregator = Aggregator(model_name=self.model_name)
+        aggregator = Aggregator(model_name=self.model_name, format_prompt=self.format_prompt)
         
         return {
             "workers": swarm_agents + [aggregator]
@@ -197,8 +200,8 @@ class SwarmSystem(AgentSystem):
     def _get_system_prompt(self) -> str:
         """Get system prompt for an agent based on its index"""
         base_prompt = "You are an intelligent AI assistant specialized in solving problems carefully and step by step."
-
-        return base_prompt + self.format_prompt
+      
+        return base_prompt
 
     async def _solve_problem_async(self, agent: SwarmAgent, problem: str) -> Dict[str, Any]:
         """Solve a problem asynchronously"""
