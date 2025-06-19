@@ -878,8 +878,12 @@ def create_agent_system(name: str, config: Dict[str, Any] = None) -> Optional[Ag
             # The wrapper will now be responsible for initializing the ToolManager
             agent_system = ToolIntegrationWrapper(agent_system, mcp_servers, mock=mock_mode)
 
-        except ImportError:
+        except ImportError as e:
+            import traceback
             print("Warning: ToolIntegrationWrapper not found. Tool integration is disabled.")
+            print("Underlying ImportError:")
+            traceback.print_exc()
+
 
     return agent_system
 
