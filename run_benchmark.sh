@@ -1,12 +1,13 @@
 #!/bin/bash
 # Benchmark Runner Script
-# Usage: ./run_benchmark.sh [benchmark_name] [agent_system] [limit] [mcp_config_file]
+# Usage: ./run_benchmark.sh [benchmark_name] [agent_system] [limit] [mcp_config_file] [concurrency]
 
 # Default values
 BENCHMARK=${1:-math}
 AGENT_SYSTEM=${2:-agentverse} # single_agent, supervisor_mas, swarm, agentverse
 LIMIT=${3:-2}
 MCP_CONFIG=${4:-}
+CONCURRENCY=${5:-}
 
 # Create necessary directories
 mkdir -p results metrics
@@ -24,6 +25,12 @@ if [ -n "$MCP_CONFIG" ]; then
 else
   echo "Using MCP tools: no"
 fi
+if [ -n "$CONCURRENCY" ]; then
+  echo "Concurrency: $CONCURRENCY"
+  echo "Running asynchronously: yes"
+else
+  echo "Running asynchronously: no"
+fi
 echo "====================================================="
 
 # Activate virtual environment if exists
@@ -38,12 +45,20 @@ else
   MCP_FLAGS=""
 fi
 
+# Build concurrency flags if provided
+if [ -n "$CONCURRENCY" ]; then
+  ASYNC_FLAGS="--async-run --concurrency $CONCURRENCY"
+else
+  ASYNC_FLAGS=""
+fi
+
 # Run the benchmark
 python main.py \
   --benchmark "$BENCHMARK" \
   --agent-system "$AGENT_SYSTEM" \
   --limit "$LIMIT" \
-  $MCP_FLAGS
+  $MCP_FLAGS \
+  $ASYNC_FLAGS
 
 # Exit with the same status as the Python script
 exit $? 

@@ -13,6 +13,7 @@ from pathlib import Path
 import datetime
 import importlib
 import glob
+import time
 from benchmark.src.agents.format_prompts import get_format_prompt
 from openai.types.completion_usage import CompletionUsage
 
@@ -462,14 +463,7 @@ class AgentSystem(abc.ABC):
         
         This method handles running the agent, evaluating the results,
         and collecting metrics.
-
-        Args:
-            problem: Dictionary containing the problem data
-
-        Returns:
-            Dictionary of evaluation results including any metrics
         """
-        # Initialize components if needed
         metrics_registry = kwargs.get("metrics_registry", self.metrics_registry)
         if metrics_registry:
             self.metrics_registry = metrics_registry
@@ -477,107 +471,60 @@ class AgentSystem(abc.ABC):
         self._initialize_evaluator()
         self._initialize_metrics_collector()
         
-        # Generate a run ID for this evaluation
         run_id = self.generate_run_id()
-        
-        # Set up metrics collection
+        problem_id = problem.get("id", f"problem_{hash(problem.get('problem', ''))}")
+
         if self.metrics_collector:
             self.metrics_collector.set_metrics_registry(self.metrics_registry)
-            
-            # Generate a stable problem ID if not present
-            problem_text = problem.get("problem", problem.get("question", ""))
-            problem_id = problem.get("id", f"problem_{hash(problem_text)}")
-            
-            # Record problem metadata
             self.metrics_collector.record_metric(
-                "problem.process", 
-                1.0, 
-                {
-                    "problem_id": problem_id,
-                    "agent_system": self.name,
-                    "evaluator": self.evaluator.name if self.evaluator else "unknown",
-                    "run_id": run_id
-                }
+                "problem.process", 1.0, 
+                {"problem_id": problem_id, "agent_system": self.name, "evaluator": self.evaluator.name, "run_id": run_id}
             )
-            
-            # Start problem timer
             self.metrics_collector.start_timer(
                 "problem_evaluation", 
-                {
-                    "problem_id": problem_id, 
-                    "agent_system": self.name,
-                    "evaluator": self.evaluator.name if self.evaluator else "unknown",
-                    "run_id": run_id
-                }
+                {"problem_id": problem_id, "agent_system": self.name, "evaluator": self.evaluator.name, "run_id": run_id}
             )
         
         try:
-            # Run the agent system
-            run_result = self.run_agent(problem, **kwargs)
+            agent_run_start_time = time.perf_counter()
+            run_output = self.run_agent(problem, **kwargs)
+            agent_run_end_time = time.perf_counter()
+            execution_time_ms = (agent_run_end_time - agent_run_start_time) * 1000
             
-            # Record execution time
-            execution_time_ms = 0
+            messages = run_output.get("messages", [])
+            usage_metrics = self._record_token_usage(problem_id, execution_time_ms, messages)
+            
+            self._record_agent_responses(problem_id, messages)
+            response_file = self.save_agent_responses(problem_id, run_id)
+            visualization_file = self.save_visualization_data(problem_id, run_id)
+            
+            if self.metrics_collector and (response_file or visualization_file):
+                self.metrics_collector.record_metric(
+                    "agent.response_files",
+                    {"response_file": str(response_file) if response_file else None, "visualization_file": str(visualization_file) if visualization_file else None},
+                    {"problem_id": problem_id, "agent_system": self.name, "run_id": run_id}
+                )
+            
+            eval_start_time = time.perf_counter()
+            eval_result = self.evaluator.evaluate(problem=problem, run_result=run_output)
+            eval_end_time = time.perf_counter()
+            eval_duration_ms = (eval_end_time - eval_start_time) * 1000
+            
             if self.metrics_collector:
-                execution_time_ms = self.metrics_collector.stop_timer("problem_evaluation")
-                
-                # Extract and record metrics from AI message metadata
-                messages = run_result.get("messages", [])
-                usage_metrics = self._record_token_usage(problem_id, execution_time_ms, messages)
-                
-                # Process and save agent responses
-                self._record_agent_responses(problem_id, messages)
-                response_file = self.save_agent_responses(problem_id, run_id)
-                
-                # Generate and save visualization data
-                visualization_file = self.save_visualization_data(problem_id, run_id)
-                
-                # Record paths to saved files
-                if response_file or visualization_file:
-                    self.metrics_collector.record_metric(
-                        "agent.response_files",
-                        {
-                            "response_file": str(response_file) if response_file else None,
-                            "visualization_file": str(visualization_file) if visualization_file else None
-                        },
-                        {
-                            "problem_id": problem_id,
-                            "agent_system": self.name,
-                            "run_id": run_id
-                        }
-                    )
+                score = eval_result.get("score", 0)
+                self.metrics_collector.record_evaluation_result(
+                    problem_id=problem_id, score=score, duration_ms=execution_time_ms,
+                    metrics={"passed": score == 1, "agent_system": self.name, "run_id": run_id},
+                    tags={"agent_system": self.name, "evaluator": self.evaluator.name, "run_id": run_id}
+                )
             
-            # Evaluate results
-            evaluation_results = {}
-            if self.evaluator:
-                evaluation_results = self.evaluator.evaluate(problem, run_result)
-                
-                # Record evaluation metrics
-                if self.metrics_collector:
-                    score = evaluation_results.get("score", 0)
-                    self.metrics_collector.record_evaluation_result(
-                        problem_id=problem_id,
-                        score=score,
-                        duration_ms=execution_time_ms,
-                        metrics={
-                            "passed": score == 1,
-                            "agent_system": self.name,
-                            "run_id": run_id
-                        },
-                        tags={
-                            "agent_system": self.name,
-                            "evaluator": self.evaluator.name,
-                            "run_id": run_id
-                        }
-                    )
-            
-            # Return final results
             return {
-                **evaluation_results,  # Include all evaluation results
-                "messages": messages,  # Include messages for token analysis in benchmark_runner
+                **eval_result,
+                "messages": messages,
                 "execution_time_ms": execution_time_ms,
-                "llm_usage": usage_metrics,  # Include the collected LLM usage metrics
-                "response_file": str(response_file) if 'response_file' in locals() and response_file else None,
-                "visualization_file": str(visualization_file) if 'visualization_file' in locals() and visualization_file else None,
+                "llm_usage": usage_metrics,
+                "response_file": str(response_file) if response_file else None,
+                "visualization_file": str(visualization_file) if visualization_file else None,
                 "run_id": run_id
             }
             
@@ -786,70 +733,50 @@ class AgentSystemRegistry:
 
     @classmethod
     def _import_agent_systems(cls):
-        """Import all agent system modules to ensure registration"""
+        """Import all agent system modules to trigger their registration."""
         if cls._initialized:
             return
-            
-        # Get the directory containing agent system modules
-        current_dir = Path(__file__).parent
-        
-        # Import all Python files in the agents directory
-        for file_path in glob.glob(str(current_dir / "*.py")):
-            if file_path == __file__:  # Skip this base.py file
-                continue
-                
-            module_name = Path(file_path).stem
-            try:
-                importlib.import_module(f"benchmark.src.agents.{module_name}")
-            except ImportError as e:
-                print(f"Warning: Failed to import agent system module {module_name}: {e}")
-                
+
+        # Import the package to trigger registration
         cls._initialized = True
 
     @classmethod
     def register(cls, name: str, agent_class, **default_config):
-        """
-        Register an agent system class with the registry.
-
-        Args:
-            name: Name to register the agent system under
-            agent_class: The agent system class
-            default_config: Default configuration parameters
-        """
-        cls._registry[name] = {"class": agent_class, "default_config": default_config}
+        """Register an agent system class with the registry."""
+        cls._registry[name] = {
+            "class": agent_class,
+            "default_config": default_config
+        }
 
     @classmethod
     def get(cls, name: str, config: Dict[str, Any] = None) -> Optional[AgentSystem]:
-        """
-        Get an instance of the specified agent system.
-
-        Args:
-            name: Name of the agent system
-            config: Configuration parameters (overrides defaults)
-
-        Returns:
-            An instance of the requested agent system or None if not found
-        """
-        # Ensure all agent systems are imported
+        """Get an instance of an agent system by name."""
         cls._import_agent_systems()
-        
         if name not in cls._registry:
-            return None
-
+            raise KeyError(f"Agent system '{name}' not found. Available: {', '.join(cls.get_available_system_names())}")
+        
         agent_info = cls._registry[name]
-        agent_config = dict(agent_info["default_config"])
-        if config:
-            agent_config.update(config)
-
+        agent_config = {**agent_info["default_config"], **(config or {})}
         return agent_info["class"](name=name, config=agent_config)
 
     @classmethod
     def list_available(cls) -> Dict[str, Any]:
-        """List all available agent systems"""
-        # Ensure all agent systems are imported
+        """List all available agent systems and their descriptions."""
         cls._import_agent_systems()
-        
-        return {k: v.get("default_config", {}) for k, v in cls._registry.items()}
+        return {name: info["default_config"].get("description", "") 
+                for name, info in cls._registry.items()}
+
+    @classmethod
+    def get_available_system_names(cls) -> list[str]:
+        """Returns a list of names of all registered agent systems."""
+        cls._import_agent_systems()
+        return sorted(cls._registry.keys())
+
+    @classmethod
+    def get_all_systems(cls) -> Dict[str, Dict[str, Any]]:
+        """Returns the complete dictionary of all registered agent systems."""
+        cls._import_agent_systems()
+        return cls._registry
 
 
 def create_agent_system(name: str, config: Dict[str, Any] = None) -> Optional[AgentSystem]:

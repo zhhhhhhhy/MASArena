@@ -31,6 +31,8 @@ class MathEvaluator(BaseEvaluator):
     supporting LaTeX expressions, boxed answers, and various mathematical formats.
     """
     
+    SUPPORTS_CONCURRENCY = False
+    
     def __init__(self, name: str, config: Dict[str, Any] = None):
         """
         Initialize the Math Evaluator.

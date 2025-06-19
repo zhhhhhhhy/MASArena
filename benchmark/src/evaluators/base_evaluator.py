@@ -9,15 +9,18 @@ import os
 import json
 import logging
 from typing import Dict, Any, List, Optional, Union
+from abc import ABCMeta
 
 
-class BaseEvaluator:
+class BaseEvaluator(metaclass=ABCMeta):
     """
-    Base class for all evaluators in the benchmark framework.
-    
-    This class defines the common interface and functionality that all evaluators should implement.
+    Abstract base class for evaluators.
+    Each evaluator is responsible for scoring an agent's performance on a specific benchmark.
     """
-    
+    # All evaluators are considered thread-safe by default.
+    # Evaluators that are NOT thread-safe should override this to False.
+    SUPPORTS_CONCURRENCY = True
+
     def __init__(self, name: str, config: Dict[str, Any] = None):
         """
         Initialize the base evaluator.

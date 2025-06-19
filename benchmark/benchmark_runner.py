@@ -10,18 +10,37 @@ import json
 import random
 from pathlib import Path
 from datetime import datetime
+import asyncio
+from tqdm.asyncio import tqdm
+from openai.types.completion_usage import CompletionUsage
+import traceback
+from concurrent.futures import ThreadPoolExecutor
 
 from benchmark.src.metrics import (
     MetricsRegistry,
-    SystemMetricsCollector,
-    AgentMetricsCollector,
-    InterAgentMetricsCollector,
     MetricsCollector
 )
-from benchmark.src.metrics.unified_evaluator import UnifiedEvaluator
 from benchmark.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
 from benchmark.src.evaluators import BENCHMARKS
 from benchmark.src.evaluators.utils.normalization import normalize_problem_keys
+
+def custom_json_serializer(obj):
+    """Custom JSON serializer for objects that are not serializable by default."""
+    if isinstance(obj, (datetime, Path)):
+        return str(obj)
+    if hasattr(obj, '__dict__'):
+        # For AIMessage-like objects, convert to dict
+        return {key: getattr(obj, key) for key in obj.__dict__ if not key.startswith('_')}
+    if isinstance(obj, CompletionUsage):
+        return {
+            "prompt_tokens": obj.prompt_tokens,
+            "completion_tokens": obj.completion_tokens,
+            "total_tokens": obj.total_tokens,
+        }
+    try:
+        return str(obj)  # Fallback for other non-serializable types
+    except Exception:
+        return f"Object of type {type(obj).__name__} is not JSON serializable"
 
 class BenchmarkRunner:
     """
@@ -62,11 +81,9 @@ class BenchmarkRunner:
     def _setup_metrics(self):
         """Set up metrics collection"""
         registry = MetricsRegistry()
-        registry.register_collector("system", SystemMetricsCollector())
-        registry.register_collector("agent", AgentMetricsCollector())
-        registry.register_collector("inter_agent", InterAgentMetricsCollector())
         return registry
 
+    def _prepare_benchmark(self, benchmark_name, data_path, limit, agent_system, agent_config, verbose):
     def run(
         self,
         benchmark_name="math",
@@ -100,296 +117,177 @@ class BenchmarkRunner:
         if verbose:
             print(f"Available agent systems: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
 
-        # Store agent configuration for later use
         self.agent_config = agent_config or {}
 
-        # Determine data path
-        if data_path is None:
-            if benchmark_name.lower() == "aime":
-                data_path = f"data/{benchmark_name}_aime2025-i_test.jsonl"
-            else:
-                data_path = f"data/{benchmark_name}_test.jsonl"
+        # Ensure the agent knows which evaluator to use by setting it in the config
+        self.agent_config['evaluator'] = benchmark_name
+
+        if not data_path:
+            data_path = benchmark_config.get("data_path", f"data/{benchmark_name}_test.jsonl")
 
         output_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}.json"
         metrics_output = Path(self.metrics_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}"
 
-        if verbose:
-            print(f"Running {benchmark_name} benchmark with {agent_system} agent system...")
-            print(f"Using data from: {data_path}")
-            print(f"Processing up to {limit} problems")
-
-        # Start metrics collection
-        self.metrics_registry.start_all_collectors()
-        
-        # Record benchmark metadata using centralized collector
-        self.metrics_collector.record_metric(
-            "benchmark.metadata",
-            1.0,
-            {
-                "benchmark": benchmark_name,
-                "agent_system": agent_system,
-                "limit": limit,
-                "timestamp": self.timestamp
-            }
-        )
-        
-        # Start benchmark timer through centralized collector
-        self.metrics_collector.start_timer(
-            "benchmark.execution",
-            {
-                "benchmark": benchmark_name,
-                "agent_system": agent_system,
-                "limit": limit
-            }
-        )
-
-        # Create agent system with appropriate configuration
-        if agent_config is None:
-            agent_config = {}
-
-        # Add evaluator name to configuration
-        agent_config["evaluator"] = benchmark_name
-        
-        # Set mock_mcp flag if using mcp_config_file with "mock" in the name
-        if agent_config.get("use_mcp_tools") and agent_config.get("mcp_config_file"):
-            config_file = agent_config.get("mcp_config_file", "")
-            if "mock" in config_file.lower():
-                agent_config["mock_mcp"] = True
-                if verbose:
-                    print(f"Using mock MCP tools (config: {config_file})")
-
-        # Create agent system
-        agent = create_agent_system(agent_system, agent_config)
+        agent = create_agent_system(agent_system, self.agent_config)
         if agent is None:
-            raise ValueError(
-                f"Unknown agent system: {agent_system}. Available: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}"
-            )
+            raise ValueError(f"Unknown agent system: {agent_system}. Available: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
 
-        # Set metrics registry
         agent.set_metrics_registry(self.metrics_registry)
 
-        # Load problems
         try:
             with open(data_path, "r") as f:
                 problems = [json.loads(line) for line in f]
         except FileNotFoundError:
             raise FileNotFoundError(f"Data file not found: {data_path}")
 
+        if limit and limit < len(problems):
+            problems = random.sample(problems, limit)
         if data_id:
             problems = [p for p in problems if p.get("task_id") == data_id]
         else:
             # Limit problems
             # random sample
             problems = random.sample(problems, limit)
-        
-        # Record problem count
-        self.metrics_collector.record_metric(
-            "benchmark.problem_count",
-            len(problems),
-            {
-                "benchmark": benchmark_name,
-                "agent_system": agent_system
+
+        return agent, problems, benchmark_config, output_file, metrics_output
+
+    def _process_one_problem(self, i, p, agent, benchmark_config, verbose=True):
+        key_mapping = benchmark_config.get("normalization_keys", {})
+        normalized_problem = normalize_problem_keys(p, key_mapping, i)
+        problem_id = normalized_problem["id"]
+
+        if verbose:
+            print(f"\nProblem {i + 1}: {problem_id}")
+
+        self.metrics_collector.start_timer(f"benchmark.problem.{problem_id}", {"problem_id": problem_id})
+
+        try:
+            results = agent.evaluate(normalized_problem, metrics_registry=self.metrics_registry)
+            problem_duration_ms = self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
+
+            duration_ms = results.get("execution_time_ms", problem_duration_ms)
+            score = results.get("score", 0)
+            is_correct = score == 1
+
+            self.metrics_collector.record_metric("benchmark.problem.result", score, {"problem_id": problem_id, "correct": is_correct, "duration_ms": duration_ms})
+
+            result_entry = {
+                "problem_id": problem_id,
+                "problem": normalized_problem["problem"],
+                "expected": normalized_problem["solution"],
+                "prediction": results.get("extracted_answer", ""),
+                "score": score,
+                "duration_ms": duration_ms,
+                "agent_system": agent.name,
+                "llm_usage": results.get("llm_usage", {}),
+                "summary": {"correct": is_correct, "score": score, "duration_ms": duration_ms},
             }
-        )
-
-        # Process problems
-        all_results = []
-        correct_count = 0
-        error_count = 0
-        total_duration = 0
-
-        for i, problem in enumerate(problems):
-            # Normalize problem dictionary using the config from the registry
-            key_mapping = benchmark_config.get("normalization_keys", {})
-            normalized_problem = normalize_problem_keys(problem, key_mapping, i)
-
-            problem_id = normalized_problem["id"]
-
             if verbose:
-                print(f"\nProblem {i + 1}/{len(problems)}: {problem_id}")
+                print(f"Result: {'✓' if is_correct else '✗'} ({duration_ms:.0f}ms)")
+            return result_entry
+        except Exception as e:
+            self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
+            self.metrics_collector.record_error("problem_processing", str(e), {"problem_id": problem_id, "error_type": type(e).__name__})
+            if verbose:
+                print(f"Error processing problem {problem_id}: {e}")
+                traceback.print_exc()
+            return {"problem_id": problem_id, "problem": normalized_problem.get("problem"), "error": str(e)}
 
-            # Start problem timer
-            self.metrics_collector.start_timer(
-                f"benchmark.problem.{problem_id}",
-                {
-                    "problem_id": problem_id,
-                    "benchmark": benchmark_name,
-                    "agent_system": agent_system,
-                    "problem_index": i
-                }
-            )
-
-            try:
-                # Evaluate the problem using the agent system
-                results = agent.evaluate(normalized_problem, metrics_registry=self.metrics_registry)
-
-                # Stop problem timer
-                problem_duration_ms = self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
-                
-                duration_ms = results.get("execution_time_ms", problem_duration_ms)
-                score = results.get("score", 0)
-                is_correct = score == 1
-                
-                # Update statistics
-                total_duration += duration_ms
-                if is_correct:
-                    correct_count += 1
-                    
-                # Record problem result
-                self.metrics_collector.record_metric(
-                    "benchmark.problem.result",
-                    score,
-                    {
-                        "problem_id": problem_id,
-                        "benchmark": benchmark_name,
-                        "agent_system": agent_system,
-                        "correct": is_correct,
-                        "duration_ms": duration_ms
-                    }
-                )
-                
-                # Create result entry
-                result_entry = {
-                    "problem_id": problem_id,
-                    "problem": normalized_problem["problem"],
-                    "expected": normalized_problem["solution"],
-                    "prediction": results.get("extracted_answer", ""),
-                    "score": score,
-                    "duration_ms": duration_ms,
-                    "agent_system": agent_system,
-                    "llm_usage": results.get("llm_usage", {}),  # Include LLM usage metrics
-                    # Add a simplified summary for quick reference
-                    "summary": {
-                        "correct": is_correct,
-                        "duration_ms": duration_ms,
-                        "total_tokens": results.get("llm_usage", {}).get("total_tokens", 0)
-                    },
-                }
-
-                all_results.append(result_entry)
-
-                if verbose:
-                    print(f"Result: {'✓' if is_correct else '✗'} ({duration_ms:.0f}ms)")
-                    print(f"Expected: {normalized_problem['solution']}")
-                    print(f"Predicted: {results.get('extracted_answer', '')}")
-
-            except Exception as e:
-                # Stop problem timer
-                self.metrics_collector.stop_timer(f"benchmark.problem.{problem_id}")
-                
-                # Record error in metrics
-                error_count += 1
-                self.metrics_collector.record_error(
-                    "problem_processing",
-                    str(e),
-                    {
-                        "problem_id": problem_id,
-                        "benchmark": benchmark_name,
-                        "agent_system": agent_system,
-                        "error_type": type(e).__name__
-                    }
-                )
-
-                if verbose:
-                    import traceback
-                    print(f"Error processing problem {problem_id} in benchmark {benchmark_name}: {e}")
-                    traceback.print_exc()
-
-                all_results.append(
-                    {
-                        "problem_id": problem_id,
-                        "problem": normalized_problem["problem"],
-                        "error": str(e),
-                        "duration_ms": 0,
-                        "agent_system": agent_system,
-                        # Add a simplified summary for error cases
-                        "summary": {
-                            "correct": False,
-                            "duration_ms": 0,
-                            "error": True,
-                            "error_type": type(e).__name__,
-                        },
-                    }
-                )
-
-        # Stop benchmark timer
-        benchmark_duration_ms = self.metrics_collector.stop_timer("benchmark.execution")
-        
-        # Record final benchmark statistics
-        self.metrics_collector.record_system_metrics(
-            {
-                "total_problems": len(problems),
-                "correct_count": correct_count,
-                "error_count": error_count,
-                "accuracy": correct_count / len(problems) if problems else 0,
-                "total_duration_ms": total_duration,
-                "avg_duration_per_problem": total_duration / len(problems) if problems else 0,
-            },
-            {
-                "benchmark": benchmark_name,
-                "agent_system": agent_system
-            }
-        )
-
-        # Save results to file
-        with open(output_file, "w") as f:
-            json.dump(all_results, f, indent=2)
-
-        # Export metrics
-        self.metrics_registry.export_all("json", str(metrics_output))
-
-        # Calculate statistics
-        correct = sum(1 for r in all_results if r.get("score", 0) == 1)
+    def _finalize_benchmark(self, all_results, benchmark_name, agent_system, output_file, metrics_output, verbose):
         total = len(all_results)
+        correct = sum(1 for r in all_results if r.get("score", 0) == 1)
         accuracy = correct / total if total > 0 else 0
+        total_duration = sum(r.get("duration_ms", 0) for r in all_results)
 
-        # Generate inference metrics using UnifiedEvaluator
-        evaluator = UnifiedEvaluator()
-        inference_metrics = evaluator.evaluate_inference_metrics([str(output_file)])
-        
-        # Summary
         summary = {
             "benchmark": benchmark_name,
             "agent_system": agent_system,
             "total_problems": total,
             "correct": correct,
             "accuracy": accuracy,
-            "total_duration_ms": benchmark_duration_ms,
-            "avg_duration_ms": benchmark_duration_ms / total if total > 0 else 0,
+            "total_duration_ms": total_duration,
+            "avg_duration_ms": total_duration / total if total > 0 else 0,
             "results_file": str(output_file),
             "metrics_dir": str(metrics_output),
             "timestamp": self.timestamp,
-            "inference_metrics": inference_metrics.get(agent_system, {})
         }
 
-        # Save summary with inference metrics to a separate file
-        summary_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}_summary.json"
-        with open(summary_file, "w") as f:
-            json.dump(summary, f, indent=2)
+        self.metrics_registry.stop_all_collectors()
+        self.metrics_registry.export_all(format="json", path=str(metrics_output))
 
-        # Save results for visualization
-        self.results = all_results
-        self.summary = summary
+        # Create a separate summary file for visualization
+        summary_file = output_file.with_name(f"{output_file.stem}_summary.json")
+        with open(summary_file, "w") as f:
+            json.dump(summary, f, indent=4, default=custom_json_serializer)
+
+        # Save main results file
+        with open(output_file, "w") as f:
+            json.dump({"summary": summary, "results": all_results}, f, indent=4, default=custom_json_serializer)
 
         if verbose:
-            print("\nBenchmark complete!")
-            
             print("\n" + "=" * 80)
             print("Benchmark Summary")
             print("=" * 80)
-            
-            print(f"Agent system: {agent_system}")
-            print(f"Accuracy: {accuracy:.2%} ({correct}/{total})")
-            print(f"Total duration: {benchmark_duration_ms:.0f}ms")
-            print(f"Results saved to: {output_file}")
-            # print(f"Metrics saved to: {metrics_output}")
-            print(f"Summary saved to: {summary_file}")
-            print(f"Run visualization: $ python benchmark/src/visualization/visualize_benchmark.py visualize --summary {summary_file}")
+            print(json.dumps(summary, indent=2))
+            print("-" * 80)
+            print("To visualize results, run:")
+            print(f"$ python benchmark/src/visualization/visualize_benchmark.py visualize --summary {summary_file}")
+            print("=" * 80)
 
-        # Stop metrics collection
-        self.metrics_registry.stop_all_collectors()
-
+        self.results = all_results
+        self.summary = summary
         return summary
+
+    def run(self, benchmark_name="math", data_path=None, limit=10, agent_system="single_agent", agent_config=None, verbose=True):
+        agent, problems, benchmark_config, output_file, metrics_output = self._prepare_benchmark(
+            benchmark_name, data_path, limit, agent_system, agent_config, verbose
+        )
+
+        if verbose:
+            print(f"Running {benchmark_name} benchmark with {agent_system} agent system...")
+            print(f"Processing {len(problems)} problems sequentially.")
+
+        self.metrics_registry.start_all_collectors()
+        self.metrics_collector.start_timer("benchmark.execution")
+
+        all_results = [
+            self._process_one_problem(i, p, agent, benchmark_config, verbose)
+            for i, p in enumerate(tqdm(problems, desc="Processing Problems"))
+        ]
+
+        return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, metrics_output, verbose)
+
+    async def arun(self, benchmark_name="math", data_path=None, limit=10, agent_system="single_agent", agent_config=None, verbose=True, concurrency=10):
+        # The math benchmark uses a library that is not thread-safe.
+        # As a pragmatic solution, we fall back to synchronous execution for it.
+        if benchmark_name == "math":
+            if verbose:
+                print("Math benchmark does not support concurrency. Running synchronously.")
+            return self.run(benchmark_name, data_path, limit, agent_system, agent_config, verbose)
+
+        agent, problems, benchmark_config, output_file, metrics_output = self._prepare_benchmark(
+            benchmark_name, data_path, limit, agent_system, agent_config, verbose
+        )
+
+        if verbose:
+            print(f"Running {benchmark_name} benchmark asynchronously with {agent_system} agent system...")
+            print(f"Processing {len(problems)} problems with concurrency {concurrency}.")
+
+        self.metrics_registry.start_all_collectors()
+        self.metrics_collector.start_timer("benchmark.execution")
+
+        all_results = []
+        with ThreadPoolExecutor(max_workers=concurrency) as executor:
+            loop = asyncio.get_event_loop()
+            tasks = [
+                loop.run_in_executor(executor, self._process_one_problem, i, p, agent, benchmark_config, verbose)
+                for i, p in enumerate(problems)
+            ]
+            for future in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Processing Problems"):
+                result = await future
+                all_results.append(result)
+
+        return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, metrics_output, verbose)
 
     def visualize_results(self, output_dir=None):
         """

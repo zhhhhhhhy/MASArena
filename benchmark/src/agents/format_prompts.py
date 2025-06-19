@@ -92,9 +92,9 @@ Begin now. Remember: output only the compliant answer.
         prompt="""
 - Provide only the final answer within <answer>...</answer> tags, ensuring it matches the exact format required by the problem.
 - Ensure the final answer is a single line with no extra whitespace or formatting.
-- Only output the answer directly to the questions' options letter, no other text or explanations.
+- Only output the answer directly to the questions' options, no other text or explanations.
    <answer>
-   [Your final answer here]
+   [Your final answer here, only alphabet letters, e.g. A, B, C, D, no other text or explanations]
    </answer>
 """,
         description="Format prompt for MMLU benchmark",
