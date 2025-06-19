@@ -3,6 +3,7 @@ from typing import Dict, Any, Optional
 from benchmark.src.tools.tool_selector import ToolSelector
 from benchmark.src.tools.tool_manager import ToolManager
 from benchmark.src.agents.base import AgentSystem
+from langchain_core.utils.function_calling import convert_to_openai_tool
 
 # Set up a logger for tool integration
 logger = logging.getLogger(__name__)
@@ -175,7 +176,8 @@ class ToolIntegrationWrapper(AgentSystem):
                                 print(f"[ToolIntegration] WARNING: Worker '{worker_name}'s' llm in '{wrapper_self.inner.name}' does not have a 'bind_tools' method. Cannot bind {len(tool_objs_for_binding)} tools.")
                         elif tool_objs_for_binding:
                             try:
-                                worker_obj.llm = worker_obj.llm.bind_tools(tool_objs_for_binding)
+                                openapi_tools = [convert_to_openai_tool(t) for t in tool_objs_for_binding]
+                                worker_obj.llm = worker_obj.llm.bind_tools(openapi_tools)
                                 print(f"[ToolIntegration] Successfully bound {len(tool_objs_for_binding)} tools to worker '{worker_name}'.")
                             except Exception as e:
                                 print(f"[ToolIntegration] ERROR: Failed to bind tools to worker '{worker_name}' in '{wrapper_self.inner.name}'. Error: {e}")
@@ -207,9 +209,11 @@ class ToolIntegrationWrapper(AgentSystem):
             elif not hasattr(wrapper_self.inner.llm, 'bind_tools'):
                 if tool_objs:
                     print(f"[ToolIntegration] WARNING: LLM for single-agent system '{wrapper_self.inner.name}' does not have a 'bind_tools' method. Cannot bind {len(tool_objs)} tools.")
-            elif tool_objs: # Only bind if there are tools to bind
+            # Only bind if there are tools to bind
+            elif tool_objs:
                 try:
-                    wrapper_self.inner.llm = wrapper_self.inner.llm.bind_tools(tool_objs)
+                    openapi_tools = [convert_to_openai_tool(t) for t in tool_objs]
+                    wrapper_self.inner.llm = wrapper_self.inner.llm.bind_tools(openapi_tools)
                     print(f"[ToolIntegration] Successfully bound {len(tool_objs)} tools to single-agent system '{wrapper_self.inner.name}'.")
                 except Exception as e:
                     print(f"[ToolIntegration] ERROR: Failed to bind tools to single-agent system '{wrapper_self.inner.name}'. Error: {e}")
