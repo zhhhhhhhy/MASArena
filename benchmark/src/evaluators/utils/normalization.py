@@ -1,6 +1,8 @@
 """
 Utility functions for normalizing benchmark problem data.
 """
+import os
+from pathlib import Path
 from typing import Dict, Any
 
 def format_options(options: list) -> str:
@@ -22,6 +24,33 @@ def format_options(options: list) -> str:
         formatted.append(f"{letter}. {option}")
     
     return "\n".join(formatted)
+
+
+def add_files_to_prompt(
+    problem: Dict[str, Any], file_name: str = None
+):
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    relative_path = os.path.join(script_dir, '..', '..', '..', '..', 'data', 'files', file_name)
+    file_path = Path(os.path.normpath(relative_path))
+    if file_path.suffix in [".pdf", ".docx", ".doc", ".txt"]:
+        problem["problem"] += f" Here are the necessary document files: {file_path}"
+
+    elif file_path.suffix in [".jpg", ".jpeg", ".png"]:
+        problem["problem"] += f" Here are the necessary image files: {file_path}"
+
+    elif file_path.suffix in [".xlsx", "xls", ".csv"]:
+        problem["problem"] += (
+            f" Here are the necessary table files: {file_path}, for processing excel file,"
+            " you can use the excel tool or write python code to process the file"
+            " step-by-step and get the information."
+        )
+    elif file_path.suffix in [".py"]:
+        problem["problem"] += f" Here are the necessary python files: {file_path}"
+
+    else:
+        problem["problem"] += f" Here are the necessary files: {file_path}"
+
+    return problem["problem"]
 
 def normalize_problem_keys(problem: Dict[str, Any], key_mapping: Dict[str, str], problem_index: int) -> Dict[str, Any]:
     """
@@ -63,6 +92,10 @@ def normalize_problem_keys(problem: Dict[str, Any], key_mapping: Dict[str, str],
             normalized_problem["problem"] = f"{normalized_problem['problem']}\n\nOptions:\n{options_text}"
         else:
             normalized_problem["problem"] = f"Options:\n{options_text}"
+
+    if "file_name" in problem and problem["file_name"]:
+        file_name = problem["file_name"]
+        normalized_problem["problem"] = add_files_to_prompt(normalized_problem, file_name)
 
     # Ensure a unique ID for the problem, generating one if not provided.
     if "id" not in normalized_problem:

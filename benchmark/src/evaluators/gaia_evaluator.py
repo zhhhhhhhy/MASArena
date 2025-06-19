@@ -224,7 +224,7 @@ def _question_scorer(model_answer: str, ground_truth: str) -> bool:
         "id": "task_id",
         "problem": "Question",
         "solution": "Final answer",
-        "files": "File_Path",
+        "files": "file_name",
         "level": "Level",
     }
 )
