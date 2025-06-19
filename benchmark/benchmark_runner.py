@@ -84,16 +84,6 @@ class BenchmarkRunner:
         return registry
 
     def _prepare_benchmark(self, benchmark_name, data_path, limit, agent_system, agent_config, verbose):
-    def run(
-        self,
-        benchmark_name="math",
-        data_path=None,
-        limit=10,
-        agent_system="single_agent",
-        agent_config=None,
-        verbose=True,
-        data_id=None,
-    ):
         """
         Run a benchmark with the specified configuration.
 
@@ -142,12 +132,10 @@ class BenchmarkRunner:
 
         if limit and limit < len(problems):
             problems = random.sample(problems, limit)
-        if data_id:
-            problems = [p for p in problems if p.get("task_id") == data_id]
-        else:
-            # Limit problems
-            # random sample
-            problems = random.sample(problems, limit)
+
+        # Limit problems
+        # random sample
+        problems = random.sample(problems, limit)
 
         return agent, problems, benchmark_config, output_file, metrics_output
 

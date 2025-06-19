@@ -155,7 +155,7 @@ def main():
                 limit=args.limit,
                 agent_system=args.agent_system,
                 agent_config=agent_config if agent_config else None,
-                verbose=args.verbose,
+                verbose=args.verbose
             )
         logger.info(f"Benchmark summary: {summary}")
         return 0
