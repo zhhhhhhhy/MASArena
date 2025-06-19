@@ -670,13 +670,14 @@ class BenchmarkVisualizer:
         with open(summary_file, 'r') as f:
             summary_data = json.load(f)
         
-        # Load results data if provided
+        # Load results data from the path specified in the summary file
         results_data = []
-        if results_file:
-            results_file_path = results_file or summary_data.get("results_file")
-            if results_file_path and os.path.exists(results_file_path):
-                with open(results_file_path, 'r') as f:
-                    results_data = json.load(f)
+        results_file_path = results_file or summary_data.get("results_file")
+        if results_file_path and os.path.exists(results_file_path):
+            with open(results_file_path, 'r') as f:
+                # The JSON file is a dictionary, we need the value of the "results" key
+                data = json.load(f)
+                results_data = data.get("results", [])
         
         # Find problem visualizations if directory provided
         problem_visualizations = {}

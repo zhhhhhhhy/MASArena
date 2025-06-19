@@ -33,21 +33,7 @@ class HumanEvalEvaluator(BaseCodeEvaluator):
         """Raised when execution exceeds the allowed time limit."""
 
     def __init__(self, name: str, config: Dict[str, Any] = None):
-        super().__init__(name, config)
-
-        # Path to the test data and directory for logs/results
-        self.data_path = self.config.get("data_path", f"data/{name}_test.jsonl")
-        self.log_path = self.config.get("log_path", f"data/results/{name.upper()}")
-
-        # Create log directory if it doesn't exist
-        Path(self.log_path).mkdir(parents=True, exist_ok=True)
-
-        logging.basicConfig(
-            filename=f"{self.log_path}/evaluator.log",
-            level=logging.INFO,
-            format="%(asctime)s - %(levelname)s - %(message)s",
-        )
-        self.logger = logging.getLogger(__name__)
+        super().__init__(name, config) 
 
         # LangSmith evaluator for packaging the evaluation run
         self.run_evaluator = RunEvaluator()

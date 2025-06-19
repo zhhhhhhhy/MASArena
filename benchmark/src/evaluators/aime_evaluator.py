@@ -23,9 +23,11 @@ class AIMEEvaluator(BaseEvaluator):
     Evaluator for AIME-style math problems.
     Uses Math-Verify for robust mathematical expression evaluation.
     """
+    SUPPORTS_CONCURRENCY = False
+    
     def __init__(self, name: str = "aime", config: Dict[str, Any] = None):
         super().__init__(name, config)
-
+    
     @classmethod
     def from_config(cls, name: str, config: Dict[str, Any] = None):
         return cls(name, config)

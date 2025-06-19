@@ -3,6 +3,7 @@ import argparse
 import datetime
 import sys
 from pathlib import Path
+import asyncio
 
 from benchmark.benchmark_runner import BenchmarkRunner
 import logging
@@ -66,6 +67,13 @@ def main():
         help="Enable integration of tools (default: False)"
     )
 
+    parser.add_argument(
+        "--async-run", action="store_true", help="Run the benchmark asynchronously."
+    )
+    parser.add_argument(
+        "--concurrency", type=int, default=10, help="Concurrency level for async run."
+    )
+
     # Parse arguments
     args = parser.parse_args()
 
@@ -113,16 +121,37 @@ def main():
     # Create benchmark runner
     runner = BenchmarkRunner(results_dir=args.results_dir, metrics_dir=args.metrics_dir)
 
+    # Check for concurrency support
+    benchmark_config = BENCHMARKS.get(args.benchmark, {})
+    evaluator_class = benchmark_config.get("evaluator")
+    supports_concurrency = evaluator_class and getattr(evaluator_class, 'SUPPORTS_CONCURRENCY', True)
+
+    run_async = args.async_run and supports_concurrency
+    if args.async_run and not supports_concurrency:
+        if args.verbose:
+            print(f"Warning: {args.benchmark} benchmark does not support concurrency. Running synchronously.\n")
+
     # Run benchmark
     try:
-        summary = runner.run(
-            benchmark_name=args.benchmark,
-            data_path=args.data,
-            limit=args.limit,
-            agent_system=args.agent_system,
-            agent_config=agent_config if agent_config else None,
-            verbose=args.verbose,
-        )
+        if run_async:
+            summary = asyncio.run(runner.arun(
+                benchmark_name=args.benchmark,
+                data_path=args.data,
+                limit=args.limit,
+                agent_system=args.agent_system,
+                agent_config=agent_config if agent_config else None,
+                verbose=args.verbose,
+                concurrency=args.concurrency,
+            ))
+        else:
+            summary = runner.run(
+                benchmark_name=args.benchmark,
+                data_path=args.data,
+                limit=args.limit,
+                agent_system=args.agent_system,
+                agent_config=agent_config if agent_config else None,
+                verbose=args.verbose,
+            )
         logger.info(f"Benchmark summary: {summary}")
         return 0
 
