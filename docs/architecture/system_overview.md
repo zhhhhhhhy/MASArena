@@ -205,7 +205,7 @@ classDiagram
 
 ### Evaluators
 
-Similarly, all evaluators inherit from a `BaseEvaluator` class (though not strictly enforced as an ABC in the current implementation, it serves this role conceptually). The `AVAILABLE_EVALUATORS` dictionary in `benchmark/src/evaluators/__init__.py` acts as a registry.
+Similarly, all evaluators inherit from a `BaseEvaluator` class (though not strictly enforced as an ABC in the current implementation, it serves this role conceptually). The `AVAILABLE_EVALUATORS` dictionary in `mas_arena/src/evaluators/__init__.py` acts as a registry.
 
 ```mermaid
 classDiagram
@@ -236,12 +236,12 @@ classDiagram
 Adding a new agent or evaluator to the system is straightforward.
 
 ### Adding a New Agent
-1.  Create a new Python file in `benchmark/src/agents/`.
+1.  Create a new Python file in `mas_arena/src/agents/`.
 2.  Implement a new class that inherits from `agents.base.AgentSystem`.
 3.  Implement the abstract `run_agent()` method with the agent's unique logic.
-4.  Register the new agent in `benchmark/src/agents/__init__.py` by adding it to the `AVAILABLE_AGENT_SYSTEMS` dictionary and the `__all__` list.
+4.  Register the new agent in `mas_arena/src/agents/__init__.py` by adding it to the `AVAILABLE_AGENT_SYSTEMS` dictionary and the `__all__` list.
 
 ### Adding a New Evaluator
-1.  Create a new Python file in `benchmark/src/evaluators/`.
+1.  Create a new Python file in `mas_arena/src/evaluators/`.
 2.  Implement a new class that provides an `evaluate()` method.
-3.  Register the new evaluator in `benchmark/src/evaluators/__init__.py` by adding it to the `AVAILABLE_EVALUATORS` dictionary.
+3.  Register the new evaluator in `mas_arena/src/evaluators/__init__.py` by adding it to the `AVAILABLE_EVALUATORS` dictionary.

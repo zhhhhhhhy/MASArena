@@ -45,7 +45,7 @@ OPENAI_API_BASE=https://api.openai.com/v1
 ### 3. Running Benchmarks
 
 ```bash
-./run_benchmark.sh math[benchmark] supervisor_mas[agent_system] 10[limit]
+./run_benchmark.sh
 ```
 * Supported benchmarks: 
   * Math: `math`, `aime`

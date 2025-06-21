@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 import asyncio
 
-from benchmark.benchmark_runner import BenchmarkRunner
+from mas_arena.benchmark_runner import BenchmarkRunner
 import logging
 
 logger = logging.getLogger(__name__)
@@ -16,8 +16,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run benchmarks for multi-agent systems")
 
     # Import available agent systems and benchmarks
-    from benchmark.src.agents import AVAILABLE_AGENT_SYSTEMS
-    from benchmark.src.evaluators import BENCHMARKS
+    from mas_arena.src.agents import AVAILABLE_AGENT_SYSTEMS
+    from mas_arena.src.evaluators import BENCHMARKS
     parser.add_argument(
         "--benchmark",
         type=str,

@@ -7,7 +7,7 @@ BENCHMARK=${1:-math}
 AGENT_SYSTEM=${2:-agentverse} # single_agent, supervisor_mas, swarm, agentverse
 LIMIT=${3:-2}
 MCP_CONFIG=${4:-}
-CONCURRENCY=${5:-}
+CONCURRENCY=${5:-6}
 
 # Create necessary directories
 mkdir -p results metrics
