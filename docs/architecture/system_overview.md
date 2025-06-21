@@ -1,4 +1,4 @@
-# MASArena's System Architecture
+# System Architecture
 
 This document provides a detailed overview of the MAS Arena system's architecture. It explains the core components, their interactions, and the overall data flow when running a benchmark.
 

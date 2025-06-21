@@ -1,10 +1,21 @@
 site_name: MASArena
 site_url: https://lins-lab.github.io/masarena
+repo_name: LINs-lab/MASArena
+repo_url: https://github.com/LINs-lab/MASArena
 theme:
   name: material
+  icon:
+    repo: fontawesome/brands/github
 markdown_extensions:
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
           class: mermaid
           format: !!python/name:pymdownx.superfences.fence_code_format
+nav:
+  - Home: index.md
+  - Getting started:
+    - Installation: quick/quick_start.md
+    - Extending: extending/extending.md
+    - Tool Integration: tools/tool_integration.md
+  - System Architecture: architecture/system_overview.md
