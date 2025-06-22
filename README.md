@@ -28,7 +28,7 @@
 
 See MASArena in action! This demo showcases the framework's visualization capabilities:
 
-https://github.com/user-attachments/assets/your-video-id-here
+https://github.com/user-attachments/assets/b6e56eef-e00e-46bb-97e0-02d2aca47403
 
 ## 🚀 Quick Start
 
