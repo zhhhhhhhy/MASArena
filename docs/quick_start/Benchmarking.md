@@ -2,6 +2,16 @@
 
 You can run benchmarks using `main.py` or the provided shell script.
 
+## Configuration
+
+First, create a `.env` file in the project root and set the following:
+
+```bash
+OPENAI_API_KEY=your_openai_api_key
+MODEL_NAME=gpt-4o-mini
+OPENAI_API_BASE=https://api.openai.com/v1
+```
+
 ## Using `main.py`
 
 ### Basic Usage

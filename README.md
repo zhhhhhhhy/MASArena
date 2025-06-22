@@ -2,6 +2,10 @@
 
   <h1 align="center">MASArena 🏟️</h1>
   <!-- <p align="center"><i>Multi-Agent Systems Arena</i></p> -->
+  <p align="center">
+    <a href="https://lins-lab.github.io/MASArena"><img src="https://img.shields.io/badge/📖%20Docs-MASArena-blue?style=flat-square" alt="Documentation" height="20"/></a>
+    <a href="https://deepwiki.com/github/LINs-lab/MASArena"><img src="https://devin.ai/assets/deepwiki-badge.png" alt="Ask DeepWiki.com" height="20"/></a>
+  </p>
   
   <p align="center">
     <b>Layered Architecture</b> • <b>Stack</b> • <b>Swap</b> • <b>Built for Scale</b>
@@ -55,12 +59,9 @@ OPENAI_API_BASE=https://api.openai.com/v1
   * Single Agent: `single_agent`
   * Multi-Agent: `supervisor_mas`, `swarm`, `agentverse`, `chateval`, `evoagent`, `jarvis`, `metagpt`
 
-## Additional Resources 
-- [Quick Start](docs/quick/quick_start.md): A quick start guide to get you started with MAS Arena.
-- [System Overview](docs/architecture/system_overview.md): A detailed overview of the system architecture.
-- [Tool Integration](docs/tools/tool_integration.md): A guide to integrate tools into your agent system.
-- [Extending](docs/extending/extending.md): A guide to extend the framework with your own agent system.
+## 📚 Documentation
 
+For comprehensive guides, tutorials, and API references, visit our complete [documentation](https://lins-lab.github.io/MASArena).
 
 ## ✅ TODOs
 
