@@ -104,7 +104,7 @@ Here's a simplified example demonstrating a supervisor agent system:
 ```python
 from typing import Dict, List, Any, Optional, Union
 from langchain_openai import ChatOpenAI
-from mas_arena.src.agents.base import AgentSystem # Assuming AgentSystem is in this path
+from mas_arena.agents.base import AgentSystem # Assuming AgentSystem is in this path
 
 # A simple worker node
 class SimpleAgentNode:

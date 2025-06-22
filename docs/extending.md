@@ -21,7 +21,7 @@
 ### Example MAS Implementation
 
 ```python
-from mas_arena.src.agents.base import AgentSystem, AgentSystemRegistry
+from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
 
 class SimpleMAS(AgentSystem):
     def __init__(self, name: str = "simple_mas", config: Dict[str, Any] = None):
@@ -71,8 +71,8 @@ AgentSystemRegistry.register("simple_mas", SimpleMAS)
 ### Example Evaluator Implementation
 
 ```python
-from mas_arena.src.evaluators.base_evaluator import BaseEvaluator
-from mas_arena.src.evaluators.registry import register_benchmark
+from mas_arena.evaluators.base_evaluator import BaseEvaluator
+from mas_arena.evaluators.registry import register_benchmark
 
 @register_benchmark(
     name="simple",

@@ -2,6 +2,7 @@ site_name: MASArena
 site_url: https://lins-lab.github.io/masarena
 repo_name: LINs-lab/MASArena
 repo_url: https://github.com/LINs-lab/MASArena
+
 theme:
   name: material
   icon:
@@ -11,7 +12,15 @@ theme:
     - content.code.copy
     - content.code.select
     - content.code.annotate
+    - navigation.instant
+    - navigation.tracking
+    - toc.follow
+
 markdown_extensions:
+  - toc:
+      permalink: true
+      title: On this page
+      toc_depth: 3 
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -27,9 +36,10 @@ markdown_extensions:
 
 nav:
   - Getting started:
-    - Installation: quick_start/Installation.md
-    - Benchmarking: quick_start/Benchmarking.md
+    - Installation: quick_start/installation.md
+    - Usage: quick_start/usage.md
     - Visualization: quick_start/visualization.md
   - System Architecture: system_overview.md
   - Extending: extending.md
   - Tool Integration: tools/tool_integration.md
+  - Supported: supported.md
