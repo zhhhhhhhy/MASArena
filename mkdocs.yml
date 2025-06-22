@@ -5,6 +5,7 @@ repo_url: https://github.com/LINs-lab/MASArena
 theme:
   name: material
   icon:
+    logo: material/stadium-variant
     repo: fontawesome/brands/github
   features:
     - content.code.copy
@@ -25,7 +26,6 @@ markdown_extensions:
   - pymdownx.superfences
 
 nav:
-  - Home: index.md
   - Getting started:
     - Installation: quick_start/Installation.md
     - Benchmarking: quick_start/Benchmarking.md
