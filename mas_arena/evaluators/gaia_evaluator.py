@@ -12,7 +12,7 @@ from mas_arena.evaluators.registry import register_benchmark
 
 try:
     from sentence_transformers import SentenceTransformer
-    from mas_arena.src.utils.text_similarity_utils import are_strings_semantically_similar
+    from mas_arena.utils.text_similarity_utils import are_strings_semantically_similar
     SENTENCE_TRANSFORMERS_AVAILABLE = True
 except ImportError:
     SENTENCE_TRANSFORMERS_AVAILABLE = False

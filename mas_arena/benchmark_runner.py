@@ -218,7 +218,7 @@ class BenchmarkRunner:
             print(json.dumps(summary, indent=2))
             print("-" * 80)
             print("To visualize results, run:")
-            print(f"$ python mas_arena/src/visualization/visualize_mas_arena.py visualize --summary {summary_file}")
+            print(f"$ python mas_arena/visualization/visualize_benchmark.py visualize --summary {summary_file}")
             print("=" * 80)
 
         self.results = all_results

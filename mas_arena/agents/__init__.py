@@ -29,7 +29,7 @@ for _, name, _ in pkgutil.iter_modules(__path__):
 # Get all registered agent systems
 AVAILABLE_AGENT_SYSTEMS = AgentSystemRegistry.get_all_systems()
 
-# Define what gets imported when a user does 'from mas_arena.src.agents import *'
+# Define what gets imported when a user does 'from mas_arena.agents import *'
 __all__ = [
     "AgentSystem",
     "AgentSystemRegistry",

@@ -33,7 +33,7 @@ BENCHMARKS = benchmark_registry.get_all_benchmarks()
 # mapping benchmark names to their evaluator classes.
 AVAILABLE_EVALUATORS = {name: config["evaluator"] for name, config in BENCHMARKS.items()}
 
-# Define what gets imported when a user does 'from mas_arena.src.evaluators import *'
+# Define what gets imported when a user does 'from mas_arena.evaluators import *'
 __all__ = [
     "benchmark_registry",
     "BENCHMARKS",
