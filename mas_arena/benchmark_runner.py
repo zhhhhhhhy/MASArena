@@ -16,13 +16,13 @@ from openai.types.completion_usage import CompletionUsage
 import traceback
 from concurrent.futures import ThreadPoolExecutor
 
-from mas_arena.src.metrics import (
+from mas_arena.metrics import (
     MetricsRegistry,
     MetricsCollector
 )
-from mas_arena.src.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
-from mas_arena.src.evaluators import BENCHMARKS
-from mas_arena.src.evaluators.utils.normalization import normalize_problem_keys
+from mas_arena.agents import create_agent_system, AVAILABLE_AGENT_SYSTEMS
+from mas_arena.evaluators import BENCHMARKS
+from mas_arena.evaluators.utils.normalization import normalize_problem_keys
 
 def custom_json_serializer(obj):
     """Custom JSON serializer for objects that are not serializable by default."""
@@ -48,8 +48,8 @@ class BenchmarkRunner:
 
     Examples:
         >>> benchmark = BenchmarkRunner()
-        >>> results = mas_arena.run("math", limit=5)
-        >>> mas_arena.visualize_results()
+        >>> results = benchmark.run("math", limit=5)
+        >>> benchmark.visualize_results()
     """
 
     def __init__(self, results_dir="results", metrics_dir="metrics"):
@@ -105,8 +105,7 @@ class BenchmarkRunner:
         benchmark_config = BENCHMARKS[benchmark_name]
 
         if verbose:
-            print(f"Available agent systems: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
-
+                print(f"Available agent systems: {', '.join(AVAILABLE_AGENT_SYSTEMS.keys())}")
         self.agent_config = agent_config or {}
 
         # Ensure the agent knows which evaluator to use by setting it in the config
@@ -311,7 +310,7 @@ def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_ag
 
 if __name__ == "__main__":
     import argparse
-    from mas_arena.src.agents import AVAILABLE_AGENT_SYSTEMS
+    from mas_arena.agents import AVAILABLE_AGENT_SYSTEMS
 
     parser = argparse.ArgumentParser(description="Run a benchmark with a simplified interface")
     parser.add_argument(

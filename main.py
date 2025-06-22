@@ -16,8 +16,8 @@ def main():
     parser = argparse.ArgumentParser(description="Run benchmarks for multi-agent systems")
 
     # Import available agent systems and benchmarks
-    from mas_arena.src.agents import AVAILABLE_AGENT_SYSTEMS
-    from mas_arena.src.evaluators import BENCHMARKS
+    from mas_arena.agents import AVAILABLE_AGENT_SYSTEMS
+    from mas_arena.evaluators import BENCHMARKS
     parser.add_argument(
         "--benchmark",
         type=str,

@@ -104,7 +104,8 @@ Here's a simplified example demonstrating a supervisor agent system:
 ```python
 from typing import Dict, List, Any, Optional, Union
 from langchain_openai import ChatOpenAI
-from mas_arena.src.agents.base import AgentSystem # Assuming AgentSystem is in this path
+from mas_arena.agents.base import AgentSystem  # Assuming AgentSystem is in this path
+
 
 # A simple worker node
 class SimpleAgentNode:
@@ -124,22 +125,24 @@ class SimpleAgentNode:
             return f"{self.name} would run task '{task}' with tools: {tool_names}"
         return f"{self.name} would run task '{task}' (no tools assigned/bound)"
 
+
 class SimpleSupervisor(AgentSystem):
     def __init__(self, name: str = "SimpleSupervisor", config: Dict[str, Any] = None):
         super().__init__(name, config)
         # The actual worker instances will be created and managed via _create_agents
         # and the graph/logic in run_agent.
-        self.worker_nodes = None # Populated by run_agent calling _init_workers
-        self.graph = None # Placeholder for a more complex execution graph
+        self.worker_nodes = None  # Populated by run_agent calling _init_workers
+        self.graph = None  # Placeholder for a more complex execution graph
 
-    def _create_agents(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None) -> Dict[str, SimpleAgentNode]:
+    def _create_agents(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None) -> Dict[
+        str, SimpleAgentNode]:
         """Creates worker agents and returns them in a dictionary."""
         researcher_model = self.config.get("researcher_model", "gpt-4o-mini")
         coder_model = self.config.get("coder_model", "gpt-4o-mini")
 
         researcher = SimpleAgentNode(name="researcher", model_name=researcher_model)
         coder = SimpleAgentNode(name="coder", model_name=coder_model)
-        
+
         # Return a dictionary; ToolIntegrationWrapper will process the values.
         # The wrapper will modify these researcher and coder instances in place.
         return {
@@ -165,7 +168,7 @@ class SimpleSupervisor(AgentSystem):
         # Example delegation (simplified)
         research_result = researcher_node.run(f"Research for: {problem_content}")
         final_result = coder_node.run(f"Code based on: {research_result}")
-        
+
         return {"messages": [(self.name, final_result)]}
 
 ```

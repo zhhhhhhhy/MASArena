@@ -21,7 +21,8 @@
 ### Example MAS Implementation
 
 ```python
-from mas_arena.src.agents.base import AgentSystem, AgentSystemRegistry
+from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
+
 
 class SimpleMAS(AgentSystem):
     def __init__(self, name: str = "simple_mas", config: Dict[str, Any] = None):
@@ -43,6 +44,7 @@ class SimpleMAS(AgentSystem):
             "messages": [response],
             "final_answer": response.content
         }
+
 
 AgentSystemRegistry.register("simple_mas", SimpleMAS)
 ```
@@ -71,29 +73,30 @@ AgentSystemRegistry.register("simple_mas", SimpleMAS)
 ### Example Evaluator Implementation
 
 ```python
-from mas_arena.src.evaluators.base_evaluator import BaseEvaluator
-from mas_arena.src.evaluators.registry import register_benchmark
+from mas_arena.evaluators.base_evaluator import BaseEvaluator
+from mas_arena.evaluators.registry import register_benchmark
+
 
 @register_benchmark(
-    name="simple",
-    normalization_keys={
-        "id": "id",
-        "problem": "problem",
-        "solution": "solution"
-    }
+   name="simple",
+   normalization_keys={
+      "id": "id",
+      "problem": "problem",
+      "solution": "solution"
+   }
 )
 class SimpleEvaluator(BaseEvaluator):
-    def __init__(self, name: str, config: Dict[str, Any] = None):
-        super().__init__(name, config)
+   def __init__(self, name: str, config: Dict[str, Any] = None):
+      super().__init__(name, config)
 
-    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
-        final_answer = run_result.get("final_answer", "")
-        score = 1 if final_answer == problem["solution"] else 0
-        return {
-            "final_answer": final_answer,
-            "score": score
-        }
+   def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
+      final_answer = run_result.get("final_answer", "")
+      score = 1 if final_answer == problem["solution"] else 0
+      return {
+         "final_answer": final_answer,
+         "score": score
+      }
 
-    def verify_answer(self, prediction: str, reference: str) -> bool:
-        return prediction == reference 
+   def verify_answer(self, prediction: str, reference: str) -> bool:
+      return prediction == reference 
 ```

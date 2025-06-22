@@ -8,7 +8,7 @@ and performance characteristics.
 
 __version__ = "0.1.0"
 
-from mas_arena.src.metrics import (
+from mas_arena.metrics import (
     MetricsRegistry,
 )
 
