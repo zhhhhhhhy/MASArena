@@ -1,23 +1,10 @@
-# Quick Start
-
-This guide will help you get up and running with the Multi-Agent Benchmark framework.
-
-## 1. Setup
-
-We recommend using [uv](https://docs.astral.sh/uv/) for dependency and virtual environment management.
-
-```bash
-# Install dependencies
-uv sync
-```
-
-## 2. Running Benchmarks
+# Running Benchmarks
 
 You can run benchmarks using `main.py` or the provided shell script.
 
-### Using `main.py`
+## Using `main.py`
 
-#### Basic Usage
+### Basic Usage
 
 ```bash
 # Run a math benchmark with a single agent
@@ -29,6 +16,7 @@ python main.py --benchmark math --agent-system supervisor_mas --limit 10
 # Run with swarm-based multi-agent system
 python main.py --benchmark math --agent-system swarm --limit 5
 ```
+
 ### Using the Shell Runner
 
 A convenience script `run_benchmark.sh` is provided for quick runs.
@@ -37,7 +25,7 @@ A convenience script `run_benchmark.sh` is provided for quick runs.
 # Syntax: ./run_benchmark.sh <benchmark_name> <agent_system> <limit>
 ./run_benchmark.sh math supervisor_mas 10
 ```
-#### Advanced Usage: Asynchronous Execution
+### Advanced Usage: Asynchronous Execution
 
 For benchmarks that support concurrency, you can run them asynchronously to speed up evaluation.
 
@@ -49,7 +37,7 @@ python main.py --benchmark humaneval --async-run --concurrency 10
 
 
 
-### Command-Line Arguments
+## Command-Line Arguments
 
 Here are some of the most common arguments for `main.py`:
 
@@ -67,7 +55,7 @@ Here are some of the most common arguments for `main.py`:
 | `--use-mcp-tools`     | Enable the agent to use tools via the Multi-Agent Communication Protocol. | `False`                  |
 | `--mcp-config-file`   | Path to the MCP server configuration file. Required if using MCP tools.  | `None`                   |
 
-### Example Output
+## Example Output
 
 After a run, a summary is printed to the console:
 
@@ -86,24 +74,6 @@ $ python mas_arena/src/visualization/visualize_benchmark.py visualize \
   --summary results/math_swarm_20250616_203434_summary.json
 ```
 
----
-
-## 3. Visualizing Agent Interactions
-
-You can generate an interactive HTML file to visualize agent message flows and other metadata from a completed benchmark run.
-
-```bash
-python mas_arena/src/visualization/visualize_mas_arena.py visualize \
-  --summary results/math_swarm_20250616_203434_summary.json
-```
-
-This is particularly useful for debugging and analyzing the behavior of multi-agent systems.
-
-![visualization](../../assets/visual_1.png)
-
-![visualization](../../assets/visual_2.png)
-
-
 ## 📊 Supported Benchmarks
 
 | Benchmark   | Description                  | Dataset File               |
@@ -116,8 +86,6 @@ This is particularly useful for debugging and analyzing the behavior of multi-ag
 | `ifeval`    | Instruction following        | `ifeval_test.jsonl`        |
 | `aime`      | Math competition problems    | `aime_*_test.jsonl`        |
 | `mmlu_pro`  | Multi-domain knowledge       | `mmlu_pro_test.jsonl`      |
-
----
 
 ## 🤖 Supported Agent Systems
 

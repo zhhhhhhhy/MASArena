@@ -2,6 +2,8 @@
 
 A comprehensive framework for benchmarking single and multi-agent systems across a wide range of tasks—evaluating performance, accuracy, and efficiency with built-in visualization and tool integration.
 
+![MASArena](images/intro.svg)
+
 ## 🌟 Core Features
 
 * **🧱 Modular Design**: Swap agents, tools, datasets, prompts, and evaluators with ease.
