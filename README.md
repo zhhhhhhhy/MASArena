@@ -3,7 +3,9 @@
   <h1 align="center">MASArena 🏟️</h1>
   <!-- <p align="center"><i>Multi-Agent Systems Arena</i></p> -->
   <p align="center">
-    <a href="https://lins-lab.github.io/MASArena"><img src="https://img.shields.io/badge/📖%20Docs-MASArena-blue?style=flat-square" alt="Documentation" height="20"/></a>
+    <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python 3.11+" height="20"/></a>
+    <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="License: MIT" height="20"/></a>
+    <a href="https://lins-lab.github.io/MASArena"><img src="https://img.shields.io/badge/📖%20Docs-MASArena-blue" alt="Documentation" height="20"/></a>
     <a href="https://deepwiki.com/github/LINs-lab/MASArena"><img src="https://devin.ai/assets/deepwiki-badge.png" alt="Ask DeepWiki.com" height="20"/></a>
   </p>
   
@@ -21,6 +23,12 @@
 * **🔧 Tool Support**:  Manage tool selection via pluggable wrappers.
 * **🧩 Easy Extensions**: Add agents via subclassing—no core changes.
 * **📂 Paired Datasets & Evaluators**: Add new benchmarks with minimal effort.
+
+## 🎬 Demo
+
+See MASArena in action! This demo showcases the framework's visualization capabilities:
+
+https://github.com/user-attachments/assets/your-video-id-here
 
 ## 🚀 Quick Start
 
