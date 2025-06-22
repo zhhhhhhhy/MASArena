@@ -4,7 +4,7 @@ First clone the repo:
 
 ```bash
 git clone https://github.com/LINs-lab/MASArena
-cd MASArena
+cd MASArena/
 ```
 
 ## uv
