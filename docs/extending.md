@@ -23,7 +23,6 @@
 ```python
 from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
 
-
 class SimpleMAS(AgentSystem):
     def __init__(self, name: str = "simple_mas", config: Dict[str, Any] = None):
         super().__init__(name, config if config else {})
@@ -75,7 +74,10 @@ AgentSystemRegistry.register("simple_mas", SimpleMAS)
 ```python
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
 from mas_arena.evaluators.registry import register_benchmark
+<<<<<<< HEAD:docs/extending/extending.md
 
+=======
+>>>>>>> 4d2574344847618cc143b8b56c59e7d9587af426:docs/extending.md
 
 @register_benchmark(
    name="simple",
