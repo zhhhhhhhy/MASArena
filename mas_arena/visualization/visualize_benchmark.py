@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 
 # Add the project root to the Python path so we can import modules
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../")))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../")))
 
 try:
     from mas_arena.visualization.mas_visualizer import BenchmarkVisualizer
