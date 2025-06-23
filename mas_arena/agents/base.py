@@ -14,6 +14,7 @@ import datetime
 import time
 from mas_arena.agents.format_prompts import get_format_prompt
 from openai.types.completion_usage import CompletionUsage
+import aiofiles
 
 class AgentSystem(abc.ABC):
     """Base class for all agent systems in the benchmark framework
@@ -152,10 +153,22 @@ class AgentSystem(abc.ABC):
         usage_metrics = []
         
         for message in messages:
-            if hasattr(message, 'usage_metadata') and message.usage_metadata:
-                message_count += 1
+            usage_metadata = None
+            if hasattr(message, 'usage_metadata'):
                 usage_metadata = message.usage_metadata
-                agent_id = message.name if hasattr(message, 'name') and message.name else message.id if hasattr(message, 'id') and message.id else f"agent_{hash(message)}"
+            elif isinstance(message, dict) and 'usage_metadata' in message:
+                usage_metadata = message['usage_metadata']
+
+            if usage_metadata:
+                message_count += 1
+                agent_id = ""
+                if hasattr(message, 'name'):
+                    agent_id = message.name
+                elif isinstance(message, dict):
+                    agent_id = message.get("name") or message.get("agent_id")
+
+                agent_id = agent_id or (message.id if hasattr(message, 'id') and message.id else f"agent_{hash(message)}")
+
                 if isinstance(usage_metadata, CompletionUsage):
                     input_tokens = usage_metadata.prompt_tokens
                     output_tokens = usage_metadata.completion_tokens
@@ -311,7 +324,11 @@ class AgentSystem(abc.ABC):
                 print("debug message._record_agent_responses", message )
                 for key, value in message.items():
                     if key not in response_data:
-                        response_data[key] = value
+                        # Convert CompletionUsage to a serializable dict
+                        if key == "usage_metadata" and isinstance(value, CompletionUsage):
+                            response_data[key] = value.model_dump()
+                        else:
+                            response_data[key] = value
             
             if response_data.get("content"):  # Only add if there's content
                 formatted_responses.append(response_data)
@@ -319,7 +336,7 @@ class AgentSystem(abc.ABC):
         
         return formatted_responses
 
-    def save_agent_responses(self, problem_id: str, run_id: str = None):
+    async def save_agent_responses(self, problem_id: str, run_id: str = None):
         """
         Save agent responses to a file.
         
@@ -330,7 +347,12 @@ class AgentSystem(abc.ABC):
         Returns:
             Path to the saved file
         """
-        if not self.agent_responses:
+        # Filter responses for the current problem ID
+        responses_for_problem = [
+            r for r in self.agent_responses if r.get("problem_id") == problem_id
+        ]
+
+        if not responses_for_problem:
             return None
             
         # Generate filename
@@ -340,14 +362,14 @@ class AgentSystem(abc.ABC):
         file_path = self.responses_dir / filename
         
         # Save to file
-        with open(file_path, 'w') as f:
-            json.dump({
+        async with aiofiles.open(file_path, 'w') as f:
+            await f.write(json.dumps({
                 "problem_id": problem_id,
                 "agent_system": self.name,
                 "run_id": run_id,
                 "timestamp": timestamp,
-                "responses": self.agent_responses
-            }, f, indent=2)
+                "responses": responses_for_problem
+            }, indent=2))
         print(f"Saved agent responses to {file_path}")
         return file_path
 
@@ -418,7 +440,7 @@ class AgentSystem(abc.ABC):
             "links": list(combined_links.values())
         }
 
-    def save_visualization_data(self, problem_id: str, run_id: str = None):
+    async def save_visualization_data(self, problem_id: str, run_id: str = None):
         """
         Save visualization data to a file.
         
@@ -443,19 +465,19 @@ class AgentSystem(abc.ABC):
         responses = [r for r in self.agent_responses if r.get("problem_id") == problem_id]
         
         # Save to file
-        with open(file_path, 'w') as f:
-            json.dump({
+        async with aiofiles.open(file_path, 'w') as f:
+            await f.write(json.dumps({
                 "problem_id": problem_id,
                 "agent_system": self.name,
                 "run_id": run_id,
                 "timestamp": timestamp,
                 "visualization": visualization_data,
                 "responses": responses
-            }, f, indent=2)
+            }, indent=2))
             
         return file_path
 
-    def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def evaluate(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Evaluate the agent system on a given problem.
         
@@ -493,8 +515,8 @@ class AgentSystem(abc.ABC):
             usage_metrics = self._record_token_usage(problem_id, execution_time_ms, messages)
             
             self._record_agent_responses(problem_id, messages)
-            response_file = self.save_agent_responses(problem_id, run_id)
-            visualization_file = self.save_visualization_data(problem_id, run_id)
+            response_file = await self.save_agent_responses(problem_id, run_id)
+            visualization_file = await self.save_visualization_data(problem_id, run_id)
             
             if self.metrics_collector and (response_file or visualization_file):
                 self.metrics_collector.record_metric(

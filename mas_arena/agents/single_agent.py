@@ -70,12 +70,16 @@ class SingleAgent(AgentSystem):
         
 
         # Create message object with usage metadata
-        ai_message = type('AIMessage', (), {
+        # The base class expects AIMessage-like objects or dicts.
+        # Let's create a dict to be handled by the generic dict case.
+        ai_message = {
             'content': response_content,
             'name': 'single_agent',
-            'usage_metadata': response.usage if hasattr(response, 'usage') else None
-        })
-        
+            'role': 'assistant',
+            'message_type': 'ai_response',
+            'usage_metadata': response.usage
+        }
+
         # Return the response and message with usage metadata for the evaluate method
         return {
             "messages": [ai_message],

@@ -133,18 +133,18 @@ class BenchmarkRunner:
 
         return agent, problems, benchmark_config, output_file, metrics_output
 
-    def _process_one_problem(self, i, p, agent, benchmark_config, verbose=True):
+    async def _process_one_problem(self, i, p, agent, benchmark_config, verbose=True):
         key_mapping = benchmark_config.get("normalization_keys", {})
         normalized_problem = normalize_problem_keys(p, key_mapping, i)
         problem_id = normalized_problem["id"]
 
         if verbose:
-            print(f"\nProblem {i + 1}: {problem_id}")
+            print(f"Problem {i + 1}: {problem_id}")
 
         self.metrics_collector.start_timer(f"mas_arena.problem.{problem_id}", {"problem_id": problem_id})
 
         try:
-            results = agent.evaluate(normalized_problem, metrics_registry=self.metrics_registry)
+            results = await agent.evaluate(normalized_problem, metrics_registry=self.metrics_registry)
             problem_duration_ms = self.metrics_collector.stop_timer(f"mas_arena.problem.{problem_id}")
 
             duration_ms = results.get("execution_time_ms", problem_duration_ms)
@@ -232,8 +232,16 @@ class BenchmarkRunner:
         self.metrics_registry.start_all_collectors()
         self.metrics_collector.start_timer("mas_arena.execution")
 
+        # Since _process_one_problem is now async, we need to run it in an event loop
+        # For sequential execution, we can still use an event loop to run one at a time
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
         all_results = [
-            self._process_one_problem(i, p, agent, benchmark_config, verbose)
+            loop.run_until_complete(self._process_one_problem(i, p, agent, benchmark_config, verbose))
             for i, p in enumerate(tqdm(problems, desc="Processing Problems"))
         ]
 
@@ -251,16 +259,18 @@ class BenchmarkRunner:
         self.metrics_registry.start_all_collectors()
         self.metrics_collector.start_timer("mas_arena.execution")
 
-        all_results = []
-        with ThreadPoolExecutor(max_workers=concurrency) as executor:
-            loop = asyncio.get_event_loop()
-            tasks = [
-                loop.run_in_executor(executor, self._process_one_problem, i, p, agent, benchmark_config, verbose)
-                for i, p in enumerate(problems)
-            ]
-            for future in tqdm(asyncio.as_completed(tasks), total=len(tasks), desc="Processing Problems"):
-                result = await future
-                all_results.append(result)
+        semaphore = asyncio.Semaphore(concurrency)
+
+        async def process_with_semaphore(i, p):
+            async with semaphore:
+                return await self._process_one_problem(i, p, agent, benchmark_config, verbose)
+
+        tasks = [
+            process_with_semaphore(i, p)
+            for i, p in enumerate(problems)
+        ]
+        
+        all_results = await tqdm.gather(*tasks, desc="Processing Problems")
 
         return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, metrics_output, verbose)
 
