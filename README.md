@@ -8,7 +8,7 @@
     <a href="https://lins-lab.github.io/MASArena"><img src="https://img.shields.io/badge/📖%20Docs-MASArena-blue" alt="Documentation" height="20"/></a>
     <a href="https://deepwiki.com/LINs-lab/MASArena"><img src="https://devin.ai/assets/deepwiki-badge.png" alt="Ask DeepWiki.com" height="20"/></a>
   </p>
-  
+
   <p align="center">
     <b>Layered Architecture</b> • <b>Stack</b> • <b>Swap</b> • <b>Built for Scale</b>
   </p>
@@ -77,6 +77,10 @@ For comprehensive guides, tutorials, and API references, visit our complete [doc
 * [ ] Implement failure detection in MAS workflows
 * [ ] Add more benchmarks emphasizing tool usage
 * [ ] Improve configuration for MAS and tool integration
+* [ ] Integrate multiple tools(e.g., Browser, Video, Audio, Docker) into the current evaluation framework
+* [ ] Optimize the framework's tool management architecture to decouple MCP tool invocation from local tool invocation
+* [ ] Implement more benchmark evaluations(e.g., webArena, SweBench) that requires tool usage
+* [ ] Reimplementation of the Dynamic Architecture Paper Based on the Benchmark Framework
 
 ## 🙌 Contributing
 
