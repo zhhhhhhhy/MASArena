@@ -30,7 +30,7 @@ def main():
         "--data", type=str, default=None, help="Path to benchmark data (default: data/{benchmark}_test.jsonl)"
     )
 
-    parser.add_argument("--limit", type=int, default=10, help="Maximum number of problems to process (default: 10)")
+    parser.add_argument("--limit", type=int, default=None, help="Maximum number of problems to process (default: None)")
 
     parser.add_argument(
         "--agent-system",
@@ -120,7 +120,7 @@ def main():
     print(f"Benchmark: {args.benchmark}")
     print(f"Agent System: {args.agent_system}")
     print(f"Data: {args.data or 'default'}")
-    print(f"Limit: {args.limit}")
+    print(f"Limit: {args.limit or 'all'}")
     print("=" * 80 + "\n")
 
     # Create benchmark runner

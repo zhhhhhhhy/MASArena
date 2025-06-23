@@ -49,7 +49,6 @@ class BenchmarkRunner:
     Examples:
         >>> benchmark = BenchmarkRunner()
         >>> results = benchmark.run("math", limit=5)
-        >>> benchmark.visualize_results()
     """
 
     def __init__(self, results_dir="results", metrics_dir="metrics"):
@@ -131,10 +130,6 @@ class BenchmarkRunner:
 
         if limit and limit < len(problems):
             problems = random.sample(problems, limit)
-
-        # Limit problems
-        # random sample
-        problems = random.sample(problems, limit)
 
         return agent, problems, benchmark_config, output_file, metrics_output
 
@@ -225,7 +220,7 @@ class BenchmarkRunner:
         self.summary = summary
         return summary
 
-    def run(self, benchmark_name="math", data_path=None, limit=10, agent_system="single_agent", agent_config=None, verbose=True):
+    def run(self, benchmark_name="math", data_path=None, limit=None, agent_system="single_agent", agent_config=None, verbose=True):
         agent, problems, benchmark_config, output_file, metrics_output = self._prepare_benchmark(
             benchmark_name, data_path, limit, agent_system, agent_config, verbose
         )
@@ -244,14 +239,7 @@ class BenchmarkRunner:
 
         return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, metrics_output, verbose)
 
-    async def arun(self, benchmark_name="math", data_path=None, limit=10, agent_system="single_agent", agent_config=None, verbose=True, concurrency=10):
-        # The math benchmark uses a library that is not thread-safe.
-        # As a pragmatic solution, we fall back to synchronous execution for it.
-        if benchmark_name == "math":
-            if verbose:
-                print("Math benchmark does not support concurrency. Running synchronously.")
-            return self.run(benchmark_name, data_path, limit, agent_system, agent_config, verbose)
-
+    async def arun(self, benchmark_name="math", data_path=None, limit=None, agent_system="single_agent", agent_config=None, verbose=True, concurrency=10):
         agent, problems, benchmark_config, output_file, metrics_output = self._prepare_benchmark(
             benchmark_name, data_path, limit, agent_system, agent_config, verbose
         )
@@ -286,55 +274,3 @@ class BenchmarkRunner:
         pass 
 
 
-def run_simple_benchmark(benchmark_name="math", limit=5, agent_system="single_agent", visualize=True):
-    """
-    Simple one-line function to run a benchmark and get results.
-
-    Args:
-        benchmark_name: Name of the benchmark to run
-        limit: Maximum number of problems to process
-        agent_system: Agent system to use
-        visualize: Whether to generate visualizations
-
-    Returns:
-        Benchmark summary dictionary
-    """
-    benchmark = BenchmarkRunner()
-    summary = mas_arena.run(benchmark_name=benchmark_name, limit=limit, agent_system=agent_system, verbose=True)
-
-    if visualize:
-        mas_arena.visualize_results()
-
-    return summary
-
-
-if __name__ == "__main__":
-    import argparse
-    from mas_arena.agents import AVAILABLE_AGENT_SYSTEMS
-
-    parser = argparse.ArgumentParser(description="Run a benchmark with a simplified interface")
-    parser.add_argument(
-        "--benchmark",
-        default="math",
-        choices=["math", "drop", "gsm8k", "hotpotqa", "humaneval", "mbpp"],
-        help="Benchmark to run",
-    )
-    parser.add_argument(
-        "--agent-system",
-        default="single_agent",
-        choices=list(AVAILABLE_AGENT_SYSTEMS.keys()),
-        help="Agent system to use",
-    )
-    parser.add_argument("--limit", type=int, default=5, help="Maximum number of problems to process")
-    parser.add_argument("--no-viz", action="store_true", help="Skip visualization generation")
-
-    args = parser.parse_args()
-
-    summary = run_simple_benchmark(
-        benchmark_name=args.benchmark, 
-        limit=args.limit, 
-        agent_system=args.agent_system, 
-        visualize=not args.no_viz
-    )
-
-    print(f"\nAccuracy: {summary['accuracy']:.2%}")
