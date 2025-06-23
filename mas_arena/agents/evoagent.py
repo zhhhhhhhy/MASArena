@@ -136,9 +136,7 @@ class EvoAgent(AgentSystem):
         self.crossover_rate = self.config.get("crossover_rate", 0.7)
         self.mutation_rate = self.config.get("mutation_rate", 0.3)
         
-        # Initialize evaluator and metrics collector
-        self._initialize_evaluator()
-        self._initialize_metrics_collector()
+   
         
     def _initialize_base_agents(self) -> List[Agent]:
         """Initialize base agents"""

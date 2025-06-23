@@ -321,7 +321,6 @@ class AgentSystem(abc.ABC):
                 })
                 
                 # Include any additional fields from the dict
-                print("debug message._record_agent_responses", message )
                 for key, value in message.items():
                     if key not in response_data:
                         # Convert CompletionUsage to a serializable dict
@@ -619,130 +618,6 @@ class AgentSystem(abc.ABC):
             "evaluator": self.evaluator.name if self.evaluator else None
         }
 
-    def get_collected_metrics(self, problem_id=None, metric_type=None):
-        """
-        Retrieve metrics collected by the metrics_collector.
-        
-        Args:
-            problem_id: Optional problem ID to filter metrics by
-            metric_type: Optional metric type to filter by (e.g., 'llm_usage', 'evaluation')
-            
-        Returns:
-            Dictionary of collected metrics
-        """
-        if not self.metrics_collector or not self.metrics_registry:
-            return {}
-            
-        # Get all registered collectors
-        collectors = {
-            "system": self.metrics_registry.get_collector("system"),
-            "agent": self.metrics_registry.get_collector("agent"),
-            "inter_agent": self.metrics_registry.get_collector("inter_agent")
-        }
-        
-        # Filter out None collectors
-        collectors = {k: v for k, v in collectors.items() if v is not None}
-        
-        if not collectors:
-            return {}
-            
-        # Collect metrics from each collector
-        all_metrics = {}
-        for collector_name, collector in collectors.items():
-            metrics = collector.get_metrics()
-            
-            # Filter by problem_id if provided
-            if problem_id:
-                metrics = [m for m in metrics if m.get("tags", {}).get("problem_id") == problem_id]
-                
-            # Filter by metric_type if provided
-            if metric_type:
-                if metric_type == "llm_usage":
-                    metrics = [m for m in metrics if m.get("name", "").startswith("llm.")]
-                elif metric_type == "evaluation":
-                    metrics = [m for m in metrics if m.get("name", "").startswith("evaluation.")]
-            
-            all_metrics[collector_name] = metrics
-            
-        return all_metrics
-
-    def get_llm_usage_metrics(self, problem_id=None):
-        """
-        Retrieve only LLM usage metrics collected by the metrics_collector.
-        
-        Args:
-            problem_id: Optional problem ID to filter metrics by
-            
-        Returns:
-            List of LLM usage metrics
-        """
-        all_metrics = self.get_collected_metrics(problem_id=problem_id, metric_type="llm_usage")
-        
-        # Extract agent metrics which contain LLM usage
-        agent_metrics = all_metrics.get("agent", [])
-        llm_metrics = [m for m in agent_metrics if m.get("name", "").startswith("llm.")]
-        
-        return llm_metrics
-
-    def generate_benchmark_visualization(self, run_results, summary_data=None, output_dir=None):
-        """
-        Generate a benchmark summary visualization from the run results of multiple problems.
-        
-        Args:
-            run_results: List of problem evaluation results
-            summary_data: Optional dictionary with benchmark summary data
-            output_dir: Optional directory to save visualization files
-            
-        Returns:
-            Path to the generated HTML file
-        """
-        try:
-            from mas_arena.visualization.mas_visualizer import BenchmarkVisualizer
-        except ImportError:
-            print("Could not import BenchmarkVisualizer. Make sure the visualization module is available.")
-            return None
-        
-        # Create output directory if specified
-        output_dir = output_dir or "results/visualizations/html"
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Generate summary data if not provided
-        if not summary_data:
-            # Extract metrics from run_results
-            total_problems = len(run_results)
-            correct = sum(1 for r in run_results if r.get("score") == 1)
-            accuracy = correct / total_problems if total_problems > 0 else 0
-            total_duration_ms = sum(r.get("duration_ms", 0) for r in run_results)
-            avg_duration_ms = total_duration_ms / total_problems if total_problems > 0 else 0
-            
-            # Create summary data
-            summary_data = {
-                "benchmark": "unknown",
-                "agent_system": self.name,
-                "total_problems": total_problems,
-                "correct": correct,
-                "accuracy": accuracy,
-                "total_duration_ms": total_duration_ms,
-                "avg_duration_ms": avg_duration_ms,
-                "timestamp": datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-            }
-        
-        # Create benchmark visualizer
-        visualizer = BenchmarkVisualizer(output_dir)
-        
-        # Find visualization files for each problem
-        visualizations_dir = self.visualizations_dir
-        
-        # Generate and return the benchmark visualization
-        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_file = Path(output_dir) / f"benchmark_{self.name}_{timestamp}.html"
-        
-        return visualizer.visualize_benchmark(
-            summary_data=summary_data,
-            results_data=run_results,
-            visualizations_dir=visualizations_dir,
-            output_file=output_file
-        )
 
 
 class AgentSystemRegistry:

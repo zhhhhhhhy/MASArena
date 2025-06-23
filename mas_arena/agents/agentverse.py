@@ -640,7 +640,6 @@ class AgentVerse(AgentSystem):
         """Initialize the AgentVerse System"""
         super().__init__(name, config)
         self.config = config or {}
-        self.evaluator_name = self.config.get("evaluator", "math")
         self.num_agents = self.config.get("num_agents", 3)
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.use_parallel = self.config.get("parallel", True)
@@ -652,10 +651,7 @@ class AgentVerse(AgentSystem):
         self.early_stopping_rounds = self.config.get("early_stopping_rounds", 2)
         self.max_runtime = self.config.get("max_runtime", 300)  # Default maximum runtime 5 minutes
         
-        # Initialize evaluator and metrics collector through base class methods
-        self._initialize_evaluator()
-        self._initialize_metrics_collector()
-    
+     
     def _create_agents(self, problem: str, feedback: str = None) -> Dict[str, Any]:
         """
         Create specialized work agents based on the problem and optional feedback

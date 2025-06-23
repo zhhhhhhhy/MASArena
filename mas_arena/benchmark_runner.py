@@ -51,7 +51,7 @@ class BenchmarkRunner:
         >>> results = benchmark.run("math", limit=5)
     """
 
-    def __init__(self, results_dir="results", metrics_dir="metrics"):
+    def __init__(self, results_dir="results"):
         """
         Initialize the benchmark runner.
 
@@ -60,7 +60,6 @@ class BenchmarkRunner:
             metrics_dir: Directory to save metrics data
         """
         self.results_dir = results_dir
-        self.metrics_dir = metrics_dir
         self.timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         self.results = []
         self.agent_config = None  # Store agent configuration
@@ -69,7 +68,7 @@ class BenchmarkRunner:
 
         # Create directories
         os.makedirs(results_dir, exist_ok=True)
-        os.makedirs(metrics_dir, exist_ok=True)
+        # os.makedirs(metrics_dir, exist_ok=True)
 
         # Set up metrics
         self.metrics_registry = self._setup_metrics()
@@ -114,7 +113,6 @@ class BenchmarkRunner:
             data_path = benchmark_config.get("data_path", f"data/{benchmark_name}_test.jsonl")
 
         output_file = Path(self.results_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}.json"
-        metrics_output = Path(self.metrics_dir) / f"{benchmark_name}_{agent_system}_{self.timestamp}"
 
         agent = create_agent_system(agent_system, self.agent_config)
         if agent is None:
@@ -131,7 +129,7 @@ class BenchmarkRunner:
         if limit and limit < len(problems):
             problems = random.sample(problems, limit)
 
-        return agent, problems, benchmark_config, output_file, metrics_output
+        return agent, problems, benchmark_config, output_file
 
     async def _process_one_problem(self, i, p, agent, benchmark_config, verbose=True):
         key_mapping = benchmark_config.get("normalization_keys", {})
@@ -175,7 +173,7 @@ class BenchmarkRunner:
                 traceback.print_exc()
             return {"problem_id": problem_id, "problem": normalized_problem.get("problem"), "error": str(e)}
 
-    def _finalize_benchmark(self, all_results, benchmark_name, agent_system, output_file, metrics_output, verbose):
+    def _finalize_benchmark(self, all_results, benchmark_name, agent_system, output_file, verbose):
         total = len(all_results)
         correct = sum(1 for r in all_results if r.get("score", 0) == 1)
         accuracy = correct / total if total > 0 else 0
@@ -190,12 +188,12 @@ class BenchmarkRunner:
             "total_duration_ms": total_duration,
             "avg_duration_ms": total_duration / total if total > 0 else 0,
             "results_file": str(output_file),
-            "metrics_dir": str(metrics_output),
+            # "metrics_dir": str(metrics_output),
             "timestamp": self.timestamp,
         }
 
         self.metrics_registry.stop_all_collectors()
-        self.metrics_registry.export_all(format="json", path=str(metrics_output))
+        # self.metrics_registry.export_all(format="json", path=str(metrics_output))
 
         # Create a separate summary file for visualization
         summary_file = output_file.with_name(f"{output_file.stem}_summary.json")
@@ -221,7 +219,7 @@ class BenchmarkRunner:
         return summary
 
     def run(self, benchmark_name="math", data_path=None, limit=None, agent_system="single_agent", agent_config=None, verbose=True):
-        agent, problems, benchmark_config, output_file, metrics_output = self._prepare_benchmark(
+        agent, problems, benchmark_config, output_file = self._prepare_benchmark(
             benchmark_name, data_path, limit, agent_system, agent_config, verbose
         )
 
@@ -245,10 +243,10 @@ class BenchmarkRunner:
             for i, p in enumerate(tqdm(problems, desc="Processing Problems"))
         ]
 
-        return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, metrics_output, verbose)
+        return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, verbose)
 
     async def arun(self, benchmark_name="math", data_path=None, limit=None, agent_system="single_agent", agent_config=None, verbose=True, concurrency=10):
-        agent, problems, benchmark_config, output_file, metrics_output = self._prepare_benchmark(
+        agent, problems, benchmark_config, output_file = self._prepare_benchmark(
             benchmark_name, data_path, limit, agent_system, agent_config, verbose
         )
 
@@ -272,7 +270,7 @@ class BenchmarkRunner:
         
         all_results = await tqdm.gather(*tasks, desc="Processing Problems")
 
-        return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, metrics_output, verbose)
+        return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, verbose)
 
     def visualize_results(self, output_dir=None):
         """

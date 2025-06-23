@@ -41,6 +41,7 @@ dependencies = [
     "requests",
     "tika",
     "xmltodict",
+    "aiofiles>=24.1.0",
 ]
 
 [tool.ruff]

@@ -49,10 +49,6 @@ def main():
     )
 
     parser.add_argument(
-        "--metrics-dir", type=str, default="metrics", help="Directory to store metrics (default: metrics)"
-    )
-
-    parser.add_argument(
         "--use-mcp-tools", action="store_true", default=False,
         help="Enable integration of MCP tools (default: False)"
     )
@@ -110,7 +106,6 @@ def main():
 
     # Create directories if needed
     Path(args.results_dir).mkdir(exist_ok=True)
-    Path(args.metrics_dir).mkdir(exist_ok=True)
 
     # Print header
     
@@ -124,7 +119,7 @@ def main():
     print("=" * 80 + "\n")
 
     # Create benchmark runner
-    runner = BenchmarkRunner(results_dir=args.results_dir, metrics_dir=args.metrics_dir)
+    runner = BenchmarkRunner(results_dir=args.results_dir)
 
     # Check for concurrency support
     benchmark_config = BENCHMARKS.get(args.benchmark, {})

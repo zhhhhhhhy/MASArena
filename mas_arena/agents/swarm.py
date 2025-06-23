@@ -166,14 +166,11 @@ class SwarmSystem(AgentSystem):
         """Initialize the Swarm Agent System"""
         super().__init__(name, config)
         self.config = config or {}
-        self.evaluator_name = self.config.get("evaluator", "math")
         self.num_agents = self.config.get("num_agents", 3)
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.use_parallel = self.config.get("parallel", True)
         
-        # Initialize evaluator and metrics collector through base class methods
-        self._initialize_evaluator()
-        self._initialize_metrics_collector()
+     
 
     def _create_agents(self, problem_input: Dict[str, Any], feedback: Dict[str, Any] = None) -> Dict[str, List]:
         """Create the swarm agents"""
