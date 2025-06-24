@@ -6,9 +6,10 @@
     <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.11+-blue" alt="Python 3.11+" height="20"/></a>
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow" alt="License: MIT" height="20"/></a>
     <a href="https://lins-lab.github.io/MASArena"><img src="https://img.shields.io/badge/📖%20Docs-MASArena-blue" alt="Documentation" height="20"/></a>
-    <a href="https://deepwiki.com/LINs-lab/MASArena"><img src="https://devin.ai/assets/deepwiki-badge.png" alt="Ask DeepWiki.com" height="20"/></a>
+    <a href="https://deepwiki.com/LINs-lab/MASArena"><img src="https://deepwiki.com/badge.svg" alt="Ask DeepWiki" height="20"></a>
   </p>
-
+  
+  
   <p align="center">
     <b>Layered Architecture</b> • <b>Stack</b> • <b>Swap</b> • <b>Built for Scale</b>
   </p>
