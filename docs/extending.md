@@ -1,41 +1,41 @@
-# Extending MASArena Framework
+# 🚀 Extending MASArena Framework
 
 A comprehensive guide to extending MASArena with custom Multi-Agent Systems and Evaluators.
 
-## Table of Contents
+## 📋 Table of Contents
 
-- [Multi-Agent System Extension](#multi-agent-system-extension)
-  - [Implementation Requirements](#implementation-requirements)
-  - [Implementation Steps](#implementation-steps)
-  - [Advanced Features](#advanced-features)
-  - [Complete Example](#complete-example)
-- [Evaluator Extension](#evaluator-extension)
-  - [Basic Implementation](#basic-implementation)
-  - [Advanced Features](#advanced-features-1)
-  - [Code Evaluation](#code-evaluation)
-  - [Complete Examples](#complete-examples)
-- [Best Practices](#best-practices)
-- [Common Issues](#common-issues)
+- [🤖 Multi-Agent System Extension](#-multi-agent-system-extension)
+  - [📋 Implementation Requirements](#-implementation-requirements)
+  - [📝 Implementation Steps](#-implementation-steps)
+  - [⚡ Advanced Features](#-advanced-features)
+  - [💡 Complete Example](#-complete-example)
+- [🎯 Evaluator Extension](#-evaluator-extension)
+  - [🔧 Basic Implementation](#-basic-implementation)
+  - [⚡ Advanced Features](#-advanced-features-1)
+  - [💻 Code Evaluation](#-code-evaluation)
+  - [📖 Complete Examples](#-complete-examples)
+- [✅ Best Practices](#-best-practices)
+- [🚨 Common Issues](#-common-issues)
 
 ---
 
-## Multi-Agent System Extension
+## 🤖 Multi-Agent System Extension
 
-### Implementation Requirements
+### 📋 Implementation Requirements
 
-**Essential Requirements:**
+**✅ Essential Requirements:**
 - Extend `AgentSystem` base class
 - Implement `run_agent()` method (abstract method - required)
 - Include `evaluator` in config during initialization
 - Return proper message format with usage metadata
 - Register with `AgentSystemRegistry`
 
-**Optional but Recommended:**
+**💡 Optional but Recommended:**
 - Implement `_create_agents()` for tool integration support
 - Use `self.format_prompt` for benchmark-specific formatting
 - Handle async execution properly if needed
 
-### Implementation Steps
+### 📝 Implementation Steps
 
 #### Step 1: Basic Class Structure
 
@@ -46,7 +46,7 @@ from typing import Dict, Any, Optional
 class YourMAS(AgentSystem):
     def __init__(self, name: str = "your_mas", config: Dict[str, Any] = None):
         super().__init__(name, config or {})
-        # IMPORTANT: config must include 'evaluator' key
+        # ⚠️ IMPORTANT: config must include 'evaluator' key
         self.workers = None
         # Additional initialization here
 ```
@@ -56,7 +56,7 @@ class YourMAS(AgentSystem):
 ```python
 def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     """
-    Main method that processes problems - REQUIRED
+    🎯 Main method that processes problems - REQUIRED
     
     Args:
         problem: Problem dictionary with 'problem' key
@@ -70,7 +70,7 @@ def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     # Your agent logic here
     response = self.solve_problem(problem_text)
     
-    # Ensure proper message format for metrics collection
+    # 📝 Ensure proper message format for metrics collection
     message = {
         'content': response,
         'name': 'your_agent',
@@ -90,7 +90,7 @@ def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
 ```python
 def _create_agents(self, problem_input: Optional[Any] = None) -> Dict[str, Any]:
     """
-    Enable tool integration - OPTIONAL
+    🔧 Enable tool integration - OPTIONAL
     
     Returns:
         - Multi-agent: {"workers": [agent1, agent2, ...]}
@@ -111,7 +111,7 @@ def _create_agents(self, problem_input: Optional[Any] = None) -> Dict[str, Any]:
 #### Step 4: Registration
 
 ```python
-# Register your MAS with optional default configuration
+# 📋 Register your MAS with optional default configuration
 AgentSystemRegistry.register(
     "your_mas", 
     YourMAS, 
@@ -120,9 +120,9 @@ AgentSystemRegistry.register(
 )
 ```
 
-### Advanced Features
+### ⚡ Advanced Features
 
-#### Format Prompt Integration
+#### 🎨 Format Prompt Integration
 
 ```python
 def _get_system_prompt(self) -> str:
@@ -134,7 +134,7 @@ def _get_system_prompt(self) -> str:
 Solve the problem step by step and provide your final answer clearly."""
 ```
 
-#### Async Execution Handling
+#### 🔄 Async Execution Handling
 
 ```python
 def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
@@ -155,7 +155,7 @@ def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
     return result
 ```
 
-#### AgentNode Pattern
+#### 🤖 AgentNode Pattern
 
 ```python
 class AgentNode:
@@ -177,7 +177,7 @@ class AgentNode:
         return response
 ```
 
-### Complete Example
+### 💡 Complete Example
 
 ```python
 import os
@@ -203,7 +203,7 @@ class AgentNode:
         return response
 
 class MultiSolverMAS(AgentSystem):
-    """Multi-solver MAS with result aggregation"""
+    """🧠 Multi-solver MAS with result aggregation"""
     
     def __init__(self, name: str = "multi_solver", config: Dict[str, Any] = None):
         super().__init__(name, config or {})
@@ -237,7 +237,7 @@ Use {specialty} thinking to approach and solve problems."""
         return solutions[0]
 
     def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Main execution method"""
+        """🚀 Main execution method"""
         problem_text = problem["problem"]
         workers_dict = self._create_agents(problem_text)
         agents = workers_dict["workers"]
@@ -261,7 +261,7 @@ Use {specialty} thinking to approach and solve problems."""
             "agent_count": len(agents)
         }
 
-# Register with configuration
+# 📋 Register with configuration
 AgentSystemRegistry.register(
     "multi_solver", 
     MultiSolverMAS, 
@@ -272,9 +272,9 @@ AgentSystemRegistry.register(
 
 ---
 
-## Evaluator Extension
+## 🎯 Evaluator Extension
 
-### Basic Implementation
+### 🔧 Basic Implementation
 
 #### Step 1: Basic Structure
 
@@ -285,7 +285,7 @@ from mas_arena.evaluators.registry import register_benchmark
 @register_benchmark(
     name="your_benchmark",
     normalization_keys={
-        "id": "problem_id",           # Map your data fields
+        "id": "problem_id",           # 🗝️ Map your data fields
         "problem": "question",        # to standard format
         "solution": "expected_answer"
     }
@@ -293,11 +293,11 @@ from mas_arena.evaluators.registry import register_benchmark
 class YourEvaluator(BaseEvaluator):
     def __init__(self, name: str, config: Dict[str, Any] = None):
         super().__init__(name, config)
-        # Custom configuration
+        # 🎛️ Custom configuration
         self.case_sensitive = config.get("case_sensitive", False)
         
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
-        """Main evaluation method - REQUIRED"""
+        """🎯 Main evaluation method - REQUIRED"""
         final_answer = self.extract_final_answer(run_result.get("messages", []))
         score = 1 if self.verify_answer(final_answer, problem["solution"]) else 0
         
@@ -309,16 +309,16 @@ class YourEvaluator(BaseEvaluator):
         }
     
     def verify_answer(self, prediction: str, reference: str) -> bool:
-        """Answer verification logic - OPTIONAL but recommended"""
+        """✅ Answer verification logic - OPTIONAL but recommended"""
         if not self.case_sensitive:
             prediction = prediction.lower()
             reference = reference.lower()
         return prediction.strip() == reference.strip()
 ```
 
-### Advanced Features
+### ⚡ Advanced Features
 
-#### Answer Extraction
+#### 🔍 Answer Extraction
 
 ```python
 def extract_final_answer(self, messages: list) -> str:
@@ -338,7 +338,7 @@ def extract_final_answer(self, messages: list) -> str:
     else:
         content = str(last_msg)
     
-    # Look for answer patterns
+    # 🔎 Look for answer patterns
     patterns = [
         r"(?:final\s+)?answer:\s*(.+)",
         r"solution:\s*(.+)",
@@ -353,7 +353,7 @@ def extract_final_answer(self, messages: list) -> str:
     return content.strip()
 ```
 
-#### LangSmith Integration
+#### 📊 LangSmith Integration
 
 ```python
 from langsmith.evaluation import RunEvaluator
@@ -383,7 +383,7 @@ def create_run(self, problem: Dict[str, Any], final_answer: str, score: float) -
     )
 ```
 
-#### Mathematical Processing
+#### 🔢 Mathematical Processing
 
 ```python
 import re
@@ -411,7 +411,7 @@ def verify_numerical_answer(self, prediction: str, reference: str, tolerance: fl
     return abs(pred_num - ref_num) <= tolerance
 ```
 
-### Code Evaluation
+### 💻 Code Evaluation
 
 For code evaluation tasks, extend `BaseCodeEvaluator`:
 
@@ -434,11 +434,11 @@ import re
 class YourCodeEvaluator(BaseCodeEvaluator):
     
     class TimeoutError(Exception):
-        """Custom timeout exception"""
+        """⏱️ Custom timeout exception"""
         pass
     
     def extract_code(self, text: str) -> str:
-        """Extract Python code from response"""
+        """🔍 Extract Python code from response"""
         # Look for validated code section first
         validated = re.search(r"##\s*Validated Code\s*```python\s*([\s\S]*?)```", text, re.I)
         if validated:
@@ -475,9 +475,9 @@ class YourCodeEvaluator(BaseCodeEvaluator):
         return result[0] if result else None
     
     def check_solution(self, code: str, test: str, entry_point: str) -> Tuple[bool, str]:
-        """Check if code solution passes tests - REQUIRED for code evaluators"""
+        """✅ Check if code solution passes tests - REQUIRED for code evaluators"""
         try:
-            # Create isolated execution environment
+            # 🔒 Create isolated execution environment
             env = {}
             
             # Execute the solution code
@@ -493,14 +493,14 @@ class YourCodeEvaluator(BaseCodeEvaluator):
             return True, "All tests passed"
             
         except self.TimeoutError:
-            return False, "Execution timed out"
+            return False, "⏰ Execution timed out"
         except Exception as e:
-            return False, f"Test failed: {str(e)}"
+            return False, f"❌ Test failed: {str(e)}"
 ```
 
-### Complete Examples
+### 📖 Complete Examples
 
-#### Text Evaluator Example
+#### 📝 Text Evaluator Example
 
 ```python
 import re
@@ -517,7 +517,7 @@ from mas_arena.evaluators.registry import register_benchmark
     }
 )
 class SmartTextEvaluator(BaseEvaluator):
-    """Text evaluator with multiple matching strategies"""
+    """🧠 Text evaluator with multiple matching strategies"""
     
     def __init__(self, name: str, config: Dict[str, Any] = None):
         super().__init__(name, config)
@@ -526,7 +526,7 @@ class SmartTextEvaluator(BaseEvaluator):
         self.fuzzy_threshold = config.get("fuzzy_threshold", 0.8)
     
     def extract_final_answer(self, messages: list) -> str:
-        """Multi-strategy answer extraction"""
+        """🔍 Multi-strategy answer extraction"""
         if not messages:
             return ""
         
@@ -560,7 +560,7 @@ class SmartTextEvaluator(BaseEvaluator):
         return str(message)
     
     def normalize_text(self, text: str) -> str:
-        """Text normalization for comparison"""
+        """🔧 Text normalization for comparison"""
         text = text.strip()
         
         if not self.case_sensitive:
@@ -573,7 +573,7 @@ class SmartTextEvaluator(BaseEvaluator):
         return text
     
     def calculate_similarity(self, text1: str, text2: str) -> float:
-        """Calculate text similarity"""
+        """📊 Calculate text similarity"""
         text1, text2 = self.normalize_text(text1), self.normalize_text(text2)
         
         if text1 == text2:
@@ -587,7 +587,7 @@ class SmartTextEvaluator(BaseEvaluator):
         return intersection / union if union > 0 else 0.0
     
     def verify_answer(self, prediction: str, reference: str) -> bool:
-        """Multi-strategy answer verification"""
+        """🎯 Multi-strategy answer verification"""
         pred_norm = self.normalize_text(prediction)
         ref_norm = self.normalize_text(reference)
         
@@ -604,7 +604,7 @@ class SmartTextEvaluator(BaseEvaluator):
         return similarity >= self.fuzzy_threshold
     
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
-        """Main evaluation with detailed feedback"""
+        """🚀 Main evaluation with detailed feedback"""
         final_answer = self.extract_final_answer(run_result.get("messages", []))
         extracted_answer = self.normalize_text(final_answer)
         
@@ -624,45 +624,45 @@ class SmartTextEvaluator(BaseEvaluator):
 
 ---
 
-## Best Practices
+## ✅ Best Practices
 
-### Performance & Security
+### 🚀 Performance & Security
 
-- **Batch Processing**: Implement `batch_evaluate()` for better performance
-- **Timeout Handling**: Always set timeouts for external calls and code execution
-- **Input Validation**: Validate all inputs before processing
-- **Error Handling**: Implement comprehensive exception handling
-- **Logging**: Add detailed logging for debugging and monitoring
+- **⚡ Batch Processing**: Implement `batch_evaluate()` for better performance
+- **⏱️ Timeout Handling**: Always set timeouts for external calls and code execution
+- **🔍 Input Validation**: Validate all inputs before processing
+- **🛡️ Error Handling**: Implement comprehensive exception handling
+- **📝 Logging**: Add detailed logging for debugging and monitoring
 
-### Testing & Validation
+### 🧪 Testing & Validation
 
-- **Unit Tests**: Test individual components thoroughly
-- **Integration Tests**: Test full evaluation pipeline
-- **Edge Cases**: Test with malformed inputs and edge cases
-- **Performance Tests**: Benchmark evaluation speed for large datasets
+- **🎯 Unit Tests**: Test individual components thoroughly
+- **🔄 Integration Tests**: Test full evaluation pipeline
+- **⚠️ Edge Cases**: Test with malformed inputs and edge cases
+- **📊 Performance Tests**: Benchmark evaluation speed for large datasets
 
 ---
 
-## Common Issues
+## 🚨 Common Issues
 
-### Implementation Checklist
+### 📋 Implementation Checklist
 
 **For MAS Extensions:**
-- [ ] Config includes `evaluator` key
-- [ ] Messages have `usage_metadata` for token tracking
-- [ ] Agents have `name` and `llm` attributes (for tool integration)
-- [ ] `run_agent` method is synchronous
-- [ ] Return format includes `messages` and `final_answer`
-- [ ] Proper registration with `AgentSystemRegistry`
+- [ ] ✅ Config includes `evaluator` key
+- [ ] 📊 Messages have `usage_metadata` for token tracking
+- [ ] 🏷️ Agents have `name` and `llm` attributes (for tool integration)
+- [ ] ⚡ `run_agent` method is synchronous
+- [ ] 📤 Return format includes `messages` and `final_answer`
+- [ ] 📋 Proper registration with `AgentSystemRegistry`
 
 **For Evaluator Extensions:**
-- [ ] Used `@register_benchmark` decorator
-- [ ] Implemented `evaluate` method
-- [ ] Proper normalization_keys mapping
-- [ ] Error handling for malformed inputs
-- [ ] Timeout handling for long operations
+- [ ] 🎯 Used `@register_benchmark` decorator
+- [ ] ✅ Implemented `evaluate` method
+- [ ] 🗝️ Proper normalization_keys mapping
+- [ ] 🛡️ Error handling for malformed inputs
+- [ ] ⏱️ Timeout handling for long operations
 
-### Common Mistakes
+### ⚠️ Common Mistakes
 
 | Issue | Solution |
 |-------|----------|
@@ -673,14 +673,14 @@ class SmartTextEvaluator(BaseEvaluator):
 | No timeout for code execution | Always set execution timeouts |
 | Ignoring message format variations | Handle multiple message formats (tuple, dict, object) |
 
-### Debugging Tips
+### 🔧 Debugging Tips
 
-1. **Check Logs**: Review evaluator logs in the configured log directory
-2. **Validate Config**: Ensure all required configuration keys are present
-3. **Test Message Format**: Verify message objects have expected attributes
-4. **Run Simple Cases**: Start with simple test cases before complex ones
-5. **Monitor Performance**: Check execution times and memory usage
+1. **📝 Check Logs**: Review evaluator logs in the configured log directory
+2. **🔍 Validate Config**: Ensure all required configuration keys are present
+3. **💬 Test Message Format**: Verify message objects have expected attributes
+4. **🎯 Run Simple Cases**: Start with simple test cases before complex ones
+5. **📊 Monitor Performance**: Check execution times and memory usage
 
 ---
 
-This guide provides the essential information for extending MASArena. Start with simple implementations and gradually add advanced features as needed.
+💡 **Pro Tip**: This guide provides the essential information for extending MASArena. Start with simple implementations and gradually add advanced features as needed.
