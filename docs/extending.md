@@ -649,18 +649,18 @@ class SmartTextEvaluator(BaseEvaluator):
 
 **For MAS Extensions:**
 - [ ] ✅ Config includes `evaluator` key
-- [ ] 📊 Messages have `usage_metadata` for token tracking
-- [ ] 🏷️ Agents have `name` and `llm` attributes (for tool integration)
-- [ ] ⚡ `run_agent` method is synchronous
-- [ ] 📤 Return format includes `messages` and `final_answer`
-- [ ] 📋 Proper registration with `AgentSystemRegistry`
+- [ ] ✅ Messages have `usage_metadata` for token tracking
+- [ ] ✅ Agents have `name` and `llm` attributes (for tool integration)
+- [ ] ✅ `run_agent` method is synchronous
+- [ ] ✅ Return format includes `messages` and `final_answer`
+- [ ] ✅ Proper registration with `AgentSystemRegistry`
 
 **For Evaluator Extensions:**
-- [ ] 🎯 Used `@register_benchmark` decorator
+- [ ] ✅ Used `@register_benchmark` decorator
 - [ ] ✅ Implemented `evaluate` method
-- [ ] 🗝️ Proper normalization_keys mapping
-- [ ] 🛡️ Error handling for malformed inputs
-- [ ] ⏱️ Timeout handling for long operations
+- [ ] ✅ Proper normalization_keys mapping
+- [ ] ✅ Error handling for malformed inputs
+- [ ] ✅ Timeout handling for long operations
 
 ### ⚠️ Common Mistakes
 
