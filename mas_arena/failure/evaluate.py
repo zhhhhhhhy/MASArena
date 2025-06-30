@@ -1,181 +1,196 @@
 import argparse
 import json
 import os
-import re
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple
+import matplotlib.pyplot as plt
+import numpy as np
+from pathlib import Path
 
 
-def read_predictions(evaluation_file: str) -> Dict[str, Dict[str, str]]:
+def analyze_error_detection_failure(json_file_path: str) -> Tuple[int, int, float]:
     """
-    Read predictions from the evaluation file.
+    Analyze the error detection failure rate from a JSON file.
     
     Args:
-        evaluation_file: Path to the evaluation file containing predictions
+        json_file_path: Path to the JSON file containing analysis results
         
     Returns:
-        Dictionary mapping file names to their predictions
+        Tuple of (total_cases, failed_detections, failure_rate)
     """
-    predictions = {}
+    try:
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error reading JSON file: {e}")
+        return 0, 0, 0.0
     
-    with open(evaluation_file, 'r', encoding='utf-8') as f:
-        content = f.read()
+    # Extract files_analyzed from the JSON structure
+    files_analyzed = data.get('files_analyzed', [])
     
-    # Split content by file separators
-    file_sections = re.split(r'=== File: (.+?) ===', content)
+    if not files_analyzed:
+        print("No files analyzed found in the JSON file.")
+        return 0, 0, 0.0
     
-    for i in range(1, len(file_sections), 2):
-        if i + 1 < len(file_sections):
-            filename = file_sections[i].strip()
-            file_content = file_sections[i + 1].strip()
-            
-            # Extract error agent and step from the content
-            error_agent_match = re.search(r'Error Agent: (.+)', file_content)
-            error_step_match = re.search(r'Error Step: (.+)', file_content)
-            
-            error_agent = error_agent_match.group(1).strip() if error_agent_match else "Unknown"
-            error_step = error_step_match.group(1).strip() if error_step_match else "Unknown"
-            
-            predictions[filename] = {
-                'error_agent': error_agent,
-                'error_step': error_step
-            }
+    total_cases = len(files_analyzed)
+    failed_detections = 0
     
-    return predictions
+    # Count cases where error_detected is false
+    for file_data in files_analyzed:
+        analysis_result = file_data.get('analysis_result', {})
+        error_detected = analysis_result.get('error_detected', True)
+        
+        if not error_detected:
+            failed_detections += 1
+    
+    failure_rate = failed_detections / total_cases if total_cases > 0 else 0.0
+    
+    return total_cases, failed_detections, failure_rate
 
 
-def read_actual_data(data_path: str) -> Dict[str, Dict[str, str]]:
+def generate_visualization(total_cases: int, failed_detections: int, failure_rate: float, output_dir: str):
     """
-    Read actual error data from annotated JSON files.
+    Generate visualization charts for error detection analysis.
     
     Args:
-        data_path: Path to the directory containing annotated JSON files
-        
-    Returns:
-        Dictionary mapping file names to their actual error data
+        total_cases: Total number of cases analyzed
+        failed_detections: Number of cases where error detection failed
+        failure_rate: Error detection failure rate
+        output_dir: Directory to save the visualization
     """
-    actual_data = {}
+    # Create output directory if it doesn't exist
+    os.makedirs(output_dir, exist_ok=True)
     
-    if not os.path.exists(data_path):
-        print(f"Warning: Data path {data_path} does not exist.")
-        return actual_data
+    # Create figure with subplots
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
     
-    for filename in os.listdir(data_path):
-        if filename.endswith('.json'):
-            filepath = os.path.join(data_path, filename)
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                
-                # Extract actual error information from the JSON structure
-                # This assumes the JSON has fields like 'actual_error_agent' and 'actual_error_step'
-                # Adjust based on your actual data structure
-                actual_error_agent = data.get('actual_error_agent', 'Unknown')
-                actual_error_step = data.get('actual_error_step', 'Unknown')
-                
-                actual_data[filename] = {
-                    'error_agent': str(actual_error_agent),
-                    'error_step': str(actual_error_step)
-                }
-                
-            except (json.JSONDecodeError, KeyError) as e:
-                print(f"Warning: Could not parse {filename}: {e}")
-                continue
+    # Pie chart for error detection results
+    successful_detections = total_cases - failed_detections
+    labels = ['Successful Detection', 'Failed Detection']
+    sizes = [successful_detections, failed_detections]
+    colors = ['#2ecc71', '#e74c3c']
+    explode = (0, 0.1)  # explode the failed detection slice
     
-    return actual_data
+    ax1.pie(sizes, explode=explode, labels=labels, colors=colors, autopct='%1.1f%%',
+            shadow=True, startangle=90)
+    ax1.set_title('Error Detection Results Distribution', fontsize=14, fontweight='bold')
+    
+    # Bar chart for detailed statistics
+    categories = ['Total Cases', 'Successful\nDetections', 'Failed\nDetections']
+    values = [total_cases, successful_detections, failed_detections]
+    bar_colors = ['#3498db', '#2ecc71', '#e74c3c']
+    
+    bars = ax2.bar(categories, values, color=bar_colors, alpha=0.8)
+    ax2.set_title('Error Detection Statistics', fontsize=14, fontweight='bold')
+    ax2.set_ylabel('Number of Cases', fontsize=12)
+    
+    # Add value labels on bars
+    for bar, value in zip(bars, values):
+        height = bar.get_height()
+        ax2.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                f'{value}', ha='center', va='bottom', fontweight='bold')
+    
+    # Add failure rate text
+    ax2.text(0.5, 0.95, f'Failure Rate: {failure_rate:.2%}', 
+             transform=ax2.transAxes, ha='center', va='top',
+             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.8),
+             fontsize=12, fontweight='bold')
+    
+    plt.tight_layout()
+    
+    # Save the plot
+    output_path = os.path.join(output_dir, 'error_detection_analysis.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Visualization saved to: {output_path}")
+    
+    plt.show()
 
 
-def evaluate_accuracy(predictions: Dict[str, Dict[str, str]], 
-                     actual_data: Dict[str, Dict[str, str]]) -> Tuple[float, float]:
+def print_detailed_analysis(json_file_path: str, total_cases: int, failed_detections: int, failure_rate: float):
     """
-    Evaluate the accuracy of predictions against actual data.
+    Print detailed analysis results to console.
     
     Args:
-        predictions: Dictionary of predicted error data
-        actual_data: Dictionary of actual error data
-        
-    Returns:
-        Tuple of (agent_accuracy, step_accuracy)
+        json_file_path: Path to the analyzed JSON file
+        total_cases: Total number of cases
+        failed_detections: Number of failed detections
+        failure_rate: Failure rate
     """
-    if not predictions or not actual_data:
-        print("Warning: No predictions or actual data available for evaluation.")
-        return 0.0, 0.0
+    successful_detections = total_cases - failed_detections
     
-    agent_correct = 0
-    step_correct = 0
-    total_files = 0
+    print("=" * 80)
+    print("ERROR DETECTION FAILURE ANALYSIS RESULTS")
+    print("=" * 80)
+    print(f"Input File: {json_file_path}")
+    print(f"Analysis Date: {Path(json_file_path).stat().st_mtime}")
+    print("-" * 80)
+    print(f"Total Cases Analyzed: {total_cases}")
+    print(f"Successful Error Detections: {successful_detections}")
+    print(f"Failed Error Detections: {failed_detections}")
+    print("-" * 80)
+    print(f"Error Detection Failure Rate: {failure_rate:.2%} ({failure_rate:.4f})")
+    print(f"Error Detection Success Rate: {(1-failure_rate):.2%} ({(1-failure_rate):.4f})")
+    print("=" * 80)
     
-    # Find common files between predictions and actual data
-    common_files = set(predictions.keys()) & set(actual_data.keys())
+    if failure_rate > 0.5:
+        print("⚠️  WARNING: High failure rate detected! More than 50% of errors were not detected.")
+    elif failure_rate > 0.3:
+        print("⚠️  CAUTION: Moderate failure rate. Consider improving error detection mechanisms.")
+    else:
+        print("✅ GOOD: Low failure rate. Error detection is performing well.")
     
-    if not common_files:
-        print("Warning: No common files found between predictions and actual data.")
-        return 0.0, 0.0
-    
-    print(f"Evaluating {len(common_files)} common files...")
-    
-    for filename in common_files:
-        pred = predictions[filename]
-        actual = actual_data[filename]
-        
-        total_files += 1
-        
-        # Check agent accuracy
-        if pred['error_agent'].lower() == actual['error_agent'].lower():
-            agent_correct += 1
-        
-        # Check step accuracy
-        if pred['error_step'].lower() == actual['error_step'].lower():
-            step_correct += 1
-        
-        print(f"File: {filename}")
-        print(f"  Predicted Agent: {pred['error_agent']} | Actual Agent: {actual['error_agent']} | {'✓' if pred['error_agent'].lower() == actual['error_agent'].lower() else '✗'}")
-        print(f"  Predicted Step: {pred['error_step']} | Actual Step: {actual['error_step']} | {'✓' if pred['error_step'].lower() == actual['error_step'].lower() else '✗'}")
-        print()
-    
-    agent_accuracy = agent_correct / total_files if total_files > 0 else 0.0
-    step_accuracy = step_correct / total_files if total_files > 0 else 0.0
-    
-    return agent_accuracy, step_accuracy
+    print("=" * 80)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Evaluate failure attribution accuracy.")
+    parser = argparse.ArgumentParser(
+        description="Analyze error detection failure rate from failure attribution JSON results."
+    )
     
     parser.add_argument(
-        "--data_path",
+        "json_file",
         type=str,
-        required=True,
-        help="Path to the directory containing actual/annotated data JSON files."
+        help="Path to the JSON file containing failure attribution analysis results."
     )
+    
     parser.add_argument(
-        "--evaluation_file",
+        "--output_dir",
         type=str,
-        required=True,
-        help="Path to the evaluation file containing predictions."
+        default=".",
+        help="Directory to save visualization charts (default: current directory)."
     )
     
     args = parser.parse_args()
     
-    if not os.path.exists(args.evaluation_file):
-        print(f"Error: Evaluation file {args.evaluation_file} does not exist.")
+    # Validate input file
+    if not os.path.exists(args.json_file):
+        print(f"Error: JSON file '{args.json_file}' does not exist.")
         return
     
-    print(f"Reading predictions from: {args.evaluation_file}")
-    predictions = read_predictions(args.evaluation_file)
-    print(f"Found predictions for {len(predictions)} files.")
+    if not args.json_file.endswith('.json'):
+        print(f"Error: Input file must be a JSON file.")
+        return
     
-    print(f"Reading actual data from: {args.data_path}")
-    actual_data = read_actual_data(args.data_path)
-    print(f"Found actual data for {len(actual_data)} files.")
+    print(f"Analyzing error detection failure rate from: {args.json_file}")
+    print("-" * 80)
     
-    agent_accuracy, step_accuracy = evaluate_accuracy(predictions, actual_data)
+    # Analyze the JSON file
+    total_cases, failed_detections, failure_rate = analyze_error_detection_failure(args.json_file)
     
-    print("=" * 50)
-    print("EVALUATION RESULTS")
-    print("=" * 50)
-    print(f"Agent Accuracy: {agent_accuracy:.2%} ({agent_accuracy:.4f})")
-    print(f"Step Accuracy: {step_accuracy:.2%} ({step_accuracy:.4f})")
-    print("=" * 50)
+    if total_cases == 0:
+        print("No valid data found for analysis.")
+        return
+    
+    # Print detailed analysis
+    print_detailed_analysis(args.json_file, total_cases, failed_detections, failure_rate)
+    
+    # Generate visualization
+    try:
+        generate_visualization(total_cases, failed_detections, failure_rate, args.output_dir)
+        print(f"\n✅ Analysis completed successfully!")
+        print(f"📊 Visualization chart saved in: {args.output_dir}")
+    except Exception as e:
+        print(f"Error generating visualization: {e}")
+        print("Analysis completed, but visualization could not be generated.")
 
 
 if __name__ == "__main__":

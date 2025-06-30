@@ -12,7 +12,9 @@ from openai import AzureOpenAI, OpenAI
 from lib.utils import (
     all_at_once as gpt_all_at_once,
     step_by_step as gpt_step_by_step,
-    binary_search as gpt_binary_search
+    binary_search as gpt_binary_search,
+    convert_txt_to_json,
+    generate_timestamped_filename
 )
 
 from lib.local_model import (
@@ -57,8 +59,14 @@ def main():
     parser.add_argument(
         "--directory_path",
         type=str,
-        default="../results/agent_responses",
-        help="Path to the directory containing agent response JSON files. Default: '../results/agent_responses'."
+        default="../../results/agent_responses",
+        help="Path to the directory containing agent response JSON files. Default: '../../results/agent_responses'."
+    )
+    parser.add_argument(
+        "--output_dir",
+        type=str,
+        default="../../results/failure",
+        help="Path to the output directory for failure attribution results. Default: '../../results/failure'."
     )
 
     parser.add_argument(
@@ -180,17 +188,24 @@ def main():
         print(f"Error: Invalid model '{args.model}' specified.")
         sys.exit(1)
 
-    output_dir = "outputs"
+    output_dir = args.output_dir
     os.makedirs(output_dir, exist_ok=True)
-    output_filename = f"{args.method}_{args.model.replace('/','_')}_agent_responses.txt"
-    output_filepath = os.path.join(output_dir, output_filename)
+    
+    # Generate timestamped filenames
+    base_filename = f"{args.method}_{args.model.replace('/','_')}_agent_responses"
+    txt_filename = generate_timestamped_filename(base_filename, "txt")
+    json_filename = generate_timestamped_filename(base_filename, "json")
+    
+    txt_filepath = os.path.join(output_dir, txt_filename)
+    json_filepath = os.path.join(output_dir, json_filename)
 
     print(f"Analysis method: {args.method}")
     print(f"Model Alias: {args.model} (Family: {model_family})")
-    print(f"Output will be saved to: {output_filepath}")
+    print(f"TXT output will be saved to: {txt_filepath}")
+    print(f"JSON output will be saved to: {json_filepath}")
 
     try:
-        with open(output_filepath, 'w', encoding='utf-8') as output_file, contextlib.redirect_stdout(output_file):
+        with open(txt_filepath, 'w', encoding='utf-8') as output_file, contextlib.redirect_stdout(output_file):
             print(f"--- Starting Analysis: {args.method} ---")
             print(f"Timestamp: {datetime.datetime.now()}")
             print(f"Model Family: {model_family}")
@@ -246,7 +261,19 @@ def main():
             print("-" * 20)
             print(f"--- Analysis Complete ---")
 
-        print(f"Analysis finished. Output saved to {output_filepath}")
+        # Convert TXT output to JSON format
+        print(f"Converting analysis results to JSON format...")
+        convert_txt_to_json(
+            txt_filepath=txt_filepath,
+            json_filepath=json_filepath,
+            method=args.method,
+            model=args.model,
+            directory_path=args.directory_path
+        )
+        
+        print(f"Analysis finished. Outputs saved to:")
+        print(f"  TXT: {txt_filepath}")
+        print(f"  JSON: {json_filepath}")
 
     except Exception as e:
         print(f"\n!!! An error occurred during analysis or file writing: {e} !!!", file=sys.stderr)

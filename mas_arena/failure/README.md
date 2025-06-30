@@ -1,6 +1,6 @@
 # Failure Attribution Module
 
-This module provides automated failure attribution capabilities for analyzing multi-agent system responses and identifying failure causes.
+This module provides automated failure attribution capabilities for analyzing multi-agent system responses and identifying failure causes. The module has been migrated and adapted from the original `Automated_FA` implementation to work with the new data format and integrated with the MAS Arena benchmark system.
 
 ## Overview
 
@@ -9,6 +9,37 @@ The failure attribution module analyzes agent conversation histories to identify
 - At which step the error occurred
 - What type of error it was
 - The specific reason for the failure
+- Error detection failure rate analysis
+
+## Integration with MAS Arena
+
+The failure attribution module is now fully integrated with the MAS Arena benchmark system. When running benchmarks through `benchmark_runner.py`, the system will:
+
+1. **Automatic Collection**: Automatically collect failed agent response files from benchmark runs
+2. **Centralized Storage**: Move failed responses to a timestamped directory under `results/failure/failed_responses_{timestamp}`
+3. **Command Generation**: Generate ready-to-run commands for failure attribution analysis
+4. **Seamless Workflow**: Provide a seamless transition from benchmark execution to failure analysis
+
+## Migration from Automated_FA
+
+This module has been migrated from `d:\CodeForVScode\multi_agents_benchmark\temp3\MAS\Agents_Failure_Attribution\Automated_FA` and adapted for the new data format:
+
+### Original Data Format (Who&When)
+- Used `history` field for agent interactions
+- Included `ground_truth` labels for evaluation
+- Had `mistake_agent` annotations
+
+### New Data Format (agent_responses)
+- Uses `responses` field for agent interactions
+- No ground truth labels (unsupervised analysis)
+- Includes `problem_id` and `agent_system` metadata
+- Each response contains `agent_id`, `content`, and `timestamp`
+
+### Key Adaptations
+1. **Removed ground truth dependency**: All prompts have been updated to work without labeled data
+2. **Enhanced context**: Added `problem_id` and `agent_system` information to prompts
+3. **Focused error detection**: Optimized prompts to identify clear errors that lead to task failure
+4. **Maintained three core methods**: All-at-once, step-by-step, and binary search approaches
 
 ## Installation
 
@@ -154,17 +185,37 @@ Error Type: Calculation Error
 Reason: The agent made an arithmetic error in the calculation step.
 ```
 
-## Evaluation
+## Error Detection Analysis
 
-To evaluate the accuracy of failure attribution predictions:
+The `evaluate.py` script has been redesigned to analyze error detection failure rates from failure attribution results:
 
 ```bash
-python evaluate.py --data_path /path/to/annotated/data --evaluation_file outputs/all_at_once_gpt-4o_agent_responses.txt
+python evaluate.py results/failure/binary_search_gpt-4o_agent_responses_20250701_010542.json
 ```
 
-The evaluation script compares predictions against ground truth annotations and reports:
-- Agent identification accuracy
-- Error step identification accuracy
+### Features
+
+- **Failure Rate Calculation**: Calculates the proportion of cases where `error_detected` is false
+- **Statistical Analysis**: Provides detailed statistics including total cases, success/failure counts, and rates
+- **Performance Assessment**: Evaluates model performance based on failure rates
+- **Visualization**: Generates PNG charts (pie chart and bar chart) for visual analysis
+- **Console Output**: Displays comprehensive analysis results in English
+
+### Command Line Arguments
+
+- `json_file`: Path to the JSON file containing failure attribution analysis results (required)
+- `--output_dir`: Directory to save visualization charts (default: current directory)
+
+### Output
+
+Here is an example：
+
+<img src="./assets/error_detection_analysis.png" alt="error_detection_analysis" style="zoom:50%;" />
+
+The script generates:
+- Detailed console output with statistics and performance evaluation
+- `error_detection_analysis.png`: Visualization chart with pie chart and bar chart
+- Performance assessment based on failure rate thresholds
 
 ## Directory Structure
 
@@ -172,7 +223,7 @@ The evaluation script compares predictions against ground truth annotations and 
 failure/
 ├── __init__.py
 ├── inference.py          # Main inference script
-├── evaluate.py           # Evaluation script
+├── evaluate.py           # Error detection analysis script
 ├── requirements.txt      # Dependencies
 ├── README.md            # This file
 ├── lib/
@@ -180,40 +231,71 @@ failure/
 │   ├── utils.py         # GPT-based analysis functions
 │   └── local_model.py   # Local model analysis functions
 └── outputs/             # Generated analysis results
+
+# Integration with MAS Arena results structure:
+results/
+├── agent_responses/     # Original agent response files
+└── failure/
+    ├── failed_responses_{timestamp}/  # Collected failed responses
+    ├── {method}_{model}_agent_responses_{timestamp}.json  # Analysis results
+    ├── {method}_{model}_agent_responses_{timestamp}.txt   # Analysis logs
+    └── error_detection_analysis.png                       # Visualization charts
 ```
 
-## Examples
+## Workflow Examples
 
-### Example 1: Quick Analysis with GPT-4o
+### Example 1: Complete Benchmark to Analysis Workflow
+
 ```bash
-# Set environment variables (Option 1: Standard OpenAI)
+# Step 1: Run benchmark (this will automatically collect failed responses)
+python main.py --benchmark math --limit 10 --agent_system supervisor_mas
+
+# Step 2: The benchmark runner will output commands like:
+# python mas_arena/failure/inference.py \
+#     --method binary_search \
+#     --model gpt-4o \
+#     --directory_path results/failure/failed_responses_20250701_010542 \
+#     --output_dir results/failure
+
+# Step 3: Run the generated command
+python mas_arena/failure/inference.py \
+    --method binary_search \
+    --model gpt-4o \
+    --directory_path results/failure/failed_responses_20250701_010542 \
+    --output_dir results/failure
+
+# Step 4: Analyze error detection failure rate
+python mas_arena/failure/evaluate.py results/failure/binary_search_gpt-4o_agent_responses_20250701_010542.json
+```
+
+### Example 2: Manual Analysis with Custom Data
+
+```bash
+# Set environment variables
 export OPENAI_API_KEY="your_key"
 
-# Or (Option 2: Azure OpenAI)
-# export AZURE_OPENAI_API_KEY="your_azure_key"
-# export AZURE_OPENAI_ENDPOINT="your_azure_endpoint"
-
-# Run analysis
-python inference.py --method all_at_once --model gpt-4o
+# Run analysis on custom directory
+python inference.py --method all_at_once --model gpt-4o \
+    --directory_path /path/to/your/agent/responses \
+    --output_dir results/failure
 ```
 
-### Example 2: Local Model Analysis
+### Example 3: Local Model Analysis
+
 ```bash
 # Run with local Llama model
-python inference.py --method step_by_step --model llama-8b --device cuda:0
+python inference.py --method step_by_step --model llama-8b \
+    --device cuda:0 \
+    --directory_path results/failure/failed_responses_20250701_010542 \
+    --output_dir results/failure
 ```
 
-### Example 3: Binary Search for Large Conversations
-```bash
-# Efficient analysis for long conversations
-python inference.py --method binary_search --model gpt-4o --max_tokens 2048
-```
+### Example 4: Error Detection Analysis
 
-### Example 4: Custom Data Path
 ```bash
-# Analyze data from custom directory
-python inference.py --method all_at_once --model gpt-4o \
-    --directory_path /path/to/your/agent/responses
+# Analyze error detection failure rate with custom output directory
+python evaluate.py results/failure/binary_search_gpt-4o_agent_responses_20250701_010542.json \
+    --output_dir results/failure/visualizations
 ```
 
 ## Troubleshooting
@@ -236,10 +318,12 @@ pip install -r requirements.txt
 
 ### Performance Tips
 
-- Use `all_at_once` for comprehensive analysis
-- Use `binary_search` for efficient error localization in long conversations
+- Use `binary_search` for efficient error localization (recommended by benchmark runner)
+- Use `all_at_once` for comprehensive analysis of all conversations
 - Use `step_by_step` for detailed incremental analysis
 - For local models, ensure adequate GPU memory or use CPU inference
+- The benchmark runner automatically collects only failed responses, reducing analysis time
+- Use the generated commands from benchmark runner for optimal workflow integration
 
 ## Contributing
 
