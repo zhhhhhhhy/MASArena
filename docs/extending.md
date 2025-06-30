@@ -37,86 +37,147 @@ A comprehensive guide to extending MASArena with custom Multi-Agent Systems and 
 
 ### 📝 Implementation Steps
 
-#### Step 1: Basic Class Structure
+#### Step 1: Create Basic Class Structure
 
-```python
-from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
-from typing import Dict, Any, Optional
+**📋 Implementation Guide:**
+   - Inherit from `AgentSystem` base class
+   - Initialize configuration parameters (num_agents, num_rounds, model_name)
+   - Set up agent components using `_create_agents()` method
+   - Extract workers and result extractors from created components
+   - Validate that required components are available
 
-class YourMAS(AgentSystem):
-    def __init__(self, name: str = "your_mas", config: Dict[str, Any] = None):
-        super().__init__(name, config or {})
-        # ⚠️ IMPORTANT: config must include 'evaluator' key
-        self.workers = None
-        # Additional initialization here
-```
-
-#### Step 2: Implement Core Method
-
-```python
-def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-    """
-    🎯 Main method that processes problems - REQUIRED
+**💡 ChatEval Implementation Example (Basic Structure):**
+```187:207:mas_arena/agents/chateval.py
+class ChatEval(AgentSystem):
+    """Multi-agent evaluation system based on iterative debate"""
     
-    Args:
-        problem: Problem dictionary with 'problem' key
-        **kwargs: Additional arguments
+    def __init__(self, name: str = "chateval", config: Dict[str, Any] = None):
+        super().__init__(name, config)
+        self.config = config or {}
+        self.num_agents = self.config.get("num_agents", 3)
+        self.num_rounds = self.config.get("num_rounds", 2)
+        self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         
-    Returns:
-        Dictionary with 'messages' and 'final_answer'
-    """
-    problem_text = problem["problem"]
-    
-    # Your agent logic here
-    response = self.solve_problem(problem_text)
-    
-    # 📝 Ensure proper message format for metrics collection
-    message = {
-        'content': response,
-        'name': 'your_agent',
-        'role': 'assistant',
-        'usage_metadata': {}  # Include token usage info
-    }
-    
-    return {
-        "messages": [message],
-        "final_answer": response,
-        # Add any additional data you need
-    }
+        # Initialize agents and extractor via _create_agents
+        # self.agents and self.extractor will be set by _create_agents
+        agent_components = self._create_agents()
+        self.agents = [w for w in agent_components["workers"] if isinstance(w, Agent)]
+        extractors = [w for w in agent_components["workers"] if isinstance(w, ResultExtractor)]
+        if not extractors:
+            raise ValueError("ResultExtractor not found in components created by _create_agents.")
+        self.extractor = extractors[0]
 ```
 
-#### Step 3: Tool Integration Support (Optional)
+#### Step 2: Implement Core `run_agent` Method
 
-```python
-def _create_agents(self, problem_input: Optional[Any] = None) -> Dict[str, Any]:
-    """
-    🔧 Enable tool integration - OPTIONAL
-    
-    Returns:
-        - Multi-agent: {"workers": [agent1, agent2, ...]}
-        - Single agent: {"agent_name": agent_instance}
-    """
-    agents = []
-    for i in range(self.config.get("num_agents", 2)):
-        agent = AgentNode(
-            name=f"solver_{i+1}",
-            model_name=self.config.get("model_name", "gpt-4o-mini"),
-            prompt=f"You are solver {i+1}. {self.format_prompt}"
-        )
-        agents.append(agent)
-    
-    return {"workers": agents}
+**📋 Implementation Guide:**
+   - Extract problem text from input dictionary
+   - Initialize message storage for tracking LLM responses
+   - Implement multi-round agent interaction logic
+   - Collect and process agent responses with proper metadata
+   - Extract final answer using result extractor
+   - Return formatted result with messages and final answer
+
+**💡 ChatEval Implementation Example (run_agent Core Method):**
+```272:305:mas_arena/agents/chateval.py
+    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+        """Run iterative debate process"""
+        problem_text = problem["problem"]
+
+        # store all LLM response objects
+        all_messages = []
+        agent_histories = []
+        
+        # iterative discussion process
+        agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
+        for t in range(self.num_rounds):
+            for n, agent in enumerate(self.agents):
+                # generate response for current agent
+                context = self._build_context(problem_text, n, t)
+                response_data = agent.generate_response(context)
+                
+                # save response object
+                if "message" in response_data:
+                    all_messages.append(response_data["message"])
+                
+                # add response to context of subsequent agents
+                solution_text = response_data.get("solution", "")
+                for m in range(n + 1, len(self.agents)):
+                    self.agents[m].chat_history.append({
+                        "role": "human",
+                        "human": f"{agent_names[n]}'s response: {solution_text}"
+                    })
+        
+        # extract all agent chat histories
+        agent_histories = [agent.chat_history for agent in self.agents]
+        
+        # extract final answer
+        extractor_result = self.extractor.extract(agent_histories, problem_text)
+        
+        # add evaluator message
+        if "message" in extractor_result and extractor_result["message"]:
+            all_messages.append(extractor_result["message"])
+        return {
+            "messages": all_messages,  # contains all LLM response objects
+            "final_answer": extractor_result["message"].content
+        }
 ```
 
-#### Step 4: Registration
+#### Step 3: Implement `_create_agents` Method (Tool Integration Support)
 
-```python
-# 📋 Register your MAS with optional default configuration
+**📋 Implementation Guide:**
+   - Create specialized `AgentNode` instances for each role
+   - Set agent names, models, and system prompts
+   - Create result extractor with format prompt integration
+   - Return dictionary with "workers" key containing all components
+   - Ensure each worker has `.name` and `.llm` attributes for tool binding
+
+**💡 ChatEval Implementation Example (_create_agents Tool Integration):**
+```208:236:mas_arena/agents/chateval.py
+    def _create_agents(self) -> List[Agent]:
+        """Create multiple agent instances and result extractor"""
+        # This method will be patched by ToolIntegrationWrapper if this system is wrapped.
+        # The wrapper expects a dictionary: {"workers": [worker1, worker2, ...]}
+        # Each worker should have a .name and .llm attribute.
+        
+        debate_agents = []
+        agent_names = ["Math Expert", "Logic Expert", "Critical Thinking Expert"]
+        for i in range(self.num_agents):
+            agent = Agent(
+                agent_id=f"agent_{i+1}",
+                name=agent_names[i],
+                model_name=self.model_name,
+                system_prompt=self._get_agent_prompt(i)
+            )
+            debate_agents.append(agent)
+        
+        # Create and assign the extractor here
+        extractor = ResultExtractor(self.model_name, self.format_prompt)
+        # self.extractor = extractor # Assign to self if needed elsewhere before run_agent completes,
+                                 # but __init__ already handles setting self.extractor.
+
+        return {
+            "workers": debate_agents + [extractor]
+        }
+```
+
+#### Step 4: Register System with Framework
+
+**📋 Implementation Guide:**
+   - Use `AgentSystemRegistry.register()` to make system available
+   - Provide system name as string identifier
+   - Pass class reference (not instance)
+   - Include default configuration parameters
+   - These defaults can be overridden during initialization
+
+**💡 ChatEval Implementation Example (Registration):**
+```342:347:mas_arena/agents/chateval.py
+# register agent system
 AgentSystemRegistry.register(
-    "your_mas", 
-    YourMAS, 
+    "chateval",
+    ChatEval,
     num_agents=3,
-    model_name="gpt-4o-mini"
+    num_rounds=2
 )
 ```
 
@@ -124,151 +185,89 @@ AgentSystemRegistry.register(
 
 #### 🎨 Format Prompt Integration
 
-```python
-def _get_system_prompt(self) -> str:
-    """Use benchmark-specific formatting requirements"""
-    return f"""You are an expert problem solver.
+**📋 Implementation Guide:**
+   - Accept `format_prompt` parameter in initialization
+   - Store format prompt for benchmark-specific requirements
+   - Use format prompt in result extraction and agent prompts
+   - Configure timeout and retry settings for robust operation
 
-{self.format_prompt}
-
-Solve the problem step by step and provide your final answer clearly."""
+**💡 ChatEval Implementation Example (Format Prompt Integration):**
+```125:135:mas_arena/agents/chateval.py
+    def __init__(self, model_name: str = None, format_prompt: str = ""):
+        self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
+        self.format_prompt = format_prompt
+        self.llm = ChatOpenAI(
+            model=self.model_name,
+            request_timeout=60,  # Set request timeout to 60 seconds
+            max_retries=2        # Set maximum retry attempts to 2
+        )
+        self.name = "result_extractor"
 ```
 
-#### 🔄 Async Execution Handling
+#### 🤖 Agent Node Pattern
 
-```python
-def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-    """Handle async operations in sync method"""
+**📋 Implementation Guide:**
+   - Use dataclass decorator for clean agent definition
+   - Include required attributes: agent_id, name, model_name, system_prompt
+   - Initialize chat history as empty list
+   - Set up LLM instance with timeout and retry configuration
+   - Ensure compatibility with tool integration framework
+
+**💡 ChatEval Implementation Example (Agent Class Definition):**
+```16:39:mas_arena/agents/chateval.py
+@dataclass
+class Agent:
+    """Represents an LLM agent"""
+    agent_id: str
+    name: str
+    model_name: str
+    system_prompt: str
+    chat_history: List[Dict[str, str]] = None
     
-    async def async_solve():
-        result = await self.async_problem_solving(problem)
-        return result
-    
-    # Convert async to sync
-    try:
-        loop = asyncio.get_event_loop()
-    except RuntimeError:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-    
-    result = loop.run_until_complete(async_solve())
-    return result
+    def __post_init__(self):
+        self.chat_history = []
+        self.llm = ChatOpenAI(
+            model=self.model_name,
+            request_timeout=60,  # Set request timeout to 60 seconds
+            max_retries=2        # Set maximum retry attempts to 2
+        )
 ```
 
-#### 🤖 AgentNode Pattern
+#### 🔄 Usage Metadata Handling
 
-```python
-class AgentNode:
-    """Standard agent node for tool integration"""
-    
-    def __init__(self, name: str, model_name: str, prompt: str):
-        self.name = name  # Required for tool binding
-        self.model_name = model_name
-        self.prompt = prompt
-        self.llm = ChatOpenAI(model=model_name)  # Required for tools
-        
-    def solve(self, problem: str):
-        messages = [
-            {"role": "system", "content": self.prompt},
-            {"role": "user", "content": problem}
-        ]
-        response = self.llm.invoke(messages)
-        response.name = self.name  # For metrics tracking
-        return response
+**📋 Implementation Guide:**
+   - Use OpenAI callback handler to track token usage
+   - Attach usage metadata to AIMessage responses
+   - Include input tokens, output tokens, and total tokens
+   - Add detailed token breakdown for reasoning tokens
+   - Ensure metadata preservation throughout message flow
+
+**💡 ChatEval Implementation Example (Usage Metadata):**
+```53:63:mas_arena/agents/chateval.py
+            # Attach usage metadata
+            if isinstance(raw_response, AIMessage):
+                raw_response.usage_metadata = {
+                    "input_tokens": callback_handler.prompt_tokens,
+                    "output_tokens": callback_handler.completion_tokens,
+                    "total_tokens": callback_handler.total_tokens,
+                    "input_token_details": {},
+                    "output_token_details": {"reasoning": callback_handler.completion_tokens}
+                }
 ```
 
-### 💡 Complete Example
+### 📋 Key Implementation Summary
 
-```python
-import os
-import asyncio
-from typing import Dict, Any, Optional, List
-from langchain_openai import ChatOpenAI
-from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
+**🔧 Implementation Points:**
+- Inherit from `AgentSystem` base class
+- Implement required `run_agent()` method  
+- Ensure config includes `evaluator` key
+- Return dictionary containing `messages` and `final_answer`
+- Optional: Implement `_create_agents()` for tool integration support
 
-class AgentNode:
-    def __init__(self, name: str, model_name: str, prompt: str):
-        self.name = name
-        self.model_name = model_name
-        self.prompt = prompt
-        self.llm = ChatOpenAI(model=model_name)
+**📝 Registration Process:**
+Use `AgentSystemRegistry.register()` to register system and provide default configuration parameters.
 
-    def solve(self, problem: str):
-        messages = [
-            {"role": "system", "content": self.prompt},
-            {"role": "user", "content": problem}
-        ]
-        response = self.llm.invoke(messages)
-        response.name = self.name
-        return response
-
-class MultiSolverMAS(AgentSystem):
-    """🧠 Multi-solver MAS with result aggregation"""
-    
-    def __init__(self, name: str = "multi_solver", config: Dict[str, Any] = None):
-        super().__init__(name, config or {})
-        self.num_agents = self.config.get("num_agents", 3)
-
-    def _create_agents(self, problem_input: Optional[Any] = None) -> Dict[str, List]:
-        """Create multiple specialized solver agents"""
-        agents = []
-        specializations = ["analytical", "creative", "systematic"]
-        
-        for i in range(self.num_agents):
-            specialty = specializations[i % len(specializations)]
-            agent = AgentNode(
-                name=f"{specialty}_solver",
-                model_name=self.config.get("model_name", "gpt-4o-mini"),
-                prompt=f"""You are a {specialty} problem solver.
-{self.format_prompt}
-
-Use {specialty} thinking to approach and solve problems."""
-            )
-            agents.append(agent)
-        
-        return {"workers": agents}
-
-    def _aggregate_solutions(self, solutions: List[str]) -> str:
-        """Aggregate multiple solutions"""
-        if len(solutions) == 1:
-            return solutions[0]
-        
-        # Simple implementation - you can add sophisticated logic
-        return solutions[0]
-
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """🚀 Main execution method"""
-        problem_text = problem["problem"]
-        workers_dict = self._create_agents(problem_text)
-        agents = workers_dict["workers"]
-        
-        solutions = []
-        messages = []
-        
-        # Collect solutions from all agents
-        for agent in agents:
-            response = agent.solve(problem_text)
-            solutions.append(response.content)
-            messages.append(response)
-        
-        # Aggregate results
-        final_answer = self._aggregate_solutions(solutions)
-        
-        return {
-            "messages": messages,
-            "final_answer": final_answer,
-            "individual_solutions": solutions,
-            "agent_count": len(agents)
-        }
-
-# 📋 Register with configuration
-AgentSystemRegistry.register(
-    "multi_solver", 
-    MultiSolverMAS, 
-    num_agents=3,
-    model_name="gpt-4o-mini"
-)
-```
+> 📄 **Complete Implementation Reference**: [`mas_arena/agents/chateval.py`](../mas_arena/agents/chateval.py)
 
 ---
 
@@ -276,351 +275,271 @@ AgentSystemRegistry.register(
 
 ### 🔧 Basic Implementation
 
-#### Step 1: Basic Structure
+#### Step 1: Basic Structure and Registration
 
-```python
-from mas_arena.evaluators.base_evaluator import BaseEvaluator
-from mas_arena.evaluators.registry import register_benchmark
+**📋 Implementation Guide:**
+   - Use `@register_benchmark` decorator to register evaluator
+   - Define normalization keys mapping for data field standardization
+   - Inherit from `BaseEvaluator` base class
+   - Provide comprehensive docstring explaining evaluator purpose
+   - Set up evaluator name and supported answer formats
 
+**💡 MMLU_pro Implementation Example (Registration and Class Definition):**
+```17:32:mas_arena/evaluators/mmlu_pro_evaluator.py
 @register_benchmark(
-    name="your_benchmark",
+    name="mmlu_pro",
     normalization_keys={
-        "id": "problem_id",           # 🗝️ Map your data fields
-        "problem": "question",        # to standard format
-        "solution": "expected_answer"
+        "id": "id",
+        "problem": "question",
+        "solution": "answer",
     }
 )
-class YourEvaluator(BaseEvaluator):
-    def __init__(self, name: str, config: Dict[str, Any] = None):
-        super().__init__(name, config)
-        # 🎛️ Custom configuration
-        self.case_sensitive = config.get("case_sensitive", False)
+class MMLU_ProEvaluator(BaseEvaluator):
+    """
+    Evaluator for the MMLU Professional mas_arena.
+    
+    This evaluator assesses agent performance on the MMLU_pro dataset
+    using exact matching of answers (A, B, C, etc.).
+    """
+```
+
+#### Step 2: Initialize Configuration
+
+**📋 Implementation Guide:**
+   - Call parent class initialization with name and config
+   - Set up evaluation-specific weights and parameters
+   - Configure dataset loading and validation
+   - Set up logging and error handling
+   - Define evaluation metrics and scoring methods
+
+**💡 MMLU_pro Implementation Example (Initialization):**
+```33:50:mas_arena/evaluators/mmlu_pro_evaluator.py
+    def __init__(self, name="mmlu_pro", config=None):
+        """
+        Initialize the MMLU Professional evaluator.
         
+        Args:
+            name: Name of the evaluator
+            config: Configuration dictionary containing:
+                - data_path: Path to the MMLU_pro dataset
+                - log_path: Path to save evaluation logs
+        """
+        super().__init__(name, config or {})
+        
+        # Weight for exact match score is always 1.0 as it's the only metric
+        self.exact_match_weight = 1.0
+        
+        # Load the dataset
+        self._load_dataset()
+```
+
+#### Step 3: Implement Core Evaluation Method
+
+**📋 Implementation Guide:**
+   - Extract final answer and reference solution from inputs
+   - Use specialized answer extraction method for response parsing
+   - Apply scoring logic (exact match, numerical comparison, etc.)
+   - Calculate evaluation metrics and scores
+   - Return standardized evaluation results dictionary
+   - Include extracted answer and original final answer
+
+**💡 MMLU_pro Implementation Example (evaluate Method):**
+```132:161:mas_arena/evaluators/mmlu_pro_evaluator.py
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
-        """🎯 Main evaluation method - REQUIRED"""
-        final_answer = self.extract_final_answer(run_result.get("messages", []))
-        score = 1 if self.verify_answer(final_answer, problem["solution"]) else 0
+        """
+        Evaluate an agent's solution to a MMLU_pro problem.
         
+        Args:
+            problem: Problem dictionary containing:
+                - question: Problem text (with options)
+                - answer: Correct answer (letter)
+                - answer_index: Index of correct answer (optional)
+            run_result: Results from agent's execution, containing:
+                - final_answer: Agent's final answer text
+                - messages: Agent's message history
+            
+        Returns:
+            Evaluation results
+        """
+        final_answer = run_result.get("final_answer", "")
+        reference_letter = problem.get("solution", "")
+        
+        # Extract the final letter from the agent's response
+        extracted_answer = self.extract_answer_from_response(final_answer)
+        
+        # Calculate exact match score (letter-based)
+        score = self.check_exact_match(reference_letter, extracted_answer)
+        
+        # Record evaluation results
         return {
             "final_answer": final_answer,
-            "extracted_answer": final_answer,
+            "extracted_answer": extracted_answer,
             "score": score,
-            "passed": score == 1
         }
-    
-    def verify_answer(self, prediction: str, reference: str) -> bool:
-        """✅ Answer verification logic - OPTIONAL but recommended"""
-        if not self.case_sensitive:
-            prediction = prediction.lower()
-            reference = reference.lower()
-        return prediction.strip() == reference.strip()
 ```
 
 ### ⚡ Advanced Features
 
 #### 🔍 Answer Extraction
 
-```python
-def extract_final_answer(self, messages: list) -> str:
-    """Extract final answer from agent conversation messages"""
-    if not messages:
-        return ""
-    
-    last_msg = messages[-1]
-    
-    # Handle different message formats
-    if isinstance(last_msg, tuple) and len(last_msg) > 1:
-        content = last_msg[1]  # (agent_name, content)
-    elif hasattr(last_msg, "content"):
-        content = last_msg.content  # AIMessage
-    elif isinstance(last_msg, dict):
-        content = last_msg.get("content", "")  # Dict format
-    else:
-        content = str(last_msg)
-    
-    # 🔎 Look for answer patterns
-    patterns = [
-        r"(?:final\s+)?answer:\s*(.+)",
-        r"solution:\s*(.+)",
-        r"result:\s*(.+)"
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, content, re.IGNORECASE)
+**📋 Implementation Guide:**
+   - Use regular expressions to extract formatted answers
+   - Handle multiple answer formats (tags, patterns, raw text)
+   - Implement fallback strategies for unformatted responses
+   - Clean and normalize extracted text
+   - Support flexible answer parsing for different benchmarks
+
+**💡 MMLU_pro Implementation Example (Answer Extraction):**
+```116:131:mas_arena/evaluators/mmlu_pro_evaluator.py
+    def extract_answer_from_response(self, response: str) -> str:
+        """
+        Extract answer from agent response.
+        
+        Args:
+            response: Complete response text from agent
+            
+        Returns:
+            Extracted answer letter
+        """
+        # Try to extract answer from <answer> tags, allowing for whitespace
+        match = re.search(r'<answer>\s*(.*?)\s*</answer>', response, re.DOTALL)
         if match:
             return match.group(1).strip()
-    
-    return content.strip()
+        
+        # If no tags found, return original response
+        return response.strip()
 ```
 
-#### 📊 LangSmith Integration
+#### ✅ Answer Verification
 
-```python
-from langsmith.evaluation import RunEvaluator
-from langsmith.schemas import Run
-import uuid
-import time
+**📋 Implementation Guide:**
+   - Implement case-insensitive comparison for text answers
+   - Handle numerical index to letter conversion (1→A, 2→B, etc.)
+   - Apply normalization and cleaning to both reference and candidate
+   - Return numerical score (1.0 for match, 0.0 for no match)
+   - Include error handling for malformed inputs
 
-def __init__(self, name: str, config: Dict[str, Any] = None):
-    super().__init__(name, config)
-    self.run_evaluator = RunEvaluator()
-
-def create_run(self, problem: Dict[str, Any], final_answer: str, score: float) -> Run:
-    """Create LangSmith run for tracking"""
-    return Run(
-        id=str(uuid.uuid4()),
-        name=f"{self.name.upper()}_Evaluation",
-        inputs={"problem": problem["problem"]},
-        outputs={
-            "prediction": final_answer,
-            "expected": problem["solution"],
-            "score": score,
-            "passed": score == 1
-        },
-        run_type="evaluation",
-        start_time=time.strftime("%Y-%m-%dT%H:%M:%SZ"),
-        trace_id=str(uuid.uuid4())
-    )
-```
-
-#### 🔢 Mathematical Processing
-
-```python
-import re
-from typing import Optional
-
-def extract_number(self, text: str) -> Optional[float]:
-    """Extract numerical answers from text"""
-    matches = re.findall(r"[-+]?\d+(?:,\d{3})*(?:\.\d+)?|\d+\.\d+", str(text))
-    if matches:
-        last_number = matches[-1].replace(",", "")
+**💡 MMLU_pro Implementation Example (Exact Match Verification):**
+```65:95:mas_arena/evaluators/mmlu_pro_evaluator.py
+    def check_exact_match(self, reference: str, candidate: str) -> float:
+        """
+        Check if the candidate exactly matches the reference (case-insensitive).
+        
+        Args:
+            reference: Reference answer (e.g., 'A', 'B', 'C', etc.)
+            candidate: Candidate answer
+            
+        Returns:
+            1.0 if exact match, 0.0 otherwise
+        """
+        # Clean and normalize both answers
+        ref_clean = reference.strip().upper()
+        cand_clean = candidate.strip().upper()
+        
+        # Check for exact match
+        if cand_clean == ref_clean:
+            return 1.0
+        
+        # Check if candidate is an index (e.g., "1", "2", "3") converted to letter
         try:
-            return float(last_number)
-        except ValueError:
-            return None
-    return None
+            if cand_clean.isdigit():
+                cand_index = int(cand_clean) - 1
+                cand_letter = chr(ord('A') + cand_index)
+                if cand_letter == ref_clean:
+                    return 1.0
+        except Exception:
+            pass
+            
+        return 0.0
+```
 
-def verify_numerical_answer(self, prediction: str, reference: str, tolerance: float = 1e-6) -> bool:
-    """Verify numerical answers with tolerance"""
-    pred_num = self.extract_number(prediction)
-    ref_num = self.extract_number(reference)
-    
-    if pred_num is None or ref_num is None:
-        return str(prediction).strip() == str(reference).strip()
-    
-    return abs(pred_num - ref_num) <= tolerance
+#### 📊 Batch Evaluation
+
+**📋 Implementation Guide:**
+   - Iterate through all problems in the batch
+   - Extract problem IDs and reference answers for each item
+   - Apply evaluation logic consistently across all problems
+   - Collect comprehensive results with metadata
+   - Log evaluation progress and summary statistics
+   - Return standardized results format for benchmark runner
+
+**💡 MMLU_pro Implementation Example (Batch Evaluation):**
+```163:200:mas_arena/evaluators/mmlu_pro_evaluator.py
+    def batch_evaluate(self, problems: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """
+        Evaluate a batch of problems.
+        
+        Args:
+            problems: List of problem dictionaries
+            
+        Returns:
+            List of evaluation results
+        """
+        results = []
+        
+        # Evaluate each problem individually
+        for i, problem in enumerate(problems):
+            problem_id = problem.get("id", problem.get("question_id", f"unknown_{i}"))
+            reference_letter = problem.get("solution", problem.get("answer", ""))
+            reference_text = self.get_correct_answer_text(problem)
+            response = problem.get("response", "")
+            
+            # Calculate exact match score
+            exact_match = self.check_exact_match(reference_letter, response)
+            
+            # Record results
+            result = {
+                "problem_id": problem_id,
+                "exact_match": exact_match,
+                "combined_score": exact_match,  # Combined score is just the exact match
+                "extracted_answer": response,
+                "reference_answer": reference_letter,
+                "reference_text": reference_text,
+                "execution_time_ms": 0,  # Will be updated by the benchmark runner
+                "math_score": 1.0 if exact_match >= 0.9 else 0.0  # For compatibility with benchmark runner
+            }
+            
+            results.append(result)
+            
+            # Log the results
+            self.logger.info(f"Problem {problem_id}: Exact={exact_match:.1f}, Combined={exact_match:.4f}")
+        
+        return results
 ```
 
 ### 💻 Code Evaluation
 
-For code evaluation tasks, extend `BaseCodeEvaluator`:
+**🔧 Code Evaluator Key Points:**
+- Inherit from `BaseCodeEvaluator` base class (not BaseEvaluator)
+- Implement `check_solution(code, test, entry_point)` method
+- Implement `extract_code(text)` to extract code from responses
+- Must include timeout protection mechanisms
+- Use isolated environments for code execution
 
-```python
-from mas_arena.evaluators.base_code_evaluator import BaseCodeEvaluator
-from threading import Thread
-from typing import Tuple, Callable, Any
-import re
+**📊 Core Process Flow:**
+1. **Code Extraction** - Extract Python code from agent responses
+2. **Environment Isolation** - Create secure execution environment
+3. **Test Execution** - Run test cases to verify code correctness
+4. **Timeout Control** - Prevent infinite loops or long execution
 
-@register_benchmark(
-    name="your_code_benchmark",
-    normalization_keys={
-        "id": "task_id",
-        "problem": "prompt",
-        "solution": "canonical_solution",
-        "test": "test",
-        "entry_point": "entry_point"
-    }
-)
-class YourCodeEvaluator(BaseCodeEvaluator):
-    
-    class TimeoutError(Exception):
-        """⏱️ Custom timeout exception"""
-        pass
-    
-    def extract_code(self, text: str) -> str:
-        """🔍 Extract Python code from response"""
-        # Look for validated code section first
-        validated = re.search(r"##\s*Validated Code\s*```python\s*([\s\S]*?)```", text, re.I)
-        if validated:
-            return validated.group(1).strip()
-        
-        # Look for any python code block
-        fenced = re.search(r"```python\s*([\s\S]*?)```", text, re.I)
-        if fenced:
-            return fenced.group(1).strip()
-        
-        return text.strip()
-    
-    def run_with_timeout(self, func: Callable, args: tuple, timeout: int = 60) -> Any:
-        """Execute function with timeout protection"""
-        result = []
-        exception = []
-        
-        def target():
-            try:
-                result.append(func(*args))
-            except BaseException as e:
-                exception.append(e)
-        
-        thread = Thread(target=target, daemon=True)
-        thread.start()
-        thread.join(timeout)
-        
-        if thread.is_alive():
-            raise self.TimeoutError("Execution timed out")
-        
-        if exception:
-            raise exception[0]
-        
-        return result[0] if result else None
-    
-    def check_solution(self, code: str, test: str, entry_point: str) -> Tuple[bool, str]:
-        """✅ Check if code solution passes tests - REQUIRED for code evaluators"""
-        try:
-            # 🔒 Create isolated execution environment
-            env = {}
-            
-            # Execute the solution code
-            exec(code, env)
-            candidate_fn = env[entry_point]
-            
-            # Execute test code
-            exec(test, env)
-            check_fn = env["check"]
-            
-            # Run tests with timeout
-            self.run_with_timeout(check_fn, (candidate_fn,), timeout=60)
-            return True, "All tests passed"
-            
-        except self.TimeoutError:
-            return False, "⏰ Execution timed out"
-        except Exception as e:
-            return False, f"❌ Test failed: {str(e)}"
-```
+### 📋 Evaluator Implementation Summary
 
-### 📖 Complete Examples
+**🔧 Core Components:**
+- Use `@register_benchmark` decorator for registration
+- Inherit from `BaseEvaluator` base class
+- Implement required `evaluate()` method
+- Configure `normalization_keys` for data mapping
+- Optional: Implement answer extraction and verification methods
 
-#### 📝 Text Evaluator Example
+**📊 Evaluation Process:**
+1. **Data Normalization** - Map fields using normalization_keys
+2. **Answer Extraction** - Extract final answer from messages
+3. **Answer Verification** - Compare predicted vs reference answers
+4. **Result Return** - Return score, extracted_answer, final_answer fields
 
-```python
-import re
-from typing import Dict, Any, Optional
-from mas_arena.evaluators.base_evaluator import BaseEvaluator
-from mas_arena.evaluators.registry import register_benchmark
-
-@register_benchmark(
-    name="smart_text",
-    normalization_keys={
-        "id": "question_id",
-        "problem": "question_text",
-        "solution": "correct_answer"
-    }
-)
-class SmartTextEvaluator(BaseEvaluator):
-    """🧠 Text evaluator with multiple matching strategies"""
-    
-    def __init__(self, name: str, config: Dict[str, Any] = None):
-        super().__init__(name, config)
-        self.case_sensitive = config.get("case_sensitive", False)
-        self.exact_match = config.get("exact_match", False)
-        self.fuzzy_threshold = config.get("fuzzy_threshold", 0.8)
-    
-    def extract_final_answer(self, messages: list) -> str:
-        """🔍 Multi-strategy answer extraction"""
-        if not messages:
-            return ""
-        
-        last_msg = messages[-1]
-        content = self._get_message_content(last_msg)
-        
-        # Try multiple extraction patterns
-        patterns = [
-            r"(?:final\s+)?answer:\s*(.+?)(?:\n|$)",
-            r"(?:the\s+)?solution\s+is:\s*(.+?)(?:\n|$)",
-            r"(?:therefore|thus|so),?\s*(.+?)(?:\n|$)"
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, content, re.IGNORECASE | re.DOTALL)
-            if match:
-                return match.group(1).strip()
-        
-        # Fallback: return last sentence
-        sentences = content.split('.')
-        return sentences[-1].strip() if sentences else content.strip()
-    
-    def _get_message_content(self, message) -> str:
-        """Extract content from various message formats"""
-        if hasattr(message, "content"):
-            return message.content
-        elif isinstance(message, dict):
-            return message.get("content", "")
-        elif isinstance(message, tuple):
-            return message[1] if len(message) > 1 else ""
-        return str(message)
-    
-    def normalize_text(self, text: str) -> str:
-        """🔧 Text normalization for comparison"""
-        text = text.strip()
-        
-        if not self.case_sensitive:
-            text = text.lower()
-        
-        # Remove extra whitespace and trailing punctuation
-        text = re.sub(r'\s+', ' ', text)
-        text = re.sub(r'[.!?]+$', '', text)
-        
-        return text
-    
-    def calculate_similarity(self, text1: str, text2: str) -> float:
-        """📊 Calculate text similarity"""
-        text1, text2 = self.normalize_text(text1), self.normalize_text(text2)
-        
-        if text1 == text2:
-            return 1.0
-        
-        # Simple character overlap ratio
-        chars1, chars2 = set(text1), set(text2)
-        intersection = len(chars1.intersection(chars2))
-        union = len(chars1.union(chars2))
-        
-        return intersection / union if union > 0 else 0.0
-    
-    def verify_answer(self, prediction: str, reference: str) -> bool:
-        """🎯 Multi-strategy answer verification"""
-        pred_norm = self.normalize_text(prediction)
-        ref_norm = self.normalize_text(reference)
-        
-        # Exact match
-        if self.exact_match:
-            return pred_norm == ref_norm
-        
-        # Containment check
-        if ref_norm in pred_norm or pred_norm in ref_norm:
-            return True
-        
-        # Fuzzy matching
-        similarity = self.calculate_similarity(pred_norm, ref_norm)
-        return similarity >= self.fuzzy_threshold
-    
-    def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
-        """🚀 Main evaluation with detailed feedback"""
-        final_answer = self.extract_final_answer(run_result.get("messages", []))
-        extracted_answer = self.normalize_text(final_answer)
-        
-        is_correct = self.verify_answer(final_answer, problem["solution"])
-        score = 1 if is_correct else 0
-        similarity = self.calculate_similarity(final_answer, problem["solution"])
-        
-        return {
-            "final_answer": final_answer,
-            "extracted_answer": extracted_answer,
-            "score": score,
-            "passed": is_correct,
-            "similarity": similarity,
-            "evaluation_method": "exact" if extracted_answer == self.normalize_text(problem["solution"]) else "fuzzy"
-        }
-```
+> 📄 **Complete Implementation References**: 
+> - Text Evaluator: [`mas_arena/evaluators/mmlu_pro_evaluator.py`](../mas_arena/evaluators/mmlu_pro_evaluator.py)
+> - Code Evaluator: [`mas_arena/evaluators/humaneval_evaluator.py`](../mas_arena/evaluators/humaneval_evaluator.py)
 
 ---
 
@@ -649,18 +568,18 @@ class SmartTextEvaluator(BaseEvaluator):
 
 **For MAS Extensions:**
 - [ ] ✅ Config includes `evaluator` key
-- [ ] ✅ Messages have `usage_metadata` for token tracking
-- [ ] ✅ Agents have `name` and `llm` attributes (for tool integration)
-- [ ] ✅ `run_agent` method is synchronous
-- [ ] ✅ Return format includes `messages` and `final_answer`
-- [ ] ✅ Proper registration with `AgentSystemRegistry`
+- [ ] 📊 Messages have `usage_metadata` for token tracking
+- [ ] 🏷️ Agents have `name` and `llm` attributes (for tool integration)
+- [ ] ⚡ `run_agent` method is synchronous
+- [ ] 📤 Return format includes `messages` and `final_answer`
+- [ ] 📋 Proper registration with `AgentSystemRegistry`
 
 **For Evaluator Extensions:**
-- [ ] ✅ Used `@register_benchmark` decorator
+- [ ] 🎯 Used `@register_benchmark` decorator
 - [ ] ✅ Implemented `evaluate` method
-- [ ] ✅ Proper normalization_keys mapping
-- [ ] ✅ Error handling for malformed inputs
-- [ ] ✅ Timeout handling for long operations
+- [ ] 🗝️ Proper normalization_keys mapping
+- [ ] 🛡️ Error handling for malformed inputs
+- [ ] ⏱️ Timeout handling for long operations
 
 ### ⚠️ Common Mistakes
 
