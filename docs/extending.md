@@ -236,24 +236,10 @@ class Agent:
 #### 🔄 Usage Metadata Handling
 
 **📋 Implementation Guide:**
-   - Use OpenAI callback handler to track token usage
-   - Attach usage metadata to AIMessage responses
-   - Include input tokens, output tokens, and total tokens
-   - Add detailed token breakdown for reasoning tokens
-   - Ensure metadata preservation throughout message flow
-
-**💡 ChatEval Implementation Example (Usage Metadata):**
-```53:63:mas_arena/agents/chateval.py
-            # Attach usage metadata
-            if isinstance(raw_response, AIMessage):
-                raw_response.usage_metadata = {
-                    "input_tokens": callback_handler.prompt_tokens,
-                    "output_tokens": callback_handler.completion_tokens,
-                    "total_tokens": callback_handler.total_tokens,
-                    "input_token_details": {},
-                    "output_token_details": {"reasoning": callback_handler.completion_tokens}
-                }
-```
+   - For native OpenAI API calls or non-structured output: No manual handling required
+   - For structured output: Use `self.llm.with_structured_output(schema=AgentResponse, include_raw=True)`
+   - Usage metadata is automatically handled by the framework
+   - Focus on implementing the structured output schema instead
 
 ### 📋 Key Implementation Summary
 
