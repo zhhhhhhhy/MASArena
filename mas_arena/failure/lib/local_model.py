@@ -177,6 +177,8 @@ def analyze_all_at_once_local(model_obj: Union[pipeline, Tuple[AutoModelForCausa
         # Extract problem information if available
         problem_id = data.get('problem_id', 'Unknown')
         agent_system = data.get('agent_system', 'Unknown')
+        question = data.get('question', '')
+        ground_truth = data.get('ground_truth', '')
         
         # Format the conversation history
         conversation_history = _format_agent_responses(responses)
@@ -187,6 +189,8 @@ You are an expert in multi-agent system analysis. Your task is to analyze the fo
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Please analyze the conversation step by step and identify:
 1. Which agent (if any) made an error
@@ -251,6 +255,8 @@ def analyze_step_by_step_local(model_obj: Union[pipeline, Tuple[AutoModelForCaus
         # Extract problem information if available
         problem_id = data.get('problem_id', 'Unknown')
         agent_system = data.get('agent_system', 'Unknown')
+        question = data.get('question', '')
+        ground_truth = data.get('ground_truth', '')
         
         # Analyze each step incrementally
         conversation_so_far = ""
@@ -270,6 +276,8 @@ You are analyzing a multi-agent conversation step by step.
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Here is the conversation history up to step {i}:
 
@@ -308,7 +316,8 @@ Note: Focus on identifying clear errors that could lead to task failure.
 def _find_error_in_segment_recursive_local(model_obj: Union[pipeline, Tuple[AutoModelForCausalLM, AutoTokenizer]], 
                                            model_family: str, responses: List[Dict[str, Any]], 
                                            start_idx: int, end_idx: int, problem_id: str = 'Unknown', 
-                                           agent_system: str = 'Unknown') -> Optional[Tuple[int, str]]:
+                                           agent_system: str = 'Unknown', question: str = '', 
+                                           ground_truth: str = '') -> Optional[Tuple[int, str]]:
     """
     Recursively find error in conversation segment using binary search with local model.
     
@@ -336,6 +345,8 @@ Analyze this single step from a multi-agent conversation:
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Step {start_idx + 1}: Agent {agent_id}
 Content: {content}
@@ -364,6 +375,8 @@ You are analyzing a multi-agent conversation to locate errors using binary searc
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Conversation segment (Steps {start_idx + 1} to {end_idx + 1}):
 {conversation_segment}
@@ -391,9 +404,9 @@ Note: Focus on identifying clear errors that could lead to task failure.
     mid_idx = (start_idx + end_idx) // 2
     
     if "UPPER HALF" in response_text.upper():
-        return _find_error_in_segment_recursive_local(model_obj, model_family, responses, start_idx, mid_idx, problem_id, agent_system)
+        return _find_error_in_segment_recursive_local(model_obj, model_family, responses, start_idx, mid_idx, problem_id, agent_system, question, ground_truth)
     elif "LOWER HALF" in response_text.upper():
-        return _find_error_in_segment_recursive_local(model_obj, model_family, responses, mid_idx + 1, end_idx, problem_id, agent_system)
+        return _find_error_in_segment_recursive_local(model_obj, model_family, responses, mid_idx + 1, end_idx, problem_id, agent_system, question, ground_truth)
     else:
         return None
 
@@ -432,6 +445,8 @@ def analyze_binary_search_local(model_obj: Union[pipeline, Tuple[AutoModelForCau
         # Extract problem information if available
         problem_id = data.get('problem_id', 'Unknown')
         agent_system = data.get('agent_system', 'Unknown')
+        question = data.get('question', '')
+        ground_truth = data.get('ground_truth', '')
         
         if len(responses) == 1:
             # Only one step, analyze directly
@@ -444,6 +459,8 @@ Analyze this single-step conversation:
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Agent {agent_id}: {content}
 
@@ -459,7 +476,7 @@ Note: Focus on identifying clear errors that could lead to task failure.
                 print(response_text)
         else:
             # Multiple steps, use binary search
-            result = _find_error_in_segment_recursive_local(model_obj, model_family, responses, 0, len(responses) - 1, problem_id, agent_system)
+            result = _find_error_in_segment_recursive_local(model_obj, model_family, responses, 0, len(responses) - 1, problem_id, agent_system, question, ground_truth)
             
             if result:
                 error_step, error_description = result

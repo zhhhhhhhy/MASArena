@@ -335,13 +335,14 @@ class AgentSystem(abc.ABC):
         
         return formatted_responses
 
-    async def save_agent_responses(self, problem_id: str, run_id: str = None):
+    async def save_agent_responses(self, problem_id: str, run_id: str = None, problem: Dict[str, Any] = None):
         """
         Save agent responses to a file.
         
         Args:
             problem_id: ID of the problem
             run_id: Optional run ID to use in the filename
+            problem: Optional problem dictionary containing the question
             
         Returns:
             Path to the saved file
@@ -360,13 +361,25 @@ class AgentSystem(abc.ABC):
         filename = f"{self.name}_{problem_id}_{timestamp}_{run_id[:8]}.json"
         file_path = self.responses_dir / filename
         
+        # Extract question from problem
+        question = ""
+        if problem:
+            question = problem.get("problem", problem.get("question", problem.get("prompt", "")))
+        
+        # Extract ground truth answer from problem
+        ground_truth = ""
+        if problem:
+            ground_truth = problem.get("answer", problem.get("ground_truth", problem.get("solution", "")))
+        
         # Save to file
         async with aiofiles.open(file_path, 'w') as f:
             await f.write(json.dumps({
                 "problem_id": problem_id,
+                "question": question,
                 "agent_system": self.name,
                 "run_id": run_id,
                 "timestamp": timestamp,
+                "ground_truth": ground_truth,
                 "responses": responses_for_problem
             }, indent=2))
         print(f"Saved agent responses to {file_path}")
@@ -514,7 +527,7 @@ class AgentSystem(abc.ABC):
             usage_metrics = self._record_token_usage(problem_id, execution_time_ms, messages)
             
             self._record_agent_responses(problem_id, messages)
-            response_file = await self.save_agent_responses(problem_id, run_id)
+            response_file = await self.save_agent_responses(problem_id, run_id, problem)
             visualization_file = await self.save_visualization_data(problem_id, run_id)
             
             if self.metrics_collector and (response_file or visualization_file):

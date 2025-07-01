@@ -135,6 +135,8 @@ def all_at_once(client, directory_path: str, model: str, max_tokens: int = 1024)
         # Extract problem information if available
         problem_id = data.get('problem_id', 'Unknown')
         agent_system = data.get('agent_system', 'Unknown')
+        question = data.get('question', '')
+        ground_truth = data.get('ground_truth', '')
         
         # Create the analysis prompt
         prompt = f"""
@@ -142,6 +144,8 @@ You are an expert in multi-agent system analysis. Your task is to analyze the fo
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Please analyze the conversation step by step and identify:
 1. Which agent (if any) made an error
@@ -351,6 +355,8 @@ def step_by_step(client, directory_path: str, model: str, max_tokens: int = 1024
         # Extract problem information if available
         problem_id = data.get('problem_id', 'Unknown')
         agent_system = data.get('agent_system', 'Unknown')
+        question = data.get('question', '')
+        ground_truth = data.get('ground_truth', '')
         
         # Analyze each step incrementally
         conversation_so_far = ""
@@ -370,6 +376,8 @@ You are analyzing a multi-agent conversation step by step to identify errors tha
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Here is the conversation history up to step {i}:
 
@@ -413,7 +421,7 @@ Note: Focus on identifying clear errors that would derail the problem-solving pr
         print("\n" + "=" * 80)
 
 
-def _construct_binary_search_prompt(conversation_segment: str, start_step: int, end_step: int, problem_id: str = "Unknown", agent_system: str = "Unknown") -> str:
+def _construct_binary_search_prompt(conversation_segment: str, start_step: int, end_step: int, problem_id: str = "Unknown", agent_system: str = "Unknown", question: str = "", ground_truth: str = "") -> str:
     """
     Construct prompt for binary search analysis.
     
@@ -423,6 +431,8 @@ def _construct_binary_search_prompt(conversation_segment: str, start_step: int, 
         end_step: Ending step number
         problem_id: Problem identifier
         agent_system: Agent system type
+        question: The problem question being solved
+        ground_truth: The correct answer to the problem
         
     Returns:
         Formatted prompt for binary search
@@ -434,6 +444,8 @@ You are analyzing a multi-agent conversation to locate errors using binary searc
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Conversation segment (Steps {start_step} to {end_step}):
 {conversation_segment}
@@ -459,7 +471,7 @@ Note: Focus on identifying clear errors that would lead to incorrect solutions o
 
 def _find_error_in_segment_recursive(client, model: str, responses: List[Dict[str, Any]], 
                                     start_idx: int, end_idx: int, max_tokens: int, 
-                                    problem_id: str = "Unknown", agent_system: str = "Unknown") -> Optional[Tuple[int, str]]:
+                                    problem_id: str = "Unknown", agent_system: str = "Unknown", question: str = "", ground_truth: str = "") -> Optional[Tuple[int, str]]:
     """
     Recursively find error in conversation segment using binary search.
     
@@ -472,6 +484,8 @@ def _find_error_in_segment_recursive(client, model: str, responses: List[Dict[st
         max_tokens: Maximum tokens for response
         problem_id: Problem identifier
         agent_system: Agent system type
+        question: The problem question being solved
+        ground_truth: The correct answer to the problem
         
     Returns:
         Tuple of (error_step, error_description) or None if no error
@@ -490,6 +504,8 @@ Analyze this single step from a multi-agent conversation:
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Step {start_idx + 1}: Agent {agent_id}
 Content: {content}
@@ -517,7 +533,7 @@ Note: Focus on identifying clear errors that would lead to incorrect solutions o
     segment_responses = responses[start_idx:end_idx + 1]
     conversation_segment = _format_agent_responses(segment_responses)
     
-    prompt = _construct_binary_search_prompt(conversation_segment, start_idx + 1, end_idx + 1, problem_id, agent_system)
+    prompt = _construct_binary_search_prompt(conversation_segment, start_idx + 1, end_idx + 1, problem_id, agent_system, question, ground_truth)
     
     messages = [
         {"role": "system", "content": "You are an expert analyst for multi-agent systems."},
@@ -532,9 +548,9 @@ Note: Focus on identifying clear errors that would lead to incorrect solutions o
     mid_idx = (start_idx + end_idx) // 2
     
     if "UPPER HALF" in response_text.upper():
-        return _find_error_in_segment_recursive(client, model, responses, start_idx, mid_idx, max_tokens, problem_id, agent_system)
+        return _find_error_in_segment_recursive(client, model, responses, start_idx, mid_idx, max_tokens, problem_id, agent_system, question, ground_truth)
     elif "LOWER HALF" in response_text.upper():
-        return _find_error_in_segment_recursive(client, model, responses, mid_idx + 1, end_idx, max_tokens, problem_id, agent_system)
+        return _find_error_in_segment_recursive(client, model, responses, mid_idx + 1, end_idx, max_tokens, problem_id, agent_system, question, ground_truth)
     else:
         return None
 
@@ -594,6 +610,8 @@ def binary_search(client, directory_path: str, model: str, max_tokens: int = 102
         # Extract problem information if available
         problem_id = data.get('problem_id', 'Unknown')
         agent_system = data.get('agent_system', 'Unknown')
+        question = data.get('question', '')
+        ground_truth = data.get('ground_truth', '')
         
         if len(responses) == 1:
             # Only one step, analyze directly
@@ -606,6 +624,8 @@ Analyze this single-step conversation:
 
 Problem ID: {problem_id}
 Agent System: {agent_system}
+Problem: {question}
+Ground Truth Answer: {ground_truth}
 
 Agent {agent_id}: {content}
 
@@ -627,7 +647,7 @@ Note: Focus on identifying clear errors that would lead to incorrect solutions o
                 print(response_text)
         else:
             # Multiple steps, use binary search
-            result = _find_error_in_segment_recursive(client, model, responses, 0, len(responses) - 1, max_tokens, problem_id, agent_system)
+            result = _find_error_in_segment_recursive(client, model, responses, 0, len(responses) - 1, max_tokens, problem_id, agent_system, question, ground_truth)
             
             if result:
                 error_step, error_description = result
