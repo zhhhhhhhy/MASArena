@@ -105,7 +105,7 @@ class RecruiterAgent:
             Agent ID: {self.agent_id}
         """
 
-    def describe(self, problem: str, feedback: str = None):
+    async def describe(self, problem: str, feedback: str = None):
         messages = [
             SystemMessage(content=self.system_prompt),
             HumanMessage(content=self._create_prompt(problem, feedback))
@@ -117,7 +117,7 @@ class RecruiterAgent:
         try:
             # Use structured output to call LLM
             llm_with_schema = self.llm.with_structured_output(schema=ExpertTeam, include_raw=True)
-            response = llm_with_schema.invoke(messages)
+            response = await llm_with_schema.ainvoke(messages)
             end_time = time.time()  # Update end_time
             
             # Extract content from structured response
@@ -163,7 +163,7 @@ class RecruiterAgent:
             print(f"Structured output failed for recruiter: {str(e)}. Falling back to standard output.")
             
             # Re-invoke model without structured output
-            response = self.llm.invoke(messages)
+            response = await self.llm.ainvoke(messages)
             end_time = time.time()
             
             # Set name
@@ -246,7 +246,7 @@ class WorkAgent:
             max_tokens=1000
         )
 
-    def solve(self, problem: str, feedback: str = None):
+    async def solve(self, problem: str, feedback: str = None):
         """Solve a problem with optional feedback"""
         feedback_section = ""
         if feedback:
@@ -272,16 +272,11 @@ class WorkAgent:
             HumanMessage(content=problem_content)
         ]
 
-        start_time = time.time()
-        end_time = start_time  # Initialize end_time to prevent undefined errors
-        
         try:
-            # Try to use structured output
             llm_with_schema = self.llm.with_structured_output(schema=ExpertSolution, include_raw=True)
-            response = llm_with_schema.invoke(messages)
-            end_time = time.time()  # Update end_time
+            response = await llm_with_schema.ainvoke(messages)
             
-            # Extract content from structured response
+            # Extract structured data and raw response
             structured_data = response["parsed"]
             raw_response = response["raw"]
             
@@ -299,21 +294,15 @@ class WorkAgent:
             
             return {
                 "agent_id": self.agent_id,
-                "solution": structured_data["solution"],  # Extract solution field directly for compatibility with existing code
-                "structured_solution": structured_data,  # Save complete structured data
-                "message": raw_response,  # Save original message to preserve usage_metadata
-                "latency_ms": (end_time - start_time) * 1000,
+                "solution": structured_data,
+                "message": raw_response,
             }
-            
         except Exception as e:
             # If structured output fails, fall back to standard mode
             print(f"Structured output failed for agent {self.agent_id}: {str(e)}. Falling back to standard output.")
             
             # Re-invoke model without structured output
-            end_time = time.time()  # Record time from previous attempt
-            start_time = time.time()  # Reset timer
-            
-            response = self.llm.invoke(messages)
+            response = await self.llm.ainvoke(messages)
             end_time = time.time()
             
             # Set name
@@ -321,9 +310,8 @@ class WorkAgent:
             
             return {
                 "agent_id": self.agent_id,
-                "solution": response.content,
+                "solution": response.content,  # Return raw content on fallback
                 "message": response,
-                "latency_ms": (end_time - start_time) * 1000,
             }
 
 class Evaluator:
@@ -338,7 +326,7 @@ class Evaluator:
             model=self.model_name
         )
         
-    def evaluate(self, problem: str, solutions: List[Dict[str, Any]], iteration: int, previous_solutions: List[Dict[str, Any]] = None, format_prompt: str = "") -> Dict[str, Any]:
+    async def evaluate(self, problem: str, solutions: List[Dict[str, Any]], iteration: int, previous_solutions: List[Dict[str, Any]] = None, format_prompt: str = "") -> Dict[str, Any]:
         """
         Evaluate solutions from multiple agents and decide whether to:
         1. Provide final solution if satisfactory
@@ -478,7 +466,7 @@ class Evaluator:
         try:
             # Use structured output to call LLM
             llm_with_schema = self.llm.with_structured_output(schema=EvaluationResult, include_raw=True)
-            response = llm_with_schema.invoke(messages)
+            response = await llm_with_schema.ainvoke(messages)
             end_time = time.time()  # Update end_time
             
             # Extract content from structured response
@@ -536,7 +524,7 @@ class Evaluator:
             print(f"Structured output failed for evaluator: {str(e)}. Falling back to standard output and JSON parsing.")
             
             # Re-invoke model without structured output
-            response = self.llm.invoke(messages)
+            response = await self.llm.ainvoke(messages)
             end_time = time.time()
             
             # Set name
@@ -652,7 +640,7 @@ class AgentVerse(AgentSystem):
         self.max_runtime = self.config.get("max_runtime", 300)  # Default maximum runtime 5 minutes
         
      
-    def _create_agents(self, problem: str, feedback: str = None) -> Dict[str, Any]:
+    async def _create_agents(self, problem: str, feedback: str = None) -> Dict[str, Any]:
         """
         Create specialized work agents based on the problem and optional feedback
         
@@ -669,7 +657,7 @@ class AgentVerse(AgentSystem):
             model_name=self.model_name,
             num_agents=self.num_agents
         )
-        response_dict = recruiter.describe(problem, feedback)
+        response_dict = await recruiter.describe(problem, feedback)
         
         # Get expert configuration from structured output
         expert_config = response_dict.get("solution", {})
@@ -718,20 +706,19 @@ class AgentVerse(AgentSystem):
 
     async def _solve_async(self, worker: WorkAgent, problem: str, feedback: str = None) -> Dict[str, Any]:
         """Solve a problem asynchronously with a worker agent"""
-        loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, worker.solve, problem, feedback)
+        return await worker.solve(problem, feedback)
 
     async def _async_solve_problem(self, problem: str, workers: List[WorkAgent], feedback: str = None) -> List[Dict[str, Any]]:
         """Solve a problem with multiple worker agents asynchronously"""
         # Create tasks for each worker
-        tasks = [asyncio.create_task(self._solve_async(worker, problem, feedback)) for worker in workers]
+        tasks = [self._solve_async(worker, problem, feedback) for worker in workers]
         
         # Run all tasks concurrently
         solutions = await asyncio.gather(*tasks)
         
         return solutions
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run the agent system on a given problem.
         
@@ -783,7 +770,7 @@ class AgentVerse(AgentSystem):
             print(f"Starting iteration {iteration}/{self.max_iterations}")
             
             # Create specialized agents for this problem with feedback from previous iteration
-            recruiter_response = self._create_agents(problem_text, feedback)
+            recruiter_response = await self._create_agents(problem_text, feedback)
             agents = recruiter_response.get("workers", [])
             recruiter_message = recruiter_response.get("message", None)
             
@@ -829,7 +816,7 @@ class AgentVerse(AgentSystem):
                 previous_solutions = all_solutions[iteration-2]["solutions"]
             
             # Evaluate solutions, pass previous solutions for comparison
-            evaluation_result = evaluator.evaluate(problem_text, agent_solutions, iteration, previous_solutions, self.format_prompt)
+            evaluation_result = await evaluator.evaluate(problem_text, agent_solutions, iteration, previous_solutions, self.format_prompt)
             evaluation = evaluation_result.get("evaluation", {})
             
             # Add evaluator message
@@ -862,7 +849,7 @@ class AgentVerse(AgentSystem):
         
         # If we reached max iterations without a satisfactory solution, use the last evaluation
         if final_solution is None and all_solutions:
-            last_evaluation = evaluator.evaluate(problem_text, all_solutions[-1]["solutions"], self.max_iterations, all_solutions[:-1] if len(all_solutions) > 1 else None)
+            last_evaluation = await evaluator.evaluate(problem_text, all_solutions[-1]["solutions"], self.max_iterations, all_solutions[:-1] if len(all_solutions) > 1 else None)
             final_solution = last_evaluation.get("evaluation", {}).get("final_solution", "No satisfactory solution found")
             # Add final evaluator message
             if "message" in last_evaluation:

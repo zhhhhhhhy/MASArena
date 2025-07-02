@@ -11,7 +11,6 @@ import uuid
 import os
 from typing import Dict, Any, List
 import asyncio
-from concurrent.futures import ThreadPoolExecutor
 
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
@@ -43,7 +42,7 @@ class SwarmAgent:
         self.llm = ChatOpenAI(model=self.model_name)
         self.name = agent_id
 
-    def solve(self, problem: str) -> Dict[str, Any]:
+    async def solve(self, problem: str) -> Dict[str, Any]:
         """
         Solve a problem independently.
 
@@ -59,7 +58,7 @@ class SwarmAgent:
         ]
 
         start_time = time.time()
-        response = self.llm.invoke(messages)
+        response = await self.llm.ainvoke(messages)
         end_time = time.time()
 
         ai_message = response
@@ -102,7 +101,7 @@ class Aggregator:
         self.name = "aggregator"
         self.format_prompt = format_prompt
 
-    def aggregate(self, problem: str, solutions: List[Dict[str, Any]]) -> Dict[str, Any]:
+    async def aggregate(self, problem: str, solutions: List[Dict[str, Any]]) -> Dict[str, Any]:
         """
         Aggregate solutions from multiple agents.
 
@@ -139,7 +138,7 @@ Make sure your final answer is clearly formatted and precise.
         ]
 
         start_time = time.time()
-        response = self.llm.invoke(messages)
+        response = await self.llm.ainvoke(messages)
         end_time = time.time()
 
         ai_message = response
@@ -200,13 +199,7 @@ class SwarmSystem(AgentSystem):
       
         return base_prompt
 
-    async def _solve_problem_async(self, agent: SwarmAgent, problem: str) -> Dict[str, Any]:
-        """Solve a problem asynchronously"""
-        # Run in a thread pool to avoid blocking
-        with ThreadPoolExecutor() as executor:
-            return await asyncio.get_event_loop().run_in_executor(executor, agent.solve, problem)
-
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run the agent system on a given problem.
         
@@ -229,12 +222,6 @@ class SwarmSystem(AgentSystem):
         # Find the aggregator instance; assumes only one.
         aggregators = [w for w in all_workers if isinstance(w, Aggregator)]
         if not aggregators:
-            # Fallback if aggregator wasn't part of _create_agents (e.g. if not wrapped)
-            # This part might need adjustment if _create_agents is *always* expected
-            # to be the sole source of the aggregator.
-            # For now, assume if ToolIntegrationWrapper runs, aggregator is in workers.
-            # If not wrapped, create it as before.
-            # However, the goal is for _create_agents to be the source.
             raise ValueError("Aggregator not found among workers created by _create_agents.")
         aggregator = aggregators[0]
 
@@ -244,39 +231,28 @@ class SwarmSystem(AgentSystem):
 
         if self.use_parallel:
             # Solve problems in parallel
-            async def solve_all():
-                tasks = [self._solve_problem_async(agent, problem_text) for agent in agents]
-                return await asyncio.gather(*tasks)
-
-            # Run the async tasks
-            try:
-                loop = asyncio.get_event_loop()
-            except RuntimeError:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-            agent_solutions = loop.run_until_complete(solve_all())
+            tasks = [agent.solve(problem_text) for agent in agents]
+            solutions = await asyncio.gather(*tasks)
+            agent_solutions.extend(solutions)
         else:
             # Solve problems sequentially
             for agent in agents:
-                solution = agent.solve(problem_text)
+                solution = await agent.solve(problem_text)
                 agent_solutions.append(solution)
 
-        # Collect AI messages with usage metadata
-        for solution in agent_solutions:
-            all_messages.append(solution["message"])
+        # Extract messages from solutions
+        for sol in agent_solutions:
+            all_messages.append(sol["message"])
 
         # Aggregate solutions
-        aggregated = aggregator.aggregate(problem_text, agent_solutions)
-        all_messages.append(aggregated["message"])
-
-        # Return final solution and messages for metrics collection
+        agg_result = await aggregator.aggregate(problem_text, agent_solutions)
+        all_messages.append(agg_result["message"])
+        
         return {
             "messages": all_messages,
-            "final_answer": aggregated["final_solution"],
-            "agent_solutions": [{"agent_id": s["agent_id"], "solution": s["solution"]} for s in agent_solutions],
+            "final_answer": agg_result["final_solution"],
         }
 
 
 # Register the agent system
-AgentSystemRegistry.register("swarm", SwarmSystem, num_agents=3, parallel=True)
+AgentSystemRegistry.register("swarm", SwarmSystem, num_agents=3)

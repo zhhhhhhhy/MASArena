@@ -30,7 +30,7 @@ class Agent:
             max_retries=2        # Set maximum retry attempts to 2
         )
 
-    def generate_response(self, context: str) -> Any:
+    async def generate_response(self, context: str) -> Any:
         """Generate agent response"""
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -45,7 +45,7 @@ class Agent:
             callback_handler = OpenAICallbackHandler()
             config = {"callbacks": [callback_handler]}
             llm_with_schema = self.llm.with_structured_output(schema=AgentResponse, include_raw=True)
-            response = llm_with_schema.invoke(messages, config=config)
+            response = await llm_with_schema.ainvoke(messages, config=config)
             
             # Get structured data and raw response
             structured_data = response["parsed"]
@@ -93,7 +93,7 @@ class Agent:
             # Fallback to standard output
             callback_handler = OpenAICallbackHandler()
             config = {"callbacks": [callback_handler]}
-            response = self.llm.invoke(messages, config=config)
+            response = await self.llm.ainvoke(messages, config=config)
             response.name = self.name
             
             # Attach usage metadata for fallback
@@ -132,7 +132,7 @@ class ResultExtractor:
         )
         self.name = "result_extractor"
         
-    def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> Dict[str, Any]:
+    async def extract(self, all_histories: List[List[Dict[str, str]]], problem: str) -> Dict[str, Any]:
         """
         Extract final answer from all agents' conversation histories
         """
@@ -157,7 +157,7 @@ Please analyze the above discussions and provide a final answer. Requirements:
         try:
             callback_handler = OpenAICallbackHandler()
             config = {"callbacks": [callback_handler]}
-            response = self.llm.invoke(messages, config=config)
+            response = await self.llm.ainvoke(messages, config=config)
             response.name = "evaluator"
             
             # Attach usage metadata
@@ -269,7 +269,7 @@ You are the Logic Expert, focused on providing logical perspective analysis."""
 
 You are the Critical Thinking Expert, focused on providing multi-angle perspective analysis."""
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Run iterative debate process"""
         problem_text = problem["problem"]
 
@@ -283,7 +283,7 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
             for n, agent in enumerate(self.agents):
                 # generate response for current agent
                 context = self._build_context(problem_text, n, t)
-                response_data = agent.generate_response(context)
+                response_data = await agent.generate_response(context)
                 
                 # save response object
                 if "message" in response_data:
@@ -301,7 +301,7 @@ You are the Critical Thinking Expert, focused on providing multi-angle perspecti
         agent_histories = [agent.chat_history for agent in self.agents]
         
         # extract final answer
-        extractor_result = self.extractor.extract(agent_histories, problem_text)
+        extractor_result = await self.extractor.extract(agent_histories, problem_text)
         
         # add evaluator message
         if "message" in extractor_result and extractor_result["message"]:

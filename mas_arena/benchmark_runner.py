@@ -8,6 +8,10 @@ This module provides a simplified interface for running benchmarks on multi-agen
 import os
 import json
 import random
+import subprocess
+import sys
+import shutil
+import tempfile
 from pathlib import Path
 from datetime import datetime
 import asyncio
@@ -15,6 +19,7 @@ from tqdm.asyncio import tqdm
 from openai.types.completion_usage import CompletionUsage
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from rich import print as rprint
 
 from mas_arena.metrics import (
     MetricsRegistry,
@@ -203,20 +208,147 @@ class BenchmarkRunner:
         # Save main results file
         with open(output_file, "w") as f:
             json.dump({"summary": summary, "results": all_results}, f, indent=4, default=custom_json_serializer)
-
+       
         if verbose:
+            # Run failure attribution analysis for incorrect results
+            self._run_failure_attribution(all_results, agent_system, verbose)
+            # Print benchmark summary
             print("\n" + "=" * 80)
-            print("Benchmark Summary")
+            rprint("[bold green]🎯 Benchmark Summary[/bold green]")
             print("=" * 80)
             print(json.dumps(summary, indent=2))
             print("-" * 80)
-            print("To visualize results, run:")
+            # Print visualization command
+            rprint("[bold blue]📈 To visualize results, run:[/bold blue]")
             print(f"$ python mas_arena/visualization/visualize_benchmark.py visualize --summary {summary_file}")
             print("=" * 80)
+
 
         self.results = all_results
         self.summary = summary
         return summary
+
+    def _collect_failed_responses(self, all_results, agent_system, verbose):
+        """
+        Collect and move failed agent response files to a centralized directory.
+        
+        Args:
+            all_results: List of all benchmark results
+            agent_system: Name of the agent system used
+            verbose: Whether to print progress information
+            
+        Returns:
+            Path to the directory containing failed responses, or None if no failures
+        """
+        # Find incorrect results
+        incorrect_results = [r for r in all_results if r.get("score", 0) != 1 and "error" not in r]
+        
+        if not incorrect_results:
+            return None
+        
+        # Find corresponding agent response files
+        agent_responses_dir = Path("results/agent_responses")
+        if not agent_responses_dir.exists():
+            if verbose:
+                print("Agent responses directory not found.")
+            return None
+        
+        # Create centralized failed responses directory
+        failed_responses_dir = Path(self.results_dir) / "failure" / f"failed_responses_{self.timestamp}"
+        failed_responses_dir.mkdir(parents=True, exist_ok=True)
+        
+        collected_files = []
+        
+        for result in incorrect_results:
+            problem_id = result.get("problem_id")
+            if not problem_id:
+                continue
+                
+            # Find the corresponding agent response file
+            # Pattern: {agent_system}_{problem_id}_{timestamp}_{hash}.json
+            pattern = f"{agent_system}_{problem_id}_*.json"
+            matching_files = list(agent_responses_dir.glob(pattern))
+            
+            if not matching_files:
+                if verbose:
+                    print(f"No agent response file found for problem {problem_id}")
+                continue
+            
+            # Use the most recent file if multiple matches
+            agent_response_file = max(matching_files, key=lambda f: f.stat().st_mtime)
+            
+            # Copy file to failed responses directory
+            dest_file = failed_responses_dir / agent_response_file.name
+            shutil.copy2(agent_response_file, dest_file)
+            collected_files.append(dest_file)
+            
+            if verbose:
+                print(f"Collected failed response for problem {problem_id}: {agent_response_file.name}")
+        
+        if verbose:
+            print(f"\nCollected {len(collected_files)} failed response files in: {failed_responses_dir}")
+        
+        return failed_responses_dir
+
+    def _run_failure_attribution(self, all_results, agent_system, verbose):
+        """
+        Prepare and display instructions for failure attribution analysis.
+        
+        Args:
+            all_results: List of all benchmark results
+            agent_system: Name of the agent system used
+            verbose: Whether to print progress information
+        """
+        # Find incorrect results
+        incorrect_results = [r for r in all_results if r.get("score", 0) != 1 and "error" not in r]
+        
+        if not incorrect_results:
+            if verbose:
+                print("\n" + "=" * 80)
+                rprint("[yellow]No incorrect results found. Skipping failure attribution analysis.[/yellow]")
+                print("=" * 80)
+            return
+        
+        if verbose:
+            print("\n" + "=" * 80)
+            rprint(f"[bold yellow]Found {len(incorrect_results)} incorrect results for Failure Attribution Analysis[/bold yellow]")
+            print("=" * 80)
+        
+        # Collect failed response files
+        failed_responses_dir = self._collect_failed_responses(all_results, agent_system, verbose)
+        
+        if not failed_responses_dir:
+            if verbose:
+                print("Could not collect failed response files.")
+            return
+        
+        # Check if failure inference script exists
+        failure_inference_script = Path("mas_arena/failure/inference.py")
+        if not failure_inference_script.exists():
+            if verbose:
+                print("Failure inference script not found.")
+            return
+        
+        # Create failure output directory
+        failure_output_dir = Path(self.results_dir) / "failure"
+        failure_output_dir.mkdir(exist_ok=True)
+        
+        if verbose:
+            print("\n" + "-" * 80)
+            rprint("[bold blue]🔍 To run Failure Attribution Analysis, execute the following command:[/bold blue]")
+            print("-" * 80)
+            print(f"python {failure_inference_script} \\")
+            print(f"    --method binary_search \\")
+            print(f"    --model gpt-4o \\")
+            print(f"    --directory_path {failed_responses_dir} \\")
+            print(f"    --output_dir {failure_output_dir}")
+            # print("-" * 80)
+            rprint("\n[bold]Alternative analysis methods:[/bold]")
+            print(f"# For comprehensive analysis:")
+            print(f"python {failure_inference_script} --method binary_search --model gpt-4o --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
+            print(f"\n# For step-by-step analysis:")
+            print(f"python {failure_inference_script} --method step_by_step --model gpt-4o --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
+            print("=" * 80)
 
     def run(self, benchmark_name="math", data_path=None, limit=None, agent_system="single_agent", agent_config=None, verbose=True):
         agent, problems, benchmark_config, output_file = self._prepare_benchmark(
@@ -279,6 +411,6 @@ class BenchmarkRunner:
         Args:
             output_dir: Directory to save visualizations (defaults to metrics_dir/benchmark_timestamp/viz)
         """
-        pass 
+        pass
 
 
