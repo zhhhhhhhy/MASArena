@@ -24,6 +24,7 @@
 * **🔧 Tool Support**:  Manage tool selection via pluggable wrappers.
 * **🧩 Easy Extensions**: Add agents via subclassing—no core changes.
 * **📂 Paired Datasets & Evaluators**: Add new benchmarks with minimal effort.
+* **🔍 Failure Attribution**: Identify failure causes and responsible agents.
 
 ## 🎬 Demo
 
@@ -74,8 +75,8 @@ For comprehensive guides, tutorials, and API references, visit our complete [doc
 
 ## ✅ TODOs
 
-* [ ] Add asynchronous support for model calls
-* [ ] Implement failure detection in MAS workflows
+* [x] Add asynchronous support for model calls
+* [x] Implement failure detection in MAS workflows
 * [ ] Add more benchmarks emphasizing tool usage
 * [ ] Improve configuration for MAS and tool integration
 * [ ] Integrate multiple tools(e.g., Browser, Video, Audio, Docker) into the current evaluation framework

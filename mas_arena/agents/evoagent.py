@@ -493,7 +493,7 @@ class EvoAgent(AgentSystem):
             best_result = max(results, key=lambda x: x.get("score", 0))
             return best_result.get("extracted_answer", f"Unable to summarize results: {str(e)}"), {}
     
-    async def _run_agent_async(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run evolutionary agent system to solve given problem (async version)
         
@@ -733,31 +733,6 @@ class EvoAgent(AgentSystem):
             }
         }
         
-    def run_agent_sync(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """
-        Synchronous version of run_agent method for compatibility with existing synchronous code
-        
-        Args:
-            problem: Problem dictionary
-            **kwargs: Additional parameters
-            
-        Returns:
-            Result dictionary
-        """
-        try:
-            # Use asyncio.run() for robust async execution from a sync context
-            return asyncio.run(self._run_agent_async(problem, **kwargs))
-        except Exception as e:
-            print(f"{Colors.RED}Error: Error running agent: {str(e)}{Colors.ENDC}")
-            # Return a result containing error information
-            return {
-                "messages": [("error", f"Execution error: {str(e)}")],
-                "execution_time_ms": 0
-            }
-            
-    # For backward compatibility, set run_agent_sync method as an alias for run_agent
-    run_agent = run_agent_sync
-
     async def _run_agent_task(self, agent: Agent, problem_text: str, problem: Dict[str, Any]) -> None:
         """
         Run single agent asynchronously and calculate score
@@ -818,5 +793,5 @@ if __name__ == "__main__":
     
     # Use synchronous version of run_agent method
     evo_agent = EvoAgent()
-    result = evo_agent.run_agent(problem)
+    result = asyncio.run(evo_agent.run_agent(problem))
     print(result)

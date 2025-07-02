@@ -35,7 +35,7 @@ class Agent:
             model=self.model_name
         )
 
-    async def generate_response_async(self, context: str) -> Dict[str, Any]:
+    async def generate_response(self, context: str) -> Dict[str, Any]:
         """Generate agent response asynchronously"""
         messages = [
             SystemMessage(content=self.system_prompt),
@@ -47,7 +47,7 @@ class Agent:
         
         try:
             # Use standard output in async mode
-            response = await asyncio.to_thread(self.llm.invoke, messages)
+            response = await self.llm.ainvoke(messages)
             # Save response name for source identification
             response.name = self.name
             
@@ -90,11 +90,6 @@ class Agent:
                 "message": error_message,
                 "content": error_content
             }
-    
-    def generate_response(self, context: str) -> Dict[str, Any]:
-        """Generate agent response (synchronous wrapper)"""
-        # Run the async method in an event loop
-        return asyncio.run(self.generate_response_async(context))
 
 
 class JARVIS(AgentSystem):
@@ -240,7 +235,7 @@ When receiving a problem description and all completed task results, you must:
         
         return tasks
 
-    async def _plan_tasks_async(self, problem: str) -> List[Task]:
+    async def _plan_tasks(self, problem: str) -> List[Task]:
         """Plan task list asynchronously"""
         if not self.planner_agent:
             self._create_agents()
@@ -272,16 +267,12 @@ When receiving a problem description and all completed task results, you must:
         For mathematical problems, break down each computational step clearly.
         """
         
-        response = await self.planner_agent.generate_response_async(prompt)
+        response = await self.planner_agent.generate_response(prompt)
         content = response.get("content", "")
         
         return self._parse_tasks_from_text(content)
 
-    def _plan_tasks(self, problem: str) -> List[Task]:
-        """Plan task list (synchronous wrapper)"""
-        return asyncio.run(self._plan_tasks_async(problem))
-
-    async def _execute_task_async(self, task: Task, problem: str) -> Dict[str, Any]:
+    async def _execute_task(self, task: Task, problem: str) -> Dict[str, Any]:
         """Execute a single task asynchronously"""
         if not self.executor_agent:
             self._create_agents()
@@ -309,7 +300,7 @@ When receiving a problem description and all completed task results, you must:
         For reasoning tasks, explain your logical process thoroughly.
         """
         
-        response = await self.executor_agent.generate_response_async(prompt)
+        response = await self.executor_agent.generate_response(prompt)
         
         execution_result = {
             "task_id": task.id,
@@ -319,7 +310,7 @@ When receiving a problem description and all completed task results, you must:
         
         return execution_result
 
-    async def _generate_final_response_async(self, problem: str, task_results: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
+    async def _generate_final_response(self, problem: str, task_results: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
         """Generate final response asynchronously"""
         if not self.response_generator_agent:
             self._create_agents()
@@ -346,7 +337,7 @@ When receiving a problem description and all completed task results, you must:
         Double-check all mathematical operations for accuracy.
         """
         
-        response = await self.response_generator_agent.generate_response_async(prompt)
+        response = await self.response_generator_agent.generate_response(prompt)
         content = response.get("content", "")
         
         return {
@@ -354,11 +345,7 @@ When receiving a problem description and all completed task results, you must:
             "message": response.get("message", None)  # Preserve complete message object with metadata
         }
 
-    def _generate_final_response(self, problem: str, task_results: Dict[int, Dict[str, Any]]) -> Dict[str, Any]:
-        """Generate final response (synchronous wrapper)"""
-        return asyncio.run(self._generate_final_response_async(problem, task_results))
-
-    async def run_agent_async(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Run the agent system to process a problem asynchronously"""
         print("JARVIS: Starting problem processing...")
         start_time = time.time()
@@ -373,7 +360,7 @@ When receiving a problem description and all completed task results, you must:
         
         # Step 1: Task planning
         print("Starting task planning...")
-        self.tasks = await self._plan_tasks_async(problem_text)
+        self.tasks = await self._plan_tasks(problem_text)
         print(f"Task planning complete, {len(self.tasks)} tasks planned")
         
         # Collect all messages - containing complete AIMessage objects
@@ -419,14 +406,18 @@ When receiving a problem description and all completed task results, you must:
                 # If no tasks are ready but there are pending tasks, there might be a dependency cycle
                 print("Warning: Possible dependency cycle detected. Breaking cycle...")
                 # Force-execute the first pending task
-                first_pending = next(iter(pending_tasks.values()))
-                ready_tasks.append(first_pending)
-                del pending_tasks[first_pending.id]
+                if pending_tasks:
+                    first_pending = next(iter(pending_tasks.values()))
+                    ready_tasks.append(first_pending)
+                    del pending_tasks[first_pending.id]
+                else:
+                    # All tasks are done
+                    break
             
             print(f"Executing {len(ready_tasks)} tasks in parallel...")
             
             # Execute all ready tasks in parallel
-            tasks_execution = [self._execute_task_async(task, problem_text) for task in ready_tasks]
+            tasks_execution = [self._execute_task(task, problem_text) for task in ready_tasks]
             results = await asyncio.gather(*tasks_execution)
             
             # Process results
@@ -452,7 +443,7 @@ When receiving a problem description and all completed task results, you must:
         
         # Step 3: Generate final response
         print("Generating final response...")
-        final_response = await self._generate_final_response_async(problem_text, self.task_results)
+        final_response = await self._generate_final_response(problem_text, self.task_results)
         
         # Add final response to message list - preserve complete AIMessage object
         if "message" in final_response and final_response["message"] is not None:
@@ -488,10 +479,6 @@ When receiving a problem description and all completed task results, you must:
         
         print("JARVIS processing complete")
         return result
-
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """Run the agent system to process a problem (synchronous wrapper)"""
-        return asyncio.run(self.run_agent_async(problem, **kwargs))
 
 
 # Register agent system

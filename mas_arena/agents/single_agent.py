@@ -9,7 +9,7 @@ import os
 from typing import Dict, Any
 import contextlib
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 
 from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
@@ -34,9 +34,9 @@ class SingleAgent(AgentSystem):
         self.system_prompt = self.config.get("system_prompt", "") + self.format_prompt
 
         # Initialize evaluator and metrics collector through base class methods
-        self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
+        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run the agent system on a given problem.
         
@@ -57,7 +57,7 @@ class SingleAgent(AgentSystem):
         ]
 
         # Get solution from OpenAI API
-        response = self.client.chat.completions.create(
+        response = await self.client.chat.completions.create(
             model=self.model_name,
             messages=messages
         )

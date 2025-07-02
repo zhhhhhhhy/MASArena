@@ -51,10 +51,10 @@ def create_supervisor(model_name: str):
         "The 'coder' is a mathematical expert who can solve problems directly."
     )
 
-    def supervisor_node(state: State) -> Command[Literal["researcher", "coder", "__end__"]]:
+    async def supervisor_node(state: State) -> Command[Literal["researcher", "coder", "__end__"]]:
         messages = [{"role": "system", "content": system_prompt}] + state["messages"]
 
-        response = model.with_structured_output(Router).invoke(messages)
+        response = await model.with_structured_output(Router).ainvoke(messages)
 
         goto = response.get("next", "FINISH")
 
@@ -84,12 +84,12 @@ class AgentNode:
         return self.agent
 
     @traceable
-    def __call__(self, state: State) -> Command[Literal["supervisor"]]:
+    async def __call__(self, state: State) -> Command[Literal["supervisor"]]:
         current_agent = self._create_and_get_agent() if self.agent is None else self.agent
         
         agent_input = {"messages": state["messages"]}
 
-        result = current_agent.invoke(agent_input)
+        result = await current_agent.ainvoke(agent_input)
 
         ai_message = result["messages"][-1]
         ai_message.name = self.name
@@ -179,7 +179,7 @@ Use your expertise to help with tasks and provide information. Requirement:
         self.graph = builder.compile(checkpointer=checkpointer)
 
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run the agent system on a problem.
         """
@@ -195,7 +195,7 @@ Use your expertise to help with tasks and provide information. Requirement:
         if self.graph is None:
              raise RuntimeError("Graph not compiled before run_agent call.")
 
-        run_result = self.graph.invoke(initial_state, config={"configurable": {"thread_id": thread_id}})
+        run_result = await self.graph.ainvoke(initial_state, config={"configurable": {"thread_id": thread_id}})
         
         return {
             "messages": run_result.get("messages", []),
