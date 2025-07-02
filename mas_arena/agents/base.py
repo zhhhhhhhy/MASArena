@@ -117,7 +117,7 @@ class AgentSystem(abc.ABC):
             pass  # Metrics collector is optional
 
     @abc.abstractmethod
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run the agent system on a given problem.
         
@@ -519,7 +519,7 @@ class AgentSystem(abc.ABC):
         
         try:
             agent_run_start_time = time.perf_counter()
-            run_output = self.run_agent(problem, **kwargs)
+            run_output = await self.run_agent(problem, **kwargs)
             agent_run_end_time = time.perf_counter()
             execution_time_ms = (agent_run_end_time - agent_run_start_time) * 1000
             
