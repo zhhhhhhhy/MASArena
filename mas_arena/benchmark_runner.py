@@ -19,6 +19,7 @@ from tqdm.asyncio import tqdm
 from openai.types.completion_usage import CompletionUsage
 import traceback
 from concurrent.futures import ThreadPoolExecutor
+from rich import print as rprint
 
 from mas_arena.metrics import (
     MetricsRegistry,
@@ -207,19 +208,21 @@ class BenchmarkRunner:
         # Save main results file
         with open(output_file, "w") as f:
             json.dump({"summary": summary, "results": all_results}, f, indent=4, default=custom_json_serializer)
-
+       
         if verbose:
+            # Run failure attribution analysis for incorrect results
+            self._run_failure_attribution(all_results, agent_system, verbose)
+            # Print benchmark summary
             print("\n" + "=" * 80)
-            print("Benchmark Summary")
+            rprint("[bold green]🎯 Benchmark Summary[/bold green]")
             print("=" * 80)
             print(json.dumps(summary, indent=2))
             print("-" * 80)
-            print("To visualize results, run:")
+            # Print visualization command
+            rprint("[bold blue]📈 To visualize results, run:[/bold blue]")
             print(f"$ python mas_arena/visualization/visualize_benchmark.py visualize --summary {summary_file}")
             print("=" * 80)
 
-        # Run failure attribution analysis for incorrect results
-        self._run_failure_attribution(all_results, agent_system, verbose)
 
         self.results = all_results
         self.summary = summary
@@ -302,13 +305,13 @@ class BenchmarkRunner:
         if not incorrect_results:
             if verbose:
                 print("\n" + "=" * 80)
-                print("No incorrect results found. Skipping failure attribution analysis.")
+                rprint("[yellow]No incorrect results found. Skipping failure attribution analysis.[/yellow]")
                 print("=" * 80)
             return
         
         if verbose:
             print("\n" + "=" * 80)
-            print(f"Found {len(incorrect_results)} incorrect results for Failure Attribution Analysis")
+            rprint(f"[bold yellow]Found {len(incorrect_results)} incorrect results for Failure Attribution Analysis[/bold yellow]")
             print("=" * 80)
         
         # Collect failed response files
@@ -332,17 +335,17 @@ class BenchmarkRunner:
         
         if verbose:
             print("\n" + "-" * 80)
-            print("To run Failure Attribution Analysis, execute the following command:")
+            rprint("[bold blue]🔍 To run Failure Attribution Analysis, execute the following command:[/bold blue]")
             print("-" * 80)
             print(f"python {failure_inference_script} \\")
             print(f"    --method binary_search \\")
             print(f"    --model gpt-4o \\")
             print(f"    --directory_path {failed_responses_dir} \\")
             print(f"    --output_dir {failure_output_dir}")
-            print("-" * 80)
-            print("\nAlternative analysis methods:")
+            # print("-" * 80)
+            rprint("\n[bold]Alternative analysis methods:[/bold]")
             print(f"# For comprehensive analysis:")
-            print(f"python {failure_inference_script} --method all_at_once --model gpt-4o --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
+            print(f"python {failure_inference_script} --method binary_search --model gpt-4o --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
             print(f"\n# For step-by-step analysis:")
             print(f"python {failure_inference_script} --method step_by_step --model gpt-4o --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
             print("=" * 80)
