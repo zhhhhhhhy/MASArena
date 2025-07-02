@@ -277,11 +277,11 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
                 messages.append(message)
         return messages
 
-    def _run_agent_task(self, agent_name: str, task: Dict[str, Any]) -> Dict[str, Any]:
+    async def _run_agent_task(self, agent_name: str, task: Dict[str, Any]) -> Dict[str, Any]:
         agent = self.agents[agent_name]
         messages = [SystemMessage(content=agent.system_prompt), HumanMessage(content=str(task))]
 
-        response = agent.llm.invoke(messages)
+        response = await agent.llm.ainvoke(messages)
         content = response.content
         usage_metadata = response.usage_metadata if hasattr(response, "usage_metadata") else None
 
@@ -299,7 +299,7 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
 
         return result
 
-    def _process_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
+    async def _process_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
         max_iterations = self.task_status["max_iterations"]
         iteration = 0
         result = None
@@ -308,13 +308,13 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
             self.task_status["iteration_count"] = iteration
             self.task_status["current_task"] = task
 
-            product_manager_result = self._run_agent_task("product_manager", task)
-            architect_result = self._run_agent_task("architect", {"product_manager_result": product_manager_result})
-            project_manager_result = self._run_agent_task(
+            product_manager_result = await self._run_agent_task("product_manager", task)
+            architect_result = await self._run_agent_task("architect", {"product_manager_result": product_manager_result})
+            project_manager_result = await self._run_agent_task(
                 "project_manager",
                 {"product_manager_result": product_manager_result, "architect_result": architect_result},
             )
-            developer_result = self._run_agent_task(
+            developer_result = await self._run_agent_task(
                 "engineer",
                 {
                     "product_manager_result": product_manager_result,
@@ -322,7 +322,7 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
                     "project_manager_result": project_manager_result,
                 },
             )
-            tester_result = self._run_agent_task(
+            tester_result = await self._run_agent_task(
                 "qa_engineer",
                 {
                     "product_manager_result": product_manager_result,
@@ -368,7 +368,7 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
     def _need_iteration(self, qa_content: str) -> bool:
         return bool(self._extract_bugs(qa_content) or self._extract_suggestions(qa_content))
 
-    def run_agent(self, task_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, task_data: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run the agent system on a task.
         
@@ -383,7 +383,7 @@ Output in plain text with markdown formatting, wrapped in <answer> tags:
         self.message_history = []
 
         try:
-            result_chain = self._process_task(task_data)
+            result_chain = await self._process_task(task_data)
 
             # Return the raw QA output without specific extraction
             tester_out = result_chain.get("tester_result", {}).get("content", "")

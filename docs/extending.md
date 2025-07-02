@@ -37,7 +37,10 @@ A comprehensive guide to extending MASArena with custom Multi-Agent Systems and 
 
 ### 📝 Implementation Steps
 
-#### Step 1: Create Basic Class Structure
+#### Step 1: Create Agent System Class Structure
+
+✅ Langgraph supported
+✅ Customizable agent and multi-agent interaction 
 
 **📋 Implementation Guide:**
    - Inherit from `AgentSystem` base class
@@ -46,8 +49,52 @@ A comprehensive guide to extending MASArena with custom Multi-Agent Systems and 
    - Extract workers and result extractors from created components
    - Validate that required components are available
 
+**💡 SupervisorMAS Implementation Example (LangGraph Structure):**
+
+```
+# mas_arena/agents/supervisor_mas.py
+
+    def _init_graph_if_needed(self, problem_input: Optional[Any] = None, feedback: Optional[Any] = None):
+        if self.graph is not None:
+            return
+
+        # _create_agents now returns a dict {"researcher": researcher_node, "coder": coder_node}
+        # If wrapped by ToolIntegrationWrapper, the nodes will have been modified in-place.
+        worker_nodes_map = self._create_agents(problem_input=problem_input, feedback=feedback)
+
+        research_node_obj = worker_nodes_map.get("researcher")
+        coder_node_obj = worker_nodes_map.get("coder")
+        
+        if not research_node_obj or not coder_node_obj:
+            raise RuntimeError("Could not find researcher or coder agent nodes from _create_agents dictionary.")
+
+        builder = StateGraph(State)
+        checkpointer = InMemorySaver()
+
+        supervisor_model = self.config.get("supervisor_model_name", self.config.get("model_name", os.getenv("MODEL_NAME", "gpt-4o-mini")))
+        builder.add_node("supervisor", create_supervisor(model_name=supervisor_model))
+        
+        builder.add_node("researcher", research_node_obj)
+        builder.add_node("coder", coder_node_obj)
+
+        builder.add_edge(START, "supervisor")
+        
+        builder.add_conditional_edges(
+            "supervisor",
+            lambda x: x["next"],
+            {"researcher": "researcher", "coder": "coder", END: END},
+        )
+        
+        builder.add_edge("researcher", "supervisor")
+        builder.add_edge("coder", "supervisor")
+
+        self.graph = builder.compile(checkpointer=checkpointer)
+
+```
+
 **💡 ChatEval Implementation Example (Basic Structure):**
-```187:207:mas_arena/agents/chateval.py
+```
+# mas_arena/agents/chateval.py
 class ChatEval(AgentSystem):
     """Multi-agent evaluation system based on iterative debate"""
     
@@ -79,8 +126,9 @@ class ChatEval(AgentSystem):
    - Return formatted result with messages and final answer
 
 **💡 ChatEval Implementation Example (run_agent Core Method):**
-```272:305:mas_arena/agents/chateval.py
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+```
+# mas_arena/agents/chateval.py
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """Run iterative debate process"""
         problem_text = problem["problem"]
 
@@ -133,7 +181,8 @@ class ChatEval(AgentSystem):
    - Ensure each worker has `.name` and `.llm` attributes for tool binding
 
 **💡 ChatEval Implementation Example (_create_agents Tool Integration):**
-```208:236:mas_arena/agents/chateval.py
+```
+# mas_arena/agents/chateval.py
     def _create_agents(self) -> List[Agent]:
         """Create multiple agent instances and result extractor"""
         # This method will be patched by ToolIntegrationWrapper if this system is wrapped.
@@ -171,7 +220,8 @@ class ChatEval(AgentSystem):
    - These defaults can be overridden during initialization
 
 **💡 ChatEval Implementation Example (Registration):**
-```342:347:mas_arena/agents/chateval.py
+```
+# mas_arena/agents/chateval.py
 # register agent system
 AgentSystemRegistry.register(
     "chateval",
@@ -192,7 +242,8 @@ AgentSystemRegistry.register(
    - Configure timeout and retry settings for robust operation
 
 **💡 ChatEval Implementation Example (Format Prompt Integration):**
-```125:135:mas_arena/agents/chateval.py
+```
+# mas_arena/agents/chateval.py
     def __init__(self, model_name: str = None, format_prompt: str = ""):
         self.model_name = model_name or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.format_prompt = format_prompt
@@ -214,7 +265,8 @@ AgentSystemRegistry.register(
    - Ensure compatibility with tool integration framework
 
 **💡 ChatEval Implementation Example (Agent Class Definition):**
-```16:39:mas_arena/agents/chateval.py
+```
+# mas_arena/agents/chateval.py
 @dataclass
 class Agent:
     """Represents an LLM agent"""
@@ -271,7 +323,8 @@ Use `AgentSystemRegistry.register()` to register system and provide default conf
    - Set up evaluator name and supported answer formats
 
 **💡 MMLU_pro Implementation Example (Registration and Class Definition):**
-```17:32:mas_arena/evaluators/mmlu_pro_evaluator.py
+```
+# mas_arena/evaluators/mmlu_pro_evaluator.py
 @register_benchmark(
     name="mmlu_pro",
     normalization_keys={
@@ -299,7 +352,8 @@ class MMLU_ProEvaluator(BaseEvaluator):
    - Define evaluation metrics and scoring methods
 
 **💡 MMLU_pro Implementation Example (Initialization):**
-```33:50:mas_arena/evaluators/mmlu_pro_evaluator.py
+```
+# mas_arena/evaluators/mmlu_pro_evaluator.py
     def __init__(self, name="mmlu_pro", config=None):
         """
         Initialize the MMLU Professional evaluator.
@@ -330,7 +384,8 @@ class MMLU_ProEvaluator(BaseEvaluator):
    - Include extracted answer and original final answer
 
 **💡 MMLU_pro Implementation Example (evaluate Method):**
-```132:161:mas_arena/evaluators/mmlu_pro_evaluator.py
+```
+# mas_arena/evaluators/mmlu_pro_evaluator.py
     def evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
         """
         Evaluate an agent's solution to a MMLU_pro problem.
@@ -376,7 +431,8 @@ class MMLU_ProEvaluator(BaseEvaluator):
    - Support flexible answer parsing for different benchmarks
 
 **💡 MMLU_pro Implementation Example (Answer Extraction):**
-```116:131:mas_arena/evaluators/mmlu_pro_evaluator.py
+```
+# mas_arena/evaluators/mmlu_pro_evaluator.py
     def extract_answer_from_response(self, response: str) -> str:
         """
         Extract answer from agent response.
@@ -406,7 +462,8 @@ class MMLU_ProEvaluator(BaseEvaluator):
    - Include error handling for malformed inputs
 
 **💡 MMLU_pro Implementation Example (Exact Match Verification):**
-```65:95:mas_arena/evaluators/mmlu_pro_evaluator.py
+```
+# mas_arena/evaluators/mmlu_pro_evaluator.py
     def check_exact_match(self, reference: str, candidate: str) -> float:
         """
         Check if the candidate exactly matches the reference (case-insensitive).
@@ -450,7 +507,8 @@ class MMLU_ProEvaluator(BaseEvaluator):
    - Return standardized results format for benchmark runner
 
 **💡 MMLU_pro Implementation Example (Batch Evaluation):**
-```163:200:mas_arena/evaluators/mmlu_pro_evaluator.py
+```
+# mas_arena/evaluators/mmlu_pro_evaluator.py
     def batch_evaluate(self, problems: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
         """
         Evaluate a batch of problems.
@@ -556,7 +614,7 @@ class MMLU_ProEvaluator(BaseEvaluator):
 - [ ] ✅ Config includes `evaluator` key
 - [ ] 📊 Messages have `usage_metadata` for token tracking
 - [ ] 🏷️ Agents have `name` and `llm` attributes (for tool integration)
-- [ ] ⚡ `run_agent` method is synchronous
+- [ ] ⚡ `run_agent` should be async
 - [ ] 📤 Return format includes `messages` and `final_answer`
 - [ ] 📋 Proper registration with `AgentSystemRegistry`
 
