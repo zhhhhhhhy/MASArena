@@ -8,7 +8,7 @@ engage in multi-round discussions to collaboratively solve problems through deba
 import os
 from typing import Dict, Any, List
 import contextlib
-from openai import OpenAI
+from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
 
@@ -32,19 +32,19 @@ class LLMDebate(AgentSystem):
         # Configuration parameters
         self.agents_num = self.config.get("agents_num", 3)  # Number of debate agents
         self.rounds_num = self.config.get("rounds_num", 2)  # Number of debate rounds
-        self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")
+        self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         
         # System prompt with format requirements
         self.base_system_prompt = self.config.get("system_prompt", "You are a helpful AI assistant.")
         self.system_prompt = self.base_system_prompt + "\n" + self.format_prompt
         
         # Initialize OpenAI client
-        self.client = OpenAI(
+        self.client = AsyncOpenAI(
             api_key=os.getenv("OPENAI_API_KEY"), 
             base_url=os.getenv("OPENAI_API_BASE")
         )
 
-    def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
+    async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
         Run the LLM Debate system on a given problem.
         
@@ -77,7 +77,7 @@ class LLMDebate(AgentSystem):
                     agent_context.append(debate_message)
                 
                 # Get response from current agent
-                response = self._call_llm(agent_context)
+                response = await self._call_llm(agent_context)
                 
                 # Create response message with usage metadata
                 ai_message = {
@@ -100,7 +100,7 @@ class LLMDebate(AgentSystem):
         final_answers = [context[-1]['content'] for context in agent_contexts]
         
         # Aggregate all answers into final result
-        aggregated_answer = self._aggregate_answers(query, final_answers)
+        aggregated_answer = await self._aggregate_answers(query, final_answers)
         
         # Create aggregation message
         aggregation_message = {
@@ -120,7 +120,7 @@ class LLMDebate(AgentSystem):
             "agents_participated": self.agents_num
         }
 
-    def _call_llm(self, messages: List[Dict]) -> Dict[str, Any]:
+    async def _call_llm(self, messages: List[Dict]) -> Dict[str, Any]:
         """
         Call the LLM with given messages and return response with usage metadata.
         
@@ -134,7 +134,7 @@ class LLMDebate(AgentSystem):
         api_messages = [{"role": "system", "content": self.system_prompt}] + messages
         
         try:
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model_name,
                 messages=api_messages
             )
@@ -206,7 +206,7 @@ class LLMDebate(AgentSystem):
             "content": prefix_string + suffix_string
         }
 
-    def _aggregate_answers(self, query: str, answers: List[str]) -> Dict[str, Any]:
+    async def _aggregate_answers(self, query: str, answers: List[str]) -> Dict[str, Any]:
         """
         Aggregate all agents' final answers into a single result.
         
@@ -230,7 +230,7 @@ class LLMDebate(AgentSystem):
         
         # Call LLM for aggregation
         messages = [{"role": "user", "content": aggregate_instruction}]
-        return self._call_llm(messages)
+        return await self._call_llm(messages)
 
 
 # Register the agent system
