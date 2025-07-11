@@ -12,13 +12,13 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
 
-# 加载环境变量
+# Load environment variables
 load_dotenv()
 
 
 @dataclass
 class ChatDevAgent:
-    """ChatDev系统中的智能体基类"""
+    """Base agent class in ChatDev system"""
     name: str
     role: str
     system_prompt: str
@@ -35,25 +35,25 @@ class ChatDevAgent:
         self.chat_history = []
 
     def generate_response(self, context: str) -> Dict[str, Any]:
-        """生成响应"""
+        """Generate response"""
         try:
-            # 构建消息
+            # Build messages
             messages = [SystemMessage(content=self.system_prompt)]
             
-            # 添加历史对话
+            # Add chat history
             for msg in self.chat_history:
                 if msg.get("role") == "user":
                     messages.append(HumanMessage(content=msg["content"]))
                 else:
                     messages.append(AIMessage(content=msg["content"]))
             
-            # 添加当前用户输入
+            # Add current user input
             messages.append(HumanMessage(content=context))
             
-            # 调用LLM
+            # Call LLM
             response = self.llm.invoke(messages)
             
-            # 更新历史
+            # Update history
             self.chat_history.append({"role": "user", "content": context})
             self.chat_history.append({"role": "assistant", "content": response.content})
             
@@ -69,40 +69,40 @@ class ChatDevAgent:
 
 
 class Instructor(ChatDevAgent):
-    """指导者角色（CTO, CEO, Tester, Reviewer）"""
+    """Instructor role (CTO, CEO, Tester, Reviewer)"""
     pass
 
 
 class Assistant(ChatDevAgent):
-    """助手角色（CTO, Programmer）"""
+    """Assistant role (CTO, Programmer)"""
     pass
 
 
 class ChatDev(AgentSystem):
     """
-    ChatDev多智能体软件开发系统
+    ChatDev multi-agent software development system
     
-    实现完整的软件开发工作流程：
-    1. 需求分析 (DemandAnalysis)
-    2. 语言选择 (LanguageChoose) 
-    3. 编码 (Coding)
-    4. 代码补全 (CodeCompleteAll)
-    5. 代码评审 (CodeReview)
-    6. 测试 (Test)
+    Implements complete software development workflow:
+    1. Demand Analysis (DemandAnalysis)
+    2. Language Selection (LanguageChoose)
+    3. Coding (Coding)
+    4. Code Completion (CodeCompleteAll)
+    5. Code Review (CodeReview)
+    6. Testing (Test)
     """
     
     def __init__(self, name: str = "chatdev", config: Dict[str, Any] = None):
-        """初始化ChatDev系统"""
+        """Initialize ChatDev system"""
         super().__init__(name, config)
         
         self.config = config or {}
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.max_iterations = self.config.get("max_iterations", 3)
         
-        # 初始化智能体
+        # Initialize agents
         self.agents = self._create_agents()
         
-        # 存储项目状态
+        # Store project state
         self.project_state = {
             "task": "",
             "modality": "",
@@ -113,8 +113,8 @@ class ChatDev(AgentSystem):
         }
 
     def _create_agents(self) -> Dict[str, Any]:
-        """创建各角色智能体"""
-        # ChatDev背景提示
+        """Create role agents"""
+        # ChatDev background prompt
         chatdev_prompt = "ChatDev is a software company powered by multiple intelligent agents, such as chief executive officer, chief human resources officer, chief product officer, chief technology officer, etc, with a multi-agent organizational structure and the mission of 'changing the digital world through programming'."
         
         agents = {}
@@ -170,39 +170,39 @@ class ChatDev(AgentSystem):
         return {"workers": list(agents.values())}
 
     async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """运行ChatDev系统的完整工作流程"""
+        """Run complete workflow of ChatDev system"""
         try:
-            # 提取任务描述
+            # Extract task description
             task = problem.get("problem", "")
             self.project_state["task"] = task
             
-            # 存储所有LLM响应消息
+            # Store all LLM response messages
             all_messages = []
             
-            # 1. 需求分析阶段 (DemandAnalysis)
+            # 1. Demand Analysis Phase (DemandAnalysis)
             modality = await self._demand_analysis_phase(task, all_messages)
             self.project_state["modality"] = modality
             
-            # 2. 语言选择阶段 (LanguageChoose)
+            # 2. Language Selection Phase (LanguageChoose)
             language = await self._language_choose_phase(task, modality, all_messages)
             self.project_state["language"] = language
             
-            # 3. 编码阶段 (Coding)
+            # 3. Coding Phase (Coding)
             codes = await self._coding_phase(task, modality, language, all_messages)
             self.project_state["codes"] = codes
             
-            # 4. 代码补全阶段 (CodeCompleteAll)
+            # 4. Code Completion Phase (CodeCompleteAll)
             completed_codes = await self._code_complete_all_phase(task, modality, language, codes, all_messages)
             self.project_state["codes"] = completed_codes
             
-            # 5. 代码评审阶段 (CodeReview)
+            # 5. Code Review Phase (CodeReview)
             reviewed_codes = await self._code_review_phase(task, modality, language, completed_codes, all_messages)
             self.project_state["codes"] = reviewed_codes
             
-            # 6. 测试阶段 (Test)
+            # 6. Testing Phase (Test)
             final_codes = await self._test_phase(language, reviewed_codes, all_messages)
             
-            # 提取最终答案 - 结合格式化提示
+            # Extract final answer - Combine with format prompt
             final_answer = self._extract_final_answer(final_codes)
             
             return {
@@ -217,7 +217,7 @@ class ChatDev(AgentSystem):
             }
 
     async def _demand_analysis_phase(self, task: str, all_messages: List) -> str:
-        """需求分析阶段 - CEO与CPO讨论产品形态"""
+        """Demand Analysis Phase - CEO and CPO discuss product form"""
         phase_prompt = [
             "ChatDev has made products in the following form before:",
             "Image: can present information in line chart, bar chart, flow chart, cloud chart, Gantt chart, etc.",
@@ -235,18 +235,18 @@ class ChatDev(AgentSystem):
         
         context = f"Task: {task}\n\n{' '.join(phase_prompt)}"
         
-        # CPO作为助理角色提出建议
+        # CPO as assistant role provides suggestions
         cpo_response = self.agents["workers"][1].generate_response(context)  # CPO
         all_messages.append(cpo_response["message"])
         
-        # 提取产品形态
+        # Extract product form
         modality_match = re.search(r'<INFO>\s*(\w+)', cpo_response["content"])
         modality = modality_match.group(1) if modality_match else "Application"
         
         return modality
 
     async def _language_choose_phase(self, task: str, modality: str, all_messages: List) -> str:
-        """语言选择阶段 - CTO与CEO讨论编程语言"""
+        """Language Selection Phase - CTO and CEO discuss programming language"""
         phase_prompt = [
             f"According to the new user's task and some creative brainstorm ideas listed below: ",
             f"Task: \"{task}\".",
@@ -259,18 +259,18 @@ class ChatDev(AgentSystem):
         
         context = ' '.join(phase_prompt)
         
-        # CTO作为助理角色选择语言
+        # CTO as assistant role selects language
         cto_response = self.agents["workers"][2].generate_response(context)  # CTO
         all_messages.append(cto_response["message"])
         
-        # 提取编程语言
+        # Extract programming language
         language_match = re.search(r'<INFO>\s*(\w+)', cto_response["content"]) 
         language = language_match.group(1) if language_match else "Python"
         
         return language
 
     async def _coding_phase(self, task: str, modality: str, language: str, all_messages: List) -> str:
-        """编码阶段 - CTO指导Programmer编写代码"""
+        """Coding Phase - CTO guides Programmer to write code"""
         phase_prompt = [
             f"According to the new user's task and our software designs listed below: ",
             f"Task: \"{task}\".",
@@ -290,18 +290,18 @@ class ChatDev(AgentSystem):
         
         context = ' '.join(phase_prompt)
         
-        # Programmer作为助理角色编写代码
+        # Programmer as assistant role writes code
         programmer_response = self.agents["workers"][3].generate_response(context)  # Programmer
         all_messages.append(programmer_response["message"])
         
         return programmer_response["content"]
 
     async def _code_complete_all_phase(self, task: str, modality: str, language: str, codes: str, all_messages: List) -> str:
-        """代码补全阶段 - 循环补全所有未实现文件"""
+        """Code Completion Phase - Loop to complete all unimplemented files"""
         current_codes = codes
         
-        # 简化处理：检查是否有未实现的代码
-        for iteration in range(3):  # 最多3次迭代
+        # Simplified handling: check for unimplemented code
+        for iteration in range(3):  # Maximum 3 iterations
             if "TODO" not in current_codes and "pass" not in current_codes and "# Implementation needed" not in current_codes:
                 break
                 
@@ -327,11 +327,11 @@ class ChatDev(AgentSystem):
         return current_codes
 
     async def _code_review_phase(self, task: str, modality: str, language: str, codes: str, all_messages: List) -> str:
-        """代码评审阶段 - Code Reviewer与Programmer循环交互"""
+        """Code Review Phase - Code Reviewer and Programmer interact in loops"""
         current_codes = codes
         
-        for iteration in range(3):  # 最多3轮评审
-            # Code Reviewer评审
+        for iteration in range(3):  # Maximum 3 rounds of review
+            # Code Reviewer review
             review_prompt = [
                 f"According to the new user's task and our software designs: ",
                 f"Task: \"{task}\".",
@@ -354,11 +354,11 @@ class ChatDev(AgentSystem):
             reviewer_response = self.agents["workers"][4].generate_response(context)  # Code Reviewer
             all_messages.append(reviewer_response["message"])
             
-            # 如果评审完成，跳出循环
+            # If review is complete, break the loop
             if "<INFO> Finished" in reviewer_response["content"]:
                 break
                 
-                         # Programmer修改代码
+            # Programmer modifies code
             modify_prompt = [
                 f"According to the new user's task, our designed product modality, languages and ideas, our developed first-edition source codes are listed below: ",
                 f"Task: \"{task}\".",
@@ -383,14 +383,14 @@ class ChatDev(AgentSystem):
         return current_codes
 
     async def _test_phase(self, language: str, codes: str, all_messages: List) -> str:
-        """测试阶段 - Software Test Engineer与Programmer循环交互"""
+        """Testing Phase - Software Test Engineer and Programmer interact in loops"""
         current_codes = codes
         
-        for iteration in range(3):  # 最多3轮测试
-            # 模拟测试报告
+        for iteration in range(3):  # Maximum 3 rounds of testing
+            # Simulate test reports
             test_reports = "No syntax errors found. All basic functionality tests passed."
             
-            # Test Engineer总结错误  
+            # Test Engineer summarizes errors
             error_summary_prompt = [
                 f"Our developed source codes and corresponding test reports are listed below: ",
                 f"Programming Language: \"{language}\"",
@@ -405,11 +405,11 @@ class ChatDev(AgentSystem):
             tester_response = self.agents["workers"][5].generate_response(context)  # Tester
             all_messages.append(tester_response["message"])
             
-            # 如果没有错误，结束测试
+            # If no errors, end testing
             if "No" in tester_response["content"] or "no bugs" in tester_response["content"].lower() or "no issues" in tester_response["content"].lower():
                 break
                 
-            # Programmer修复bug
+            # Programmer fixes bugs
             fix_prompt = [
                 f"Our developed source codes and corresponding test reports are listed below: ",
                 f"Programming Language: \"{language}\"",
@@ -430,11 +430,11 @@ class ChatDev(AgentSystem):
             programmer_response = self.agents["workers"][3].generate_response(context)  # Programmer
             all_messages.append(programmer_response["message"])
             
-            # 检查是否完成修复
+            # Check if fixes are complete
             if ("<INFO> Finished" in programmer_response["content"] or 
                 "no bugs" in programmer_response["content"].lower() or
                 "no issues" in programmer_response["content"].lower()):
-                # 如果已完成，保持当前代码
+                # If complete, keep current code
                 break
                 
             current_codes = programmer_response["content"]
@@ -442,27 +442,27 @@ class ChatDev(AgentSystem):
         return current_codes
 
     def _extract_final_answer(self, final_codes: str) -> str:
-        """提取最终答案，确保符合format_prompt格式"""
-        # 如果输出已经包含format_prompt要求的格式，直接返回
+        """Extract final answer, ensure it follows format_prompt format"""
+        # If output already contains format_prompt format, return directly
         if "<answer>" in final_codes and "</answer>" in final_codes:
             return final_codes
         
-        # 如果没有正确格式化，尝试从输出中提取代码并重新格式化
+        # If not properly formatted, try to extract code and reformat
         import re
         
-        # 尝试提取代码块
+        # Try to extract code block
         code_pattern = r'```python\s*(.*?)\s*```'
         code_match = re.search(code_pattern, final_codes, re.DOTALL)
         
         if code_match:
             extracted_code = code_match.group(1).strip()
         else:
-            # 如果没有代码块，假设整个内容就是代码
+            # If no code block, assume entire content is code
             extracted_code = final_codes.strip()
         
-        # 使用format_prompt格式化输出
+        # Format output using format_prompt
         if "humaneval" in self.evaluator_name or "mbpp" in self.evaluator_name:
-            # 对于代码生成任务，使用完整的格式
+            # For code generation tasks, use complete format
             formatted_answer = f"""<answer>
 ## Implementation Details
 Complete implementation of the requested functionality.
@@ -479,18 +479,18 @@ Code follows best practices and is optimized for readability and performance.
 ```
 </answer>"""
         else:
-            # 对于其他任务，使用简单格式
+            # For other tasks, use simple format
             formatted_answer = f"Solution:\n{extracted_code}"
         
         return formatted_answer
 
 
-# 注册ChatDev系统到框架
+# Register ChatDev system to framework
 AgentSystemRegistry.register(
     "chatdev",
     ChatDev,
-    evaluator="humaneval",  # 默认使用HumanEval评估器
-    description="ChatDev多智能体软件开发系统，实现完整的软件开发工作流程",
+    evaluator="humaneval",  # Default using HumanEval evaluator
+    description="ChatDev multi-agent software development system, implementing complete software development workflow",
     max_iterations=3
 )
         
