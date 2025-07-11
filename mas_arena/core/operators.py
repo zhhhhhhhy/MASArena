@@ -8,10 +8,8 @@ import json
 import asyncio
 import concurrent
 
-from mas_arena.core.benchmark import Benchmark
 from mas_arena.core.component import SerializableComponent
 from mas_arena.core.data_utils import test_case_2_test_function
-from mas_arena.core.humaneval import AFlowHumanEval
 from mas_arena.core.prompts import *
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
 from mas_arena.evaluators.humaneval_evaluator import HumanEvalEvaluator

@@ -7,6 +7,8 @@ from mas_arena.workflow.workflow_graph import WorkFlowGraph
 
 class Optimizer(SerializableComponent):
 
+    """Base class for optimizers in the MAS Arena framework."""
+
     def optimize(self, dataset: str, **kwargs):
         """
         Optimize the workflow.

@@ -1,5 +1,4 @@
 from typing import List
-from functools import wraps
 
 
 class ComponentRegistry:
@@ -22,6 +21,9 @@ class ComponentRegistry:
 
 COMPONENT_REGISTRY = ComponentRegistry()
 
+def register_component(cls_name: str, cls):
+    COMPONENT_REGISTRY.register(cls_name, cls)
+
 
 class LLMRegistry:
     def __init__(self):
@@ -37,6 +39,12 @@ class LLMRegistry:
     def key_error_message(self, key: str):
         error_message = f"""`{key}` is not a registered model name. Currently available model names: {self.get_model_names()}. If `{key}` is a customized model, you should use @register_llm({key}) to register the model."""
         return error_message
+
+    def get_model(self, key: str):
+        model = self.models.get(key, None)
+        if model is None:
+            raise KeyError(self.key_error_message(key))
+        return model
 
     def get_model_config(self, key: str):
         config = self.model_configs.get(key, None)
