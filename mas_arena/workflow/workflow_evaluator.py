@@ -8,7 +8,7 @@ class EvaluationUtils:
 
     async def evaluate_graph_async(self, optimizer, validation_n, data, initial=False):
 
-        workflow_runner = WorkflowRunner(llm=optimizer.executor_llm)
+        workflow_runner = WorkflowRunner(agent=optimizer.executor_agent)
         sum_score = 0
 
         for _ in range(validation_n):
@@ -34,7 +34,7 @@ class EvaluationUtils:
 
     async def evaluate_graph_test_async(self, optimizer):
 
-        evaluator = WorkflowRunner(llm=optimizer.executor_llm)
+        evaluator = WorkflowRunner(agent=optimizer.executor_agent)
 
         score, avg_cost, total_cost, all_failed = await evaluator.graph_evaluate_async(optimizer.evaluator,
                                                                                            optimizer.graph,

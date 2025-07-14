@@ -4,9 +4,9 @@ import traceback
 from pathlib import Path
 from typing import List
 
-from mas_arena.core.aflow_prompt import WORKFLOW_INPUT, WORKFLOW_OPTIMIZE_PROMPT, WORKFLOW_CUSTOM_USE, WORKFLOW_TEMPLATE
-from mas_arena.core.base_llm import BaseLLM
-from mas_arena.core.operators import Custom, CustomCodeGenerate, ScEnsemble, Test, AnswerGenerate, QAScEnsemble, \
+from mas_arena.agents import AgentSystem
+from mas_arena.optimizers.aflow.aflow_prompt import WORKFLOW_INPUT, WORKFLOW_OPTIMIZE_PROMPT, WORKFLOW_CUSTOM_USE, WORKFLOW_TEMPLATE
+from mas_arena.core_serializer.operators import Custom, CustomCodeGenerate, ScEnsemble, Test, AnswerGenerate, QAScEnsemble, \
     Programmer, Operator
 import os
 import re
@@ -64,19 +64,19 @@ class GraphUtils:
         pattern = r"class Workflow:.+"
         return re.findall(pattern, graph_load, re.DOTALL)
 
-    def load_operators_description(self, operators: List[str], llm: BaseLLM) -> str:
+    def load_operators_description(self, operators: List[str], agent: AgentSystem) -> str:
 
         operators_description = ""
         for id, operator in enumerate(operators):
-            operator_description = self._load_operator_description(id + 1, operator, llm)
+            operator_description = self._load_operator_description(id + 1, operator, agent)
             operators_description += f"{operator_description}\n"
         return operators_description
 
-    def _load_operator_description(self, id: int, operator_name: str, llm: BaseLLM) -> str:
+    def _load_operator_description(self, id: int, operator_name: str, agent: AgentSystem) -> str:
         if operator_name not in OPERATOR_MAP:
             raise ValueError(
                 f"Operator {operator_name} not Found in OPERATOR_MAP! Available operators: {OPERATOR_MAP.keys()}")
-        operator: Operator = OPERATOR_MAP[operator_name](llm=llm)
+        operator: Operator = OPERATOR_MAP[operator_name](agent=agent)
         return f"{id}. {operator_name}: {operator.description}, with interface {operator.interface})."
 
     def create_graph_optimize_prompt(

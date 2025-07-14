@@ -3,7 +3,7 @@
 import os
 from collections import defaultdict
 
-from mas_arena.core.utils import load_json, save_json
+from mas_arena.utils.serialization_utils import load_json, save_json
 
 
 class ExperienceUtils:
@@ -25,7 +25,6 @@ class ExperienceUtils:
                 try:
                     round_number = int(round_dir.split("_")[1])
                     json_file_path = os.path.join(round_path, "experience.json")
-                    # logger.info(f"json_file_path is {json_file_path}")
                     if os.path.exists(json_file_path):
                         data = load_json(json_file_path, type="json")
                         father_node = data["father node"]
@@ -43,6 +42,8 @@ class ExperienceUtils:
                                 "modification": data["modification"],
                                 "score": data["after"],
                             }
+                    else:
+                        print(f"Warning: {json_file_path} does not exist.")
                 except Exception as e:
                     print(f"Error processing {round_dir}: {str(e)}")
 

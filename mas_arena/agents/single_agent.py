@@ -30,11 +30,15 @@ class SingleAgent(AgentSystem):
         super().__init__(name, config)
         self.config = config or {}
         
-        self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")  # Use qwen-plus
+        self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "gpt-4o-mini")
         self.system_prompt = self.config.get("system_prompt", "") + self.format_prompt
 
         # Initialize evaluator and metrics collector through base class methods
-        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
+        if "API_KEY" in config and config["API_KEY"] and "API_BASE" in config and config["API_BASE"]:
+            self.client = AsyncOpenAI(api_key=config["API_KEY"],
+                                      base_url=config.get("API_BASE", os.getenv("OPENAI_API_BASE")))
+        else:
+            self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
 
     async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """
@@ -66,7 +70,8 @@ class SingleAgent(AgentSystem):
         response_content = response.choices[0].message.content
         response_content = response_content.replace('\r\n', '\n').replace('\r', '\n').strip()
         with contextlib.suppress(UnicodeDecodeError):
-            response_content = response_content.encode('utf-8').decode('utf-8-sig')  # Remove BOM
+            # Remove BOM
+            response_content = response_content.encode('utf-8').decode('utf-8-sig')
         
 
         # Create message object with usage metadata
@@ -89,7 +94,3 @@ class SingleAgent(AgentSystem):
 
 # Register the agent system
 AgentSystemRegistry.register("single_agent", SingleAgent)
-
-# Register the agent as a component for workflow usage
-from mas_arena.core.registry import COMPONENT_REGISTRY
-COMPONENT_REGISTRY.register("SingleAgent", SingleAgent)

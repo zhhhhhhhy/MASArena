@@ -2,18 +2,19 @@ import asyncio
 import os
 import re
 import shutil
-from typing import Any, List
+from typing import Any, List, Union
 
 import numpy as np
 from pydantic import Field
 from tqdm import tqdm
 from .optimizer import Optimizer
-from ..core.base_llm import BaseLLM, LLMOutputParser
-from ..core.convergence_utils import ConvergenceUtils
-from ..core.data_utils import DataUtils
-from ..core.evaluation_utils import EvaluationUtils
-from ..core.experience_utils import ExperienceUtils
-from ..core.graph_utils import GraphUtils, OPERATOR_MAP
+from ..agents import AgentSystem
+from mas_arena.agents.llm_parser import LLMOutputParser
+from mas_arena.utils.convergence_utils import ConvergenceUtils
+from mas_arena.utils.data_utils import DataUtils
+from mas_arena.workflow.workflow_evaluator import EvaluationUtils
+from mas_arena.utils.experience_utils import ExperienceUtils
+from mas_arena.utils.graph_utils import GraphUtils, OPERATOR_MAP
 from ..evaluators.base_evaluator import BaseEvaluator
 
 class LLMOptimizationOutput(LLMOutputParser):
@@ -40,11 +41,6 @@ class AFlowOptimizer(Optimizer):
     initial_round: int = Field(
         default=0,
         description="The round number to start or continue optimization from.")
-    optimizer_llm: BaseLLM | None = Field(
-        default=None, description="The LLM used to suggest workflow modifications.")
-    executor_llm: BaseLLM | None = Field(
-        default=None, description="The LLM used to execute workflow tasks.")
-
     operators: List[str] = Field(
         default_factory=lambda: list(OPERATOR_MAP.keys()),
         description="The operators available for the optimizer LLM to use.")
@@ -59,6 +55,9 @@ class AFlowOptimizer(Optimizer):
         description="The number of times to run the final best workflow on the test set for final evaluation.")
     check_convergence: bool = Field(
         default=True, description="Whether to stop early if performance plateaus.")
+    optimizer_agent: Union[AgentSystem, None] = Field(default=None, description="The agent system for the optimize")
+
+    executor_agent: Union[AgentSystem, None] = Field(default=None, description="The agent system for the execute")
 
     def setup(self, **kwargs):
         """Initializes the optimizer, sets up paths, and prepares utilities."""
@@ -75,10 +74,15 @@ class AFlowOptimizer(Optimizer):
         self.graph = None
         self.round = self.initial_round
 
-        if self.optimizer_llm is None:
-            raise ValueError("optimizer_llm must be provided.")
-        if self.executor_llm is None:
-            self.executor_llm = self.optimizer_llm
+        # if self.optimizer_llm is None:
+        #     raise ValueError("optimizer_llm must be provided.")
+        # if self.executor_llm is None:
+        #     self.executor_llm = self.optimizer_llm
+
+        if self.optimizer_agent is None:
+            raise ValueError("optimizer_agent must be provided.")
+        if self.executor_agent is None:
+            self.executor_agent = self.optimizer_agent
 
         self._prepare_initial_round_files()
 
@@ -128,21 +132,20 @@ class AFlowOptimizer(Optimizer):
 
     async def _generate_and_evaluate_new_workflow(self, num_validation_runs: int, benchmark_data: list) -> float:
         """Handles an optimization round: generating a new workflow and evaluating it."""
-        #next_round_num = self.round + 1
-        new_workflow_dir = self.graph_utils.create_round_directory(self.root_path, self.round)
+        next_round_num = self.round + 1
+        new_workflow_dir = self.graph_utils.create_round_directory(self.root_path, next_round_num)
 
         while True:
             parent_workflow_sample = self._select_parent_workflow()
             prompt_template, graph_code = self.graph_utils.read_graph_files(parent_workflow_sample["round"], self.root_path)
             solve_graph_code = self.graph_utils.extract_solve_graph(graph_code)
 
-            # Prepare context for the optimizer LLM
             processed_experience = self.experience_utils.load_experience()
             experience_prompt = self.experience_utils.format_experience(processed_experience, parent_workflow_sample["round"])
 
-            if self.optimizer_llm is None:
-                raise ValueError("Optimizer LLM is not initialized.")
-            operator_description = self.graph_utils.load_operators_description(self.operators, self.optimizer_llm)
+            if self.optimizer_agent is None:
+                raise ValueError("Optimizer agent is not initialized.")
+            operator_description = self.graph_utils.load_operators_description(self.operators, self.optimizer_agent)
             log_data = self.data_utils.load_log(parent_workflow_sample["round"])
 
             # Generate the prompt to ask the LLM for a modification
@@ -152,7 +155,8 @@ class AFlowOptimizer(Optimizer):
             )
 
             # Get and parse the LLM's response
-            response_parser = await self.optimizer_llm.async_generate(prompt=graph_optimize_prompt, parse_mode="str")
+            #response_parser = await self.optimizer_llm.async_generate(prompt=graph_optimize_prompt, parse_mode="str")
+            response_parser = await self.optimizer_agent.async_generate(problem_text=graph_optimize_prompt, parse_mode="str")
             if isinstance(response_parser, list):
                 raise TypeError(f"Expected a single LLMOutputParser, but got a list.")
 
@@ -165,12 +169,10 @@ class AFlowOptimizer(Optimizer):
                 orig_prompt=prompt_template
             )
 
-            # Check if this modification has been tried before
             if self.experience_utils.check_modification(processed_experience, parsed_response['modification'],
                                                         parent_workflow_sample["round"]):
-                break  # The modification is novel, proceed to evaluation
+                break
 
-        # Save the new workflow and evaluate its performance
         avg_score = await self._evaluate_and_record_new_workflow(
             new_workflow_dir, parsed_response, parent_workflow_sample, benchmark_data, num_validation_runs
         )

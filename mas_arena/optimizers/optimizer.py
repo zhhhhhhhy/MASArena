@@ -1,12 +1,11 @@
 from typing import Optional, Union
 
-from mas_arena.core.component import SerializableComponent
+from mas_arena.core_serializer.component import SerializableComponent
 from mas_arena.workflow.action_graph import ActionGraph
 from mas_arena.workflow.workflow_graph import WorkFlowGraph
 
 
 class Optimizer(SerializableComponent):
-
     """Base class for optimizers in the MAS Arena framework."""
 
     def optimize(self, dataset: str, **kwargs):

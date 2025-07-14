@@ -3,14 +3,16 @@ import sys
 import traceback
 from typing import Optional, Type, Any, Union, Coroutine, List, Tuple
 from pydantic import Field
-from mas_arena.core.base_llm import LLMOutputParser, BaseLLM
+
+from mas_arena.agents import AgentSystem
+from mas_arena.agents.llm_parser import LLMOutputParser
 import json
 import asyncio
 import concurrent
 
-from mas_arena.core.component import SerializableComponent
-from mas_arena.core.data_utils import test_case_2_test_function
-from mas_arena.core.prompts import *
+from mas_arena.core_serializer.component import SerializableComponent
+from mas_arena.utils.data_utils import test_case_2_test_function
+from mas_arena.core_serializer.operator_prompts import *
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
 from mas_arena.evaluators.humaneval_evaluator import HumanEvalEvaluator
 from mas_arena.evaluators.utils import sanitize
@@ -23,8 +25,7 @@ class OperatorOutput(LLMOutputParser):
 class Operator(SerializableComponent):
     name: str = Field(description="The name of the operator.")
     description: str = Field(description="The description of the operator.")
-
-    llm: BaseLLM = Field(description="The LLM used to execute the operator.")
+    agent: AgentSystem = Field(description="The agent used to execute the operator.")
     outputs_format: Type[OperatorOutput] = Field(description="The structured content of the operator's output.")
 
     interface: Optional[str] = Field(description="The interface for calling the operator.")
@@ -36,11 +37,9 @@ class Operator(SerializableComponent):
     def __call__(self, *args: Any, **kwargs: Any) -> Union[dict, Coroutine[Any, Any, dict]]:
         """Make the operator callable and automatically choose between sync and async execution."""
         try:
-            # Safe way to check if we're inside an async environment
             asyncio.get_running_loop()
             return self.async_execute(*args, **kwargs)
         except RuntimeError:
-            # No running loop — likely in sync context or worker thread
             return self.execute(*args, **kwargs)
 
     def execute(self, *args, **kwargs) -> dict:
@@ -74,22 +73,26 @@ class CustomOutput(OperatorOutput):
 
 class Custom(Operator):
 
-    def __init__(self, llm: BaseLLM, **kwargs):
+    def __init__(self, agent: AgentSystem, **kwargs):
         name = "Custom"
         description = "Generates anything based on customized input and instruction"
         interface = "custom(input: str, instruction: str) -> dict with key 'response' of type str"
-        super().__init__(name=name, description=description, interface=interface, llm=llm, outputs_format=CustomOutput,
+        super().__init__(name=name, description=description, interface=interface, agent=agent, outputs_format=CustomOutput,
                          **kwargs)
 
     def execute(self, input: str, instruction: str) -> dict:
         prompt = instruction + input
-        response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        response = self.agent.generate(problem_text=prompt, parser=self.prompt, parse_mode="str")
         output = response.get_structured_data()
+        # response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        # output = response.get_structured_data()
         return output
 
     async def async_execute(self, input: str, instruction: str) -> dict:
         prompt = instruction + input
-        response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        # response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        # output = response.get_structured_data()
+        response = await self.agent.async_generate(problem_text=prompt, parser=self.prompt, parse_mode="str")
         output = response.get_structured_data()
         return output
 
@@ -101,24 +104,24 @@ class AnswerGenerateOutput(OperatorOutput):
 
 class AnswerGenerate(Operator):
 
-    def __init__(self, llm: BaseLLM, **kwargs):
+    def __init__(self, agent: AgentSystem, **kwargs):
         name = "AnswerGenerate"
         description = "Generate step by step based on the input. The step by step thought process is in the field of 'thought', and the final answer is in the field of 'answer'."
         interface = "answer_generate(input: str) -> dict with key 'thought' of type str, 'answer' of type str"
         prompt = kwargs.pop("prompt", ANSWER_GENERATION_PROMPT)
-        super().__init__(name=name, description=description, interface=interface, llm=llm,
+        super().__init__(name=name, description=description, interface=interface, agent=agent,
                          outputs_format=AnswerGenerateOutput, prompt=prompt, **kwargs)
 
     def execute(self, input: str) -> dict:
-        # prompt = ANSWER_GENERATION_PROMPT.format(input=input)
         prompt = self.prompt.format(input=input)
-        response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
         return response.get_structured_data()
 
     async def async_execute(self, input: str) -> dict:
-        # prompt = ANSWER_GENERATION_PROMPT.format(input=input)
         prompt = self.prompt.format(input=input)
-        response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
         return response.get_structured_data()
 
 
@@ -129,12 +132,12 @@ class ScEnsembleOutput(OperatorOutput):
 
 class QAScEnsemble(Operator):
 
-    def __init__(self, llm: BaseLLM, **kwargs):
+    def __init__(self, agent: AgentSystem, **kwargs):
         name = "QAScEnsemble"
         description = "Uses self-consistency to select the solution that appears most frequently in the solution list, improve the selection to enhance the choice of the best solution."
         interface = "sc_ensemble(solutions: List[str]) -> dict with key 'response' of type str"
         prompt = kwargs.pop("prompt", QA_SC_ENSEMBLE_PROMPT)
-        super().__init__(name=name, description=description, interface=interface, llm=llm,
+        super().__init__(name=name, description=description, interface=interface, agent=agent,
                          outputs_format=ScEnsembleOutput, prompt=prompt, **kwargs)
 
     def _prepare_solutions(self, solutions: List[str]) -> Tuple[dict, str]:
@@ -153,24 +156,26 @@ class QAScEnsemble(Operator):
     def execute(self, solutions: List[str]) -> dict:
         answer_mapping, solution_text = self._prepare_solutions(solutions)
         prompt = self.prompt.format(solutions=solution_text)
-        response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
         return self._process_response(response, answer_mapping, solutions)
 
     async def async_execute(self, solutions: List[str]) -> dict:
         answer_mapping, solution_text = self._prepare_solutions(solutions)
         prompt = self.prompt.format(solutions=solution_text)
-        response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
         return self._process_response(response, answer_mapping, solutions)
 
 
 class ScEnsemble(Operator):
 
-    def __init__(self, llm: BaseLLM, **kwargs):
+    def __init__(self, agent: AgentSystem, **kwargs):
         name = "ScEnsemble"
         description = "Uses self-consistency to select the solution that appears most frequently in the solution list, improve the selection to enhance the choice of the best solution."
         interface = "sc_ensemble(solutions: List[str], problem: str) -> dict with key 'response' of type str"
         prompt = kwargs.pop("prompt", SC_ENSEMBLE_PROMPT)
-        super().__init__(name=name, description=description, interface=interface, llm=llm,
+        super().__init__(name=name, description=description, interface=interface, agent=agent,
                          outputs_format=ScEnsembleOutput, prompt=prompt, **kwargs)
 
     def _prepare_solutions(self, solutions: List[str]) -> Tuple[dict, str]:
@@ -189,34 +194,38 @@ class ScEnsemble(Operator):
     def execute(self, solutions: List[str], problem: str) -> dict:
         answer_mapping, solution_text = self._prepare_solutions(solutions)
         prompt = self.prompt.format(problem=problem, solutions=solution_text)
-        response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
         return self._process_response(response, answer_mapping, solutions)
 
     async def async_execute(self, solutions: List[str], problem: str) -> dict:
         answer_mapping, solution_text = self._prepare_solutions(solutions)
         prompt = self.prompt.format(problem=problem, solutions=solution_text)
-        response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
+        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
         return self._process_response(response, answer_mapping, solutions)
 
 
 class CustomCodeGenerate(Operator):
 
-    def __init__(self, llm: BaseLLM, **kwargs):
+    def __init__(self, agent: AgentSystem, **kwargs):
         name = "CustomCodeGenerate"
         description = "Generates code based on customized input and instruction"
         interface = "custom_code_generate(problem: str, entry_point: str, instruction: str) -> dict with key 'response' of type str"
-        super().__init__(name=name, description=description, interface=interface, llm=llm, outputs_format=CustomOutput,
+        super().__init__(name=name, description=description, interface=interface, agent=agent, outputs_format=CustomOutput,
                          **kwargs)
 
     def execute(self, problem: str, entry_point: str, instruction: str) -> dict:
         prompt = instruction + problem
-        response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="str")
         code = sanitize(response.content, entrypoint=entry_point)
         return {"response": code}
 
     async def async_execute(self, problem: str, entry_point: str, instruction: str) -> dict:
         prompt = instruction + problem
-        response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
+        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="str")
         code = sanitize(response.content, entrypoint=entry_point)
         return {"response": code}
 
@@ -259,12 +268,12 @@ TEST_SUPPORTED_EVALUATORS = [HumanEvalEvaluator]
 
 class Test(Operator):
 
-    def __init__(self, llm: BaseLLM, **kwargs):
+    def __init__(self, agent: AgentSystem, **kwargs):
 
         name = "Test"
         description = "Tests the solution using public test cases. If the solution fails, it reflects on the errors and attempts to modify the solution. Returns True and the solution if all tests pass after modifications. Returns False and the current solution if it still fails after modifications."
         interface = "test(problem: str, solution: str, entry_point: str, evaluator = self.evaluator) -> dict with key 'result' of type bool and key 'solution' of type str. Always include 'evaluator = self.evaluator' in the input."
-        super().__init__(name=name, description=description, interface=interface, llm=llm, outputs_format=TestOutput,
+        super().__init__(name=name, description=description, interface=interface, agent=agent, outputs_format=TestOutput,
                          **kwargs)
 
     async def __call__(self, *args, **kwargs):
@@ -326,9 +335,8 @@ class Test(Operator):
                     exec_pass=f"executed unsuccessfully, error: \n {result}",
                     test_fail="executed unsucessfully",
                 )
-                # response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
-                # solution = response["reflection_and_solution"]
-                response = await self.llm.async_generate(prompt=prompt, parser=ReflectionTestOp, parse_mode="json")
+                response = await self.agent.async_generate(problem_text=prompt, parser=ReflectionTestOp, parse_mode="json")
+                #response = await self.llm.async_generate(prompt=prompt, parser=ReflectionTestOp, parse_mode="json")
                 solution = sanitize(
                     response.get_structured_data().get("reflection_and_solution", response.content),
                     entrypoint=entry_point
@@ -340,9 +348,8 @@ class Test(Operator):
                     exec_pass="executed successfully",
                     test_fail=result,
                 )
-                # response = await self._fill_node(ReflectionTestOp, prompt, mode="code_fill")
-                # solution = response["reflection_and_solution"]
-                response = await self.llm.async_generate(prompt=prompt, parser=ReflectionTestOp, parse_mode="json")
+                response = await self.agent.async_generate(problem_text=prompt, parser=ReflectionTestOp, parse_mode="json")
+                #response = await self.llm.async_generate(prompt=prompt, parser=ReflectionTestOp, parse_mode="json")
                 solution = sanitize(
                     response.get_structured_data().get("reflection_and_solution", response.content),
                     entrypoint=entry_point
@@ -393,12 +400,12 @@ class CodeGenerateOutput(OperatorOutput):
 
 class Programmer(Operator):
 
-    def __init__(self, llm: BaseLLM, **kwargs):
+    def __init__(self, agent: AgentSystem, **kwargs):
         name = "Programmer"
         description = "Automatically writes, executes Python code, and returns the solution based on the provided problem description and analysis. The `output` only contains the final answer. If you want to see the detailed solution process, it's recommended to retrieve the `code`."
         interface = "programmer(problem: str, analysis: str = 'None') -> dict with keys 'code' and 'output' of type str"
         prompt = kwargs.pop("prompt", PYTHON_CODE_VERIFIER_PROMPT)
-        super().__init__(name=name, description=description, interface=interface, llm=llm,
+        super().__init__(name=name, description=description, interface=interface, agent=agent,
                          outputs_format=CodeGenerateOutput, prompt=prompt, **kwargs)
 
     async def exec_code(self, code, timeout=30):
@@ -429,7 +436,8 @@ class Programmer(Operator):
             analysis=analysis,
             feedback=feedback
         )
-        response = await self.llm.async_generate(prompt=prompt, parser=None, parse_mode="str")
+        response = await self.agent.async_generate(problem_text=prompt, parser=None, parse_mode="str")
+        #response = await self.llm.async_generate(prompt=prompt, parser=None, parse_mode="str")
         code = sanitize(response.content, entrypoint="solve")
         return {"code": code}
 

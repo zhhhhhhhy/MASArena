@@ -3,26 +3,24 @@
 import asyncio
 import json
 
-from tqdm.asyncio import tqdm_asyncio, tqdm
+from tqdm.asyncio import tqdm_asyncio
 from typing import Tuple, Optional, Callable
 
-from mas_arena.core.base_llm import BaseLLM
-from mas_arena.core.benchmark import Benchmark
-from mas_arena.core.llm_utils import cost_manager
+from mas_arena.agents import AgentSystem
+from mas_arena.utils.llm_utils import cost_manager
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
 
 
 class WorkflowRunner:
 
-    def __init__(self, llm: Optional[BaseLLM] = None):
-        self.llm = llm
+    def __init__(self, agent: Optional[AgentSystem] = None):
+        self.agent = agent
 
     def _configure_graph(self, graph, evaluator):
-        return graph(name=evaluator.name, llm_config=self.llm.config, evaluator=evaluator)
+        return graph(name=evaluator.name, agent_name="single_agent", evaluator=evaluator)
 
     async def graph_evaluate_async(self, evaluator: BaseEvaluator, graph: Callable, is_test: bool = False,
                                    max_concurrent_tasks: int = 20) -> Tuple[float, float, float]:
-
         configured_graph = self._configure_graph(graph=graph, evaluator=evaluator)
 
         # get data for evaluation

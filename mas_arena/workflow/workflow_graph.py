@@ -6,10 +6,10 @@ import networkx as nx
 from networkx.classes import MultiDiGraph
 from pydantic import Field
 
-from mas_arena.core.component import SerializableComponent
+from mas_arena.core_serializer.component import SerializableComponent
 from .action_graph import ActionGraph
-from ..core.parameter import Parameter
-from ..core.utils import generate_dynamic_class_name
+from ..core_serializer.parameter import Parameter
+from mas_arena.utils.serialization_utils import generate_dynamic_class_name
 
 
 class WorkFlowNodeState(str, Enum):

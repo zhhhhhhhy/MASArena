@@ -1,7 +1,6 @@
-from ..core.component import SerializableComponent
+from ..core_serializer.component import SerializableComponent
 from pydantic import Field
-
-from ..core.model_configs import LLMConfig
+from mas_arena.workflow.model_configs import LLMConfig
 
 
 class ActionGraph(SerializableComponent):

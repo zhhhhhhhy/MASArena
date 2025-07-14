@@ -51,9 +51,8 @@ Note: In custom, the input and instruction are directly concatenated(instruction
 **Introducing multiple operators at appropriate points can enhance performance. If you find that some provided operators are not yet used in the graph, try incorporating them.**
 """
 
-WORKFLOW_TEMPLATE = """import mas_arena.core.operators as operator
-from mas_arena.core.llm_utils import create_llm_instance
-from mas_arena.core.model_configs import LLMConfig
+WORKFLOW_TEMPLATE = """import mas_arena.core_serializer.operators as operator
+from mas_arena.core_serializer.llm_utils import get_agent_by_name
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
 from . import prompt as prompt_custom
 

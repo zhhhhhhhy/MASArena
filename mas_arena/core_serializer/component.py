@@ -2,8 +2,8 @@ from pydantic._internal._model_construction import ModelMetaclass
 from pydantic import BaseModel, ValidationError
 
 from .callbacks import callback_manager
-from .registry import register_model, COMPONENT_REGISTRY, register_component
-from .utils import custom_serializer, get_base_module_init_error_message
+from .registry import COMPONENT_REGISTRY, register_component
+from mas_arena.utils.serialization_utils import custom_serializer, get_base_module_init_error_message
 import json
 from typing import List, Dict, Any
 

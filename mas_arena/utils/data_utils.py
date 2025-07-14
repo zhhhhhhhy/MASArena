@@ -7,7 +7,7 @@ import requests
 import numpy as np
 import pandas as pd
 
-from mas_arena.core.utils import save_json, load_json, make_parent_folder
+from mas_arena.utils.serialization_utils import save_json, load_json, make_parent_folder
 
 AFLOW_DATASET_FILES_MAP = {
     "hotpotqa": {"train": None, "dev": "hotpotqa_validate.jsonl", "test": "hotpotqa_test.jsonl"},

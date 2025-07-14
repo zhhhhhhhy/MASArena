@@ -1,4 +1,4 @@
-from mas_arena.core.component import SerializableComponent
+from mas_arena.core_serializer.component import SerializableComponent
 
 
 class Parser(SerializableComponent):

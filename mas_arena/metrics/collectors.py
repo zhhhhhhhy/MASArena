@@ -1,7 +1,7 @@
 """
 Unified Metrics Collection Framework for Multi-Agent Systems.
 
-This module provides the core infrastructure for collecting, aggregating,
+This module provides the core_serializer infrastructure for collecting, aggregating,
 and managing metrics across the benchmark framework.
 """
 

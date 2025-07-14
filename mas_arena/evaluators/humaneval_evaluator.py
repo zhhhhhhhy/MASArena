@@ -8,12 +8,8 @@ import traceback
 from threading import Thread
 from typing import Dict, Any, Tuple, Callable, List, Optional
 
-import numpy as np
 from langsmith.evaluation import RunEvaluator
 from langsmith.schemas import Run
-
-from mas_arena.core.callbacks import timeout, TimeoutException
-from mas_arena.core.lcb_utils import estimate_pass_at_k
 from mas_arena.evaluators.base_code_evaluator import BaseCodeEvaluator
 from mas_arena.evaluators.utils.normalization import normalize_problem_keys
 from mas_arena.evaluators.utils.sanitize import sanitize, code_extract

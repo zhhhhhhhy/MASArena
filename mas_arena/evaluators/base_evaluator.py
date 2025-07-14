@@ -11,7 +11,7 @@ import logging
 from typing import Dict, Any, List, Optional, Union
 from abc import ABCMeta
 
-from mas_arena.core.registry import COMPONENT_REGISTRY
+from mas_arena.core_serializer.registry import COMPONENT_REGISTRY
 
 class BaseEvaluator(metaclass=ABCMeta):
     """

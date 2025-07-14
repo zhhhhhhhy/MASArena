@@ -1,6 +1,6 @@
 from typing import Optional, List
 
-from ..core.component import SerializableComponent
+from mas_arena.core_serializer.component import SerializableComponent
 
 
 class BaseConfig(SerializableComponent):

@@ -63,7 +63,7 @@ class MetricsCollector:
         """
         Record a generic metric.
         
-        This is the core method for recording any kind of metric. Other specialized
+        This is the core_serializer method for recording any kind of metric. Other specialized
         methods ultimately call this method.
         
         Args:
