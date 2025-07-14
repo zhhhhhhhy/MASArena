@@ -29,12 +29,12 @@ Below are the logs of some results with the aforementioned Graph that performed 
 {log}
 
 First, provide optimization ideas. **Only one detail point can be modified at a time**, and no more than 5 lines of code may be changed per modification—extensive modifications are strictly prohibited to maintain project focus!
-When introducing new functionalities in the graph, please make sure to import the necessary libraries or modules yourself, except for operator, prompt_custom, create_llm_instance, and CostManage, which have already been automatically imported.
+When introducing new functionalities in the graph, please make sure to import the necessary libraries or modules yourself, except for operator, prompt_custom, get_agent_by_name, and CostManage, which have already been automatically imported.
 **Under no circumstances should Graph output None for any field.**
 Use custom methods to restrict your output format, rather than using code (outside of the code, the system will extract answers based on certain rules and score them).
 It is very important to format the Graph output answers, you can refer to the standard answer format in the log.
 
-**IMPORTANT: Only use operators that are defined in the operator_description. DO NOT create or use any operators that are not listed in the operator_description. Each operator must be initialized with the llm parameter, for example: self.test = operator.Test(self.llm).**
+**IMPORTANT: Only use operators that are defined in the operator_description. DO NOT create or use any operators that are not listed in the operator_description. Each operator must be initialized with the agent parameter, for example: self.test = operator.Test(self.agent).**
 """
 
 WORKFLOW_CUSTOM_USE = """\nHere's an example of using the `custom` method in graph:
@@ -52,8 +52,8 @@ Note: In custom, the input and instruction are directly concatenated(instruction
 """
 
 WORKFLOW_TEMPLATE = """import mas_arena.core_serializer.operators as operator
-from mas_arena.core_serializer.llm_utils import get_agent_by_name
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
+from mas_arena.utils.llm_utils import get_agent_by_name
 from . import prompt as prompt_custom
 
 {graph}
