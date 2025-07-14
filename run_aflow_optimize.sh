@@ -7,7 +7,7 @@
 # Default values
 BENCHMARK=${1:-humaneval}
 GRAPH_PATH=${2:-"mas_arena/configs/aflow"}
-OPTIMIZED_PATH=${3:-"example/aflow/humaneval/optimization2"}
+OPTIMIZED_PATH=${3:-"example/aflow/humaneval/optimization"}
 VALIDATION_ROUNDS=${4:-1}
 EVAL_ROUNDS=${5:-1}
 MAX_ROUNDS=${6:-3}
@@ -50,8 +50,8 @@ echo ""
 # Run the Python main script
 python run_aflow_optimize.py \
     --benchmark "$BENCHMARK" \
-    "$GRAPH_PATH" \
-    "$OPTIMIZED_PATH" \
+    --graph_path "$GRAPH_PATH" \
+    --optimized_path "$OPTIMIZED_PATH" \
     --validation_rounds "$VALIDATION_ROUNDS" \
     --eval_rounds "$EVAL_ROUNDS" \
     --max_rounds "$MAX_ROUNDS"

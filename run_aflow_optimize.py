@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 from mas_arena.evaluators.humaneval_evaluator import HumanEvalEvaluator
-from mas_arena.optimizers.aflow_optimizer import AFlowOptimizer
+from mas_arena.optimizers.aflow.aflow_optimizer import AFlowOptimizer
 from mas_arena.optimizers.aflow.aflow_experimental_config import EXPERIMENTAL_CONFIG
 
 load_dotenv()
@@ -25,16 +25,16 @@ def main():
     )
 
     parser.add_argument(
-        "graph_path"
-        , type=str,
+        "--graph_path",
+        type=str,
         default="mas_arena/configs/aflow",
         help="Path to the AFlow graph configuration",
     )
 
     parser.add_argument(
-        "optimized_path",
+        "--optimized_path",
         type=str,
-        default="example/aflow/humaneval/optimization2",
+        default="example/aflow/humaneval/optimization",
         help="Path to save the optimized AFlow graph",
     )
 
@@ -73,8 +73,8 @@ def main():
 
     # create optimizer
     optimizer = AFlowOptimizer(
-        graph_path="mas_arena/configs/aflow",
-        optimized_path="example/aflow/humaneval/optimization2",
+        graph_path=args.graph_path,
+        optimized_path=args.optimized_path,
         optimizer_agent=optimizer_agent,
         executor_agent=executor_agent,
         validation_rounds=1,
