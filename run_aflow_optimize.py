@@ -7,10 +7,10 @@ from mas_arena.optimizers.aflow_optimizer import AFlowOptimizer
 from mas_arena.optimizers.aflow.aflow_experimental_config import EXPERIMENTAL_CONFIG
 
 load_dotenv()
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-OPENAI_API_BASE = os.getenv("OPENAI_API_BASE")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
-ANTHROPIC_API_BASE = os.getenv("ANTHROPIC_API_BASE")
+API_KEY = os.getenv("OPENAI_API_KEY")
+API_BASE = os.getenv("OPENAI_API_BASE")
+OPTIMIZER_MODEL_NAME = os.getenv("OPTIMIZER_MODEL_NAME") or "gpt-4o"
+EXECUTOR_MODEL_NAME = os.getenv("EXECUTOR_MODEL_NAME") or os.getenv("MODEL_NAME") or "gpt-4o-mini"
 
 
 def main():
@@ -62,10 +62,10 @@ def main():
     args = parser.parse_args()
 
     from mas_arena.agents import AgentSystemRegistry
-    optimizer_config = {"model_name": "claude-3-5-sonnet-latest", "API_KEY": ANTHROPIC_API_KEY,
-                        "API_BASE": ANTHROPIC_API_BASE}
+    optimizer_config = {"model_name": OPTIMIZER_MODEL_NAME, "API_KEY": API_KEY,
+                        "API_BASE": API_BASE}
     optimizer_agent = AgentSystemRegistry.get("single_agent", optimizer_config)
-    executor_config = {"model_name": "gpt-4o-mini", "API_KEY": OPENAI_API_KEY, "API_BASE": OPENAI_API_BASE}
+    executor_config = {"model_name": EXECUTOR_MODEL_NAME, "API_KEY": API_KEY, "API_BASE": API_BASE}
     executor_agent = AgentSystemRegistry.get("single_agent", executor_config)
 
     # load evaluator
