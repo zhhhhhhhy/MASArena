@@ -5,7 +5,7 @@ from typing import Optional, Type, Any, Union, Coroutine, List, Tuple
 from pydantic import Field
 
 from mas_arena.agents import AgentSystem
-from mas_arena.agents.llm_parser import LLMOutputParser
+from mas_arena.utils.llm_parser import LLMOutputParser
 import json
 import asyncio
 import concurrent
@@ -35,18 +35,7 @@ class Operator(SerializableComponent):
         self._save_ignore_fields = ["llm"]
 
     def __call__(self, *args: Any, **kwargs: Any) -> Union[dict, Coroutine[Any, Any, dict]]:
-        """Make the operator callable and automatically choose between sync and async execution."""
-        try:
-            asyncio.get_running_loop()
-            return self.async_execute(*args, **kwargs)
-        except RuntimeError:
-            return self.execute(*args, **kwargs)
-
-    def execute(self, *args, **kwargs) -> dict:
-        raise NotImplementedError(f"The execute function for {type(self).__name__} is not implemented!")
-
-    async def async_execute(self, *args, **kwargs) -> dict:
-        raise NotImplementedError(f"The execute function for {type(self).__name__} is not implemented!")
+        raise NotImplementedError("The __call__ function for Operator is not implemented! ")
 
     def save_module(self, path: str, ignore: List[str] = [], **kwargs) -> str:
         ignore_fields = self._save_ignore_fields + ignore
@@ -80,21 +69,13 @@ class Custom(Operator):
         super().__init__(name=name, description=description, interface=interface, agent=agent, outputs_format=CustomOutput,
                          **kwargs)
 
-    def execute(self, input: str, instruction: str) -> dict:
+    async def __call__(self, input: str, instruction: str) -> dict:
         prompt = instruction + input
-        response = self.agent.generate(problem_text=prompt, parser=self.prompt, parse_mode="str")
-        output = response.get_structured_data()
-        # response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
-        # output = response.get_structured_data()
-        return output
-
-    async def async_execute(self, input: str, instruction: str) -> dict:
-        prompt = instruction + input
-        # response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
-        # output = response.get_structured_data()
-        response = await self.agent.async_generate(problem_text=prompt, parser=self.prompt, parse_mode="str")
-        output = response.get_structured_data()
-        return output
+        response = await self.agent.run_agent(problem={"problem": prompt}, parser=self.prompt, parse_mode="str")
+        output: Optional[LLMOutputParser] = response.get("final_answer")
+        if not output:
+            return {}
+        return output.get_structured_data()
 
 
 class AnswerGenerateOutput(OperatorOutput):
@@ -112,17 +93,13 @@ class AnswerGenerate(Operator):
         super().__init__(name=name, description=description, interface=interface, agent=agent,
                          outputs_format=AnswerGenerateOutput, prompt=prompt, **kwargs)
 
-    def execute(self, input: str) -> dict:
+    async def __call__(self, input: str, instruction: str) -> dict:
         prompt = self.prompt.format(input=input)
-        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
-        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
-        return response.get_structured_data()
-
-    async def async_execute(self, input: str) -> dict:
-        prompt = self.prompt.format(input=input)
-        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
-        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
-        return response.get_structured_data()
+        response = await self.agent.run_agent(problem={"problem": prompt}, parser=self.outputs_format, parse_mode="xml")
+        output: Optional[LLMOutputParser] = response.get("final_answer")
+        if not output:
+            return {}
+        return output.get_structured_data()
 
 
 class ScEnsembleOutput(OperatorOutput):
@@ -153,20 +130,12 @@ class QAScEnsemble(Operator):
         answer = answer.strip().upper()
         return {"response": solutions[answer_mapping[answer]]}
 
-    def execute(self, solutions: List[str]) -> dict:
+    async def __call__(self, solutions: List[str]) -> dict:
         answer_mapping, solution_text = self._prepare_solutions(solutions)
         prompt = self.prompt.format(solutions=solution_text)
-        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
-        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
-        return self._process_response(response, answer_mapping, solutions)
-
-    async def async_execute(self, solutions: List[str]) -> dict:
-        answer_mapping, solution_text = self._prepare_solutions(solutions)
-        prompt = self.prompt.format(solutions=solution_text)
-        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
-        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
-        return self._process_response(response, answer_mapping, solutions)
-
+        response = await self.agent.run_agent(problem={"problem": prompt}, parser=self.outputs_format, parse_mode="xml")
+        output = response.get("final_answer", {})
+        return output
 
 class ScEnsemble(Operator):
 
@@ -191,20 +160,14 @@ class ScEnsemble(Operator):
         answer = answer.strip().upper()
         return {"response": solutions[answer_mapping[answer]]}
 
-    def execute(self, solutions: List[str], problem: str) -> dict:
+    async def __call__(self, solutions: List[str], problem: str) -> dict:
         answer_mapping, solution_text = self._prepare_solutions(solutions)
         prompt = self.prompt.format(problem=problem, solutions=solution_text)
-        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
-        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
-        return self._process_response(response, answer_mapping, solutions)
-
-    async def async_execute(self, solutions: List[str], problem: str) -> dict:
-        answer_mapping, solution_text = self._prepare_solutions(solutions)
-        prompt = self.prompt.format(problem=problem, solutions=solution_text)
-        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="xml")
-        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="xml")
-        return self._process_response(response, answer_mapping, solutions)
-
+        response = await self.agent.run_agent(problem={"problem": prompt}, parser=self.outputs_format, parse_mode="xml")
+        output: Optional[LLMOutputParser] = response.get("final_answer")
+        if not output:
+            return {}
+        return output.get_structured_data()
 
 class CustomCodeGenerate(Operator):
 
@@ -215,20 +178,12 @@ class CustomCodeGenerate(Operator):
         super().__init__(name=name, description=description, interface=interface, agent=agent, outputs_format=CustomOutput,
                          **kwargs)
 
-    def execute(self, problem: str, entry_point: str, instruction: str) -> dict:
+    async def __call__(self,problem: str, entry_point: str, instruction: str) -> dict:
         prompt = instruction + problem
-        #response = self.llm.generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
-        response = self.agent.generate(problem_text=prompt, parser=self.outputs_format, parse_mode="str")
-        code = sanitize(response.content, entrypoint=entry_point)
+        response = await self.agent.run_agent(problem={"problem": prompt}, parser=self.outputs_format, parse_mode="str")
+        output: Optional[LLMOutputParser] = response.get("final_answer")
+        code = sanitize(output.content, entrypoint=entry_point)
         return {"response": code}
-
-    async def async_execute(self, problem: str, entry_point: str, instruction: str) -> dict:
-        prompt = instruction + problem
-        #response = await self.llm.async_generate(prompt=prompt, parser=self.outputs_format, parse_mode="str")
-        response = await self.agent.async_generate(problem_text=prompt, parser=self.outputs_format, parse_mode="str")
-        code = sanitize(response.content, entrypoint=entry_point)
-        return {"response": code}
-
 
 class TestOutput(OperatorOutput):
     result: bool = Field(default=False, description="The result of the test")
@@ -276,8 +231,55 @@ class Test(Operator):
         super().__init__(name=name, description=description, interface=interface, agent=agent, outputs_format=TestOutput,
                          **kwargs)
 
-    async def __call__(self, *args, **kwargs):
-        return await self.async_execute(*args, **kwargs)
+    # async def __call__(self, *args, **kwargs):
+    #     return await self.async_execute(*args, **kwargs)
+
+    async def __call__(self, problem, solution, entry_point, evaluator: BaseEvaluator, test_loop: int = 3):
+        """
+        "Test": {
+        "description": "Test the solution with test cases, if the solution is correct, return 'no error', if the solution is incorrect, return reflect on the soluion and the error information",
+        "interface": "test(problem: str, solution: str, entry_point: str, evaluator = self.evaluator) -> str"
+        }
+        """
+        for _ in range(test_loop):
+            result = self.exec_code(solution, entry_point, evaluator)
+            if result == "no error":
+                return {"result": True, "solution": solution}
+            elif "exec_fail_case" in result:
+                result = result["exec_fail_case"]
+                prompt = REFLECTION_ON_PUBLIC_TEST_PROMPT.format(
+                    problem=problem,
+                    solution=solution,
+                    exec_pass=f"executed unsuccessfully, error: \n {result}",
+                    test_fail="executed unsucessfully",
+                )
+                response = await self.agent.run_agent(problem={"problem": prompt}, parser=ReflectionTestOp, parse_mode="json")
+                output: Optional[LLMOutputParser] = response.get("final_answer")
+                solution = sanitize(
+                    output.get_structured_data().get("reflection_and_solution", output.content),
+                    entrypoint=entry_point
+                )
+            else:
+                prompt = REFLECTION_ON_PUBLIC_TEST_PROMPT.format(
+                    problem=problem,
+                    solution=solution,
+                    exec_pass="executed successfully",
+                    test_fail=result,
+                )
+                response = await self.agent.run_agent(problem={"problem": prompt}, parser=ReflectionTestOp, parse_mode="json")
+                output: Optional[LLMOutputParser] = response.get("final_answer")
+                solution = sanitize(
+                    output.get_structured_data().get("reflection_and_solution", output.content),
+                    entrypoint=entry_point
+                )
+
+        result = self.exec_code(solution, entry_point, evaluator)
+
+        if result == "no error":
+            return {"result": True, "solution": solution}
+        else:
+            return {"result": False, "solution": solution}
+
 
     def exec_code(self, solution: str, entry_point: str, evaluator: BaseEvaluator):
 
@@ -315,53 +317,6 @@ class Test(Operator):
             return fail_cases
         else:
             return "no error"
-
-    async def async_execute(self, problem, solution, entry_point, evaluator: BaseEvaluator, test_loop: int = 3):
-        """
-        "Test": {
-        "description": "Test the solution with test cases, if the solution is correct, return 'no error', if the solution is incorrect, return reflect on the soluion and the error information",
-        "interface": "test(problem: str, solution: str, entry_point: str, evaluator = self.evaluator) -> str"
-        }
-        """
-        for _ in range(test_loop):
-            result = self.exec_code(solution, entry_point, evaluator)
-            if result == "no error":
-                return {"result": True, "solution": solution}
-            elif "exec_fail_case" in result:
-                result = result["exec_fail_case"]
-                prompt = REFLECTION_ON_PUBLIC_TEST_PROMPT.format(
-                    problem=problem,
-                    solution=solution,
-                    exec_pass=f"executed unsuccessfully, error: \n {result}",
-                    test_fail="executed unsucessfully",
-                )
-                response = await self.agent.async_generate(problem_text=prompt, parser=ReflectionTestOp, parse_mode="json")
-                #response = await self.llm.async_generate(prompt=prompt, parser=ReflectionTestOp, parse_mode="json")
-                solution = sanitize(
-                    response.get_structured_data().get("reflection_and_solution", response.content),
-                    entrypoint=entry_point
-                )
-            else:
-                prompt = REFLECTION_ON_PUBLIC_TEST_PROMPT.format(
-                    problem=problem,
-                    solution=solution,
-                    exec_pass="executed successfully",
-                    test_fail=result,
-                )
-                response = await self.agent.async_generate(problem_text=prompt, parser=ReflectionTestOp, parse_mode="json")
-                #response = await self.llm.async_generate(prompt=prompt, parser=ReflectionTestOp, parse_mode="json")
-                solution = sanitize(
-                    response.get_structured_data().get("reflection_and_solution", response.content),
-                    entrypoint=entry_point
-                )
-
-        result = self.exec_code(solution, entry_point, evaluator)
-
-        if result == "no error":
-            return {"result": True, "solution": solution}
-        else:
-            return {"result": False, "solution": solution}
-
 
 def run_code(code):
     try:
@@ -436,12 +391,12 @@ class Programmer(Operator):
             analysis=analysis,
             feedback=feedback
         )
-        response = await self.agent.async_generate(problem_text=prompt, parser=None, parse_mode="str")
-        #response = await self.llm.async_generate(prompt=prompt, parser=None, parse_mode="str")
-        code = sanitize(response.content, entrypoint="solve")
+        response = await self.agent.run_agent(problem={"problem": prompt}, parser=None, parse_mode="str")
+        output: Optional[LLMOutputParser] = response.get("final_answer")
+        code = sanitize(output.content, entrypoint="solve")
         return {"code": code}
 
-    async def async_execute(self, problem: str, analysis: str = "None"):
+    async def __call__(self, problem: str, analysis: str = "None"):
 
         code = None
         output = None

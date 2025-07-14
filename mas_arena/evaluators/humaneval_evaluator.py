@@ -205,15 +205,14 @@ class HumanEvalEvaluator(BaseCodeEvaluator):
             "run_evaluation": run_evaluation,
         }
 
-    async def async_evaluate(self, graph: Callable, example: Any, i: int = None) -> float:
-        # generate solution
-        prompt, entry_point = example["prompt"], example["entry_point"]
+    async def async_evaluate(self, graph: Callable, problem: Any, i: int = None) -> float:
+        prompt, entry_point = problem["prompt"], problem["entry_point"]
         solution = await graph(prompt, entry_point)
         from mas_arena.evaluators import BENCHMARKS
         benchmark_config = BENCHMARKS.get(self.name, {})
         key_mapping = benchmark_config.get("normalization_keys", {})
-        normalized_problem = normalize_problem_keys(example,key_mapping,i)
-        run_result = {"solution":solution}
+        normalized_problem = normalize_problem_keys(problem, key_mapping, i)
+        run_result = {"solution": solution}
         metrics = await asyncio.to_thread(self.evaluate, run_result=run_result, problem=normalized_problem)
         return metrics["score"]
 

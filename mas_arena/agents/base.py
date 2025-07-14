@@ -5,8 +5,7 @@ This module provides the base classes and interfaces for agent systems.
 """
 
 import abc
-import asyncio
-from typing import Dict, Any, Optional, Type, Callable, Union, List
+from typing import Dict, Any, Optional, Type, Callable
 import uuid
 import os
 import json
@@ -17,7 +16,7 @@ from mas_arena.agents.format_prompts import get_format_prompt
 from openai.types.completion_usage import CompletionUsage
 import aiofiles
 
-from mas_arena.agents.llm_parser import LLMOutputParser
+from mas_arena.utils.llm_parser import LLMOutputParser
 
 
 class AgentSystem(abc.ABC):
@@ -146,39 +145,6 @@ class AgentSystem(abc.ABC):
             parser = LLMOutputParser
         return parser.parse(text, parse_mode=parse_mode, parse_func=parse_func)
 
-    def generate(
-            self,
-            problem_text: str,
-            parser: Optional[Type[LLMOutputParser]] = None,
-            parse_mode: Optional[str] = "json") -> Union[LLMOutputParser, List[LLMOutputParser]]:
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            response = asyncio.run(self.run_agent(problem={"problem": problem_text}))
-        else:
-            if loop.is_running():
-                task = asyncio.run_coroutine_threadsafe(self.run_agent(problem={"problem": problem_text}), loop)
-                response = task.result()
-            else:
-                response = asyncio.run(self.run_agent(problem={"problem": problem_text}))
-        answer_text = response.get("final_answer", "")
-        response_format = self.parse_generated_text(answer_text, parser=parser, parse_mode=parse_mode)
-        return response_format
-
-    async def async_generate(
-            self,
-            problem_text: str,
-            parser: Optional[Type[LLMOutputParser]] = None,
-            parse_mode: Optional[str] = "json"
-    ) -> Union[LLMOutputParser, List[LLMOutputParser]]:
-        try:
-            response = await self.run_agent(problem={"problem": problem_text})
-        except Exception as e:
-            raise RuntimeError(f"Error running agent: {e}")
-
-        answer_text = response.get("final_answer", "")
-        response_format = self.parse_generated_text(answer_text, parser=parser, parse_mode=parse_mode)
-        return response_format
 
     def _record_token_usage(self, problem_id: str, execution_time_ms: float, messages: list):
         """

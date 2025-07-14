@@ -155,14 +155,3 @@ class MathEvaluator(BaseEvaluator):
             "score": score,
             "extracted_answer": extracted_answer
         }
-
-    async def async_evaluate(self, graph: Callable, label: Any, i: int = None) -> dict:
-        from mas_arena.evaluators import BENCHMARKS
-        benchmark_config = BENCHMARKS.get(self.name, {})
-        key_mapping = benchmark_config.get("normalization_keys", {})
-        normalized_problem = normalize_problem_keys(label, key_mapping, i)
-
-        output = await graph(normalized_problem["problem"])
-        run_result = {"messages": [{"content": output}]}
-        result = await asyncio.to_thread(self.evaluate, normalized_problem, run_result)
-        return {"solve_rate": result["score"]}

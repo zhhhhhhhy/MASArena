@@ -2,20 +2,20 @@ import asyncio
 import os
 import re
 import shutil
-from typing import Any, List, Union
+from typing import Any, List, Union, Optional
 
 import numpy as np
 from pydantic import Field
 from tqdm import tqdm
-from .optimizer import Optimizer
-from ..agents import AgentSystem
-from mas_arena.agents.llm_parser import LLMOutputParser
+from mas_arena.optimizers.optimizer import Optimizer
+from mas_arena.agents import AgentSystem
+from mas_arena.utils.llm_parser import LLMOutputParser
 from mas_arena.utils.convergence_utils import ConvergenceUtils
 from mas_arena.utils.data_utils import DataUtils
 from mas_arena.workflow.workflow_evaluator import EvaluationUtils
 from mas_arena.utils.experience_utils import ExperienceUtils
 from mas_arena.utils.graph_utils import GraphUtils, OPERATOR_MAP
-from ..evaluators.base_evaluator import BaseEvaluator
+from mas_arena.evaluators.base_evaluator import BaseEvaluator
 
 class LLMOptimizationOutput(LLMOutputParser):
     """
@@ -155,16 +155,17 @@ class AFlowOptimizer(Optimizer):
             )
 
             # Get and parse the LLM's response
-            #response_parser = await self.optimizer_llm.async_generate(prompt=graph_optimize_prompt, parse_mode="str")
-            response_parser = await self.optimizer_agent.async_generate(problem_text=graph_optimize_prompt, parse_mode="str")
+            response_parser = await self.optimizer_agent.run_agent(problem={"problem": graph_optimize_prompt},
+                                                            parse_mode="str")
+            output: Optional[LLMOutputParser] = response_parser.get("final_answer")
             if isinstance(response_parser, list):
                 raise TypeError(f"Expected a single LLMOutputParser, but got a list.")
 
             print(f"-round:{self.round}-- Optimizer LLM Response ---")
-            print(response_parser.content)
+            print(output.content)
             print("----------------------------")
             parsed_response = self._parse_llm_optimization_output(
-                response_parser.content,
+                output.content,
                 orig_graph=solve_graph_code[0],
                 orig_prompt=prompt_template
             )
