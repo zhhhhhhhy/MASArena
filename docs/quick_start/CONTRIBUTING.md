@@ -1,43 +1,14 @@
 # Test Workflow in GitHub Actions
 
-Welcome to MASArena! This document provides guidelines for contributing to the project, with a focus on our automated testing workflow and quality assurance processes.
 
 ## Table of Contents
 
-- [Development Setup](#development-setup)
 - [Testing Framework](#testing-framework)
 - [GitHub Actions CI/CD](#github-actions-cicd)
 - [Running Tests Locally](#running-tests-locally)
 - [Code Quality Standards](#code-quality-standards)
 - [Contributing Workflow](#contributing-workflow)
 
-## Development Setup
-
-### Prerequisites
-
-- Python 3.11 or 3.12
-- Git
-- Required API keys (OpenAI, Anthropic, Tavily) for full functionality
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone <repository-url>
-   cd MASArena
-   ```
-
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   pip install pytest pytest-cov pytest-asyncio ruff
-   ```
-
-3. Set up environment variables:
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys
-   ```
 
 ## Testing Framework
 
@@ -297,9 +268,3 @@ class TestYourClass:
 - Review test output and error messages
 - Consult project documentation
 - Ask questions in pull request comments
-
-## Conclusion
-
-Our automated testing workflow ensures code reliability and maintains high quality standards. By following these guidelines, you help maintain a robust and reliable codebase that benefits all contributors and users.
-
-Thank you for contributing to MASArena! 🚀
