@@ -12,10 +12,13 @@ VALIDATION_ROUNDS=${4:-1}
 EVAL_ROUNDS=${5:-1}
 MAX_ROUNDS=${6:-3}
 
-# Set project root (assuming script is in project root or scripts/)
+# Set project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$SCRIPT_DIR"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 cd "$PROJECT_ROOT" || exit 1
+
+# Add project root to PYTHONPATH to resolve module imports
+export PYTHONPATH="$PROJECT_ROOT:$PYTHONPATH"
 
 # Load environment variables from .env file
 if [ -f ".env" ]; then
@@ -48,7 +51,7 @@ echo "====================================================="
 echo ""
 
 # Run the Python main script
-python run_aflow_optimize.py \
+python example/aflow/run_aflow_optimize.py \
     --benchmark "$BENCHMARK" \
     --graph_path "$GRAPH_PATH" \
     --optimized_path "$OPTIMIZED_PATH" \
