@@ -1,256 +1,305 @@
-# Contributing to MASArena
+# Test Workflow in GitHub Actions
 
-We welcome contributions to MASArena! This document provides guidelines for contributing to the project.
+Welcome to MASArena! This document provides guidelines for contributing to the project, with a focus on our automated testing workflow and quality assurance processes.
+
+## Table of Contents
+
+- [Development Setup](#development-setup)
+- [Testing Framework](#testing-framework)
+- [GitHub Actions CI/CD](#github-actions-cicd)
+- [Running Tests Locally](#running-tests-locally)
+- [Code Quality Standards](#code-quality-standards)
+- [Contributing Workflow](#contributing-workflow)
 
 ## Development Setup
 
 ### Prerequisites
 
-- Python 3.11 or higher
+- Python 3.11 or 3.12
 - Git
-- [uv](https://docs.astral.sh/uv/) (recommended) or pip
+- Required API keys (OpenAI, Anthropic, Tavily) for full functionality
 
-### Setting Up Development Environment
+### Installation
 
-1. **Clone the repository:**
+1. Clone the repository:
    ```bash
-   git clone https://github.com/LINs-lab/MASArena.git
+   git clone <repository-url>
    cd MASArena
    ```
 
-2. **Install dependencies:**
+2. Install dependencies:
    ```bash
-   # Using uv (recommended)
-   uv sync
-   source .venv/bin/activate
-   
-   # Or using pip
    pip install -r requirements.txt
-   pip install -e .
+   pip install pytest pytest-cov pytest-asyncio ruff
    ```
 
-3. **Install development dependencies:**
-   ```bash
-   pip install pytest pytest-cov pytest-asyncio ruff black isort
-   ```
-
-4. **Set up environment variables:**
+3. Set up environment variables:
    ```bash
    cp .env.example .env
    # Edit .env with your API keys
    ```
 
-## Testing
+## Testing Framework
 
-### Running Tests
+### Framework Choice
 
-We use pytest for testing. Here are the most common test commands:
+We use **pytest** as our primary testing framework because:
+- Excellent support for async testing with `pytest-asyncio`
+- Rich fixture system for test setup and teardown
+- Comprehensive assertion introspection
+- Extensive plugin ecosystem
+- Built-in coverage reporting
+
+### Test Structure
+
+Our test suite is organized into the following categories:
+
+```
+tests/
+├── conftest.py              # Shared fixtures and configuration
+├── test_agents.py           # Agent system tests
+├── test_evaluators.py       # Evaluator and benchmark tests
+└── test_benchmark_runner.py # Benchmark runner integration tests
+```
+
+### Test Categories
+
+1. **Unit Tests** (`@pytest.mark.unit`)
+   - Test individual functions and classes in isolation
+   - Fast execution, no external dependencies
+   - Mock external services and APIs
+
+2. **Integration Tests** (`@pytest.mark.integration`)
+   - Test component interactions
+   - May involve file I/O or network calls
+   - Use test fixtures and temporary directories
+
+3. **Async Tests** (`@pytest.mark.asyncio`)
+   - Test asynchronous functionality
+   - Agent evaluation and benchmark processing
+   - Concurrent execution scenarios
+
+### Key Test Cases
+
+Our test suite covers:
+
+- **Agent Systems**: Creation, configuration, and evaluation interfaces
+- **Evaluators**: Math, GSM8K, and other benchmark evaluators
+- **Benchmark Runner**: Problem processing, result aggregation, and error handling
+- **Registry Systems**: Agent and benchmark registration
+- **Utilities**: JSON serialization, file handling, and metrics collection
+
+## GitHub Actions CI/CD
+
+### Workflow Overview
+
+Our CI/CD pipeline (`.github/workflows/test.yml`) automatically runs on:
+- **Push** to `main` and `develop` branches
+- **Pull requests** targeting `main` and `develop` branches
+
+### Workflow Jobs
+
+#### 1. Test Job
+
+**Matrix Strategy**: Tests run on Python 3.11 and 3.12
+
+**Steps**:
+1. **Checkout**: Get the latest code
+2. **Python Setup**: Install specified Python version
+3. **Dependency Caching**: Cache pip dependencies for faster builds
+4. **Install Dependencies**: Install project and test dependencies
+5. **Environment Setup**: Set `PYTHONPATH` and test mode flags
+6. **Unit Tests**: Run individual test files with verbose output
+7. **Coverage Tests**: Generate coverage reports
+8. **Upload Coverage**: Send coverage data to Codecov (Python 3.11 only)
+
+#### 2. Lint Job
+
+**Purpose**: Ensure code quality and formatting consistency
+
+**Steps**:
+1. **Ruff Linting**: Check code style and potential issues
+2. **Format Checking**: Verify code formatting (non-blocking)
+
+### Caching Strategy
+
+We implement dependency caching to improve build performance:
+- **Cache Key**: Based on `requirements.txt` hash
+- **Cache Path**: `~/.cache/pip`
+- **Fallback**: OS-specific pip cache
+
+### Environment Variables
+
+- `PYTHONPATH`: Ensures proper module imports
+- `MAS_ARENA_TEST_MODE`: Enables test-specific configurations
+- API keys are mocked in test environment
+
+## Running Tests Locally
+
+### Basic Test Execution
 
 ```bash
 # Run all tests
 pytest
 
+# Run specific test file
+pytest tests/test_agents.py -v
+
 # Run tests with coverage
 pytest --cov=mas_arena --cov-report=html
 
-# Run only unit tests (fast)
-pytest -m "unit"
+# Run only unit tests
+pytest -m unit
 
-# Run only integration tests
-pytest -m "integration"
-
-# Run tests excluding slow tests
-pytest -m "not slow"
-
-# Run specific test file
-pytest tests/test_agents.py
-
-# Run with verbose output
-pytest -v
-
-# Run tests in parallel (if pytest-xdist is installed)
-pytest -n auto
+# Run async tests
+pytest -m asyncio
 ```
 
-### Test Categories
+### Test Configuration
 
-- **Unit Tests** (`@pytest.mark.unit`): Fast, isolated tests for individual components
-- **Integration Tests** (`@pytest.mark.integration`): Tests for component interactions
-- **Slow Tests** (`@pytest.mark.slow`): Long-running tests that may involve external services
+Our `pytest.ini` configuration:
+- **Test Discovery**: `test_*.py` files, `Test*` classes, `test_*` functions
+- **Markers**: `slow`, `integration`, `unit`, `asyncio`
+- **Warnings**: Filtered deprecation warnings
+- **Options**: Strict marker enforcement, quiet output
 
-### Writing Tests
-
-#### Test Structure
-
-```
-tests/
-├── conftest.py              # Shared fixtures and configuration
-├── test_agents.py           # Tests for agent systems
-├── test_evaluators.py       # Tests for evaluation components
-├── test_tools.py            # Tests for tool management
-├── test_benchmark_runner.py # Tests for benchmark execution
-└── test_integration.py      # End-to-end integration tests
-```
-
-#### Test Guidelines
-
-1. **Use descriptive test names:**
-   ```python
-   def test_agent_initialization_with_valid_config():
-       # Test implementation
-   ```
-
-2. **Use fixtures for common setup:**
-   ```python
-   def test_agent_run(mock_agent_config, disable_llm_calls):
-       agent = SingleAgent(config=mock_agent_config)
-       # Test implementation
-   ```
-
-3. **Mock external dependencies:**
-   ```python
-   @patch('mas_arena.agents.base.ChatOpenAI')
-   def test_agent_with_mocked_llm(mock_llm):
-       # Test implementation
-   ```
-
-4. **Mark tests appropriately:**
-   ```python
-   @pytest.mark.unit
-   def test_fast_unit_test():
-       pass
-   
-   @pytest.mark.integration
-   def test_component_integration():
-       pass
-   
-   @pytest.mark.slow
-   def test_long_running_operation():
-       pass
-   
-   @pytest.mark.asyncio
-   async def test_async_function():
-       pass
-   ```
-
-#### Available Fixtures
-
-See `tests/conftest.py` for available fixtures:
-
-- `temp_dir`: Temporary directory for test files
-- `sample_problem`: Sample problem data
-- `sample_math_problems`: Multiple math problems
-- `mock_llm_response`: Mock LLM response
-- `mock_agent_config`: Mock agent configuration
-- `disable_llm_calls`: Disable actual LLM API calls
-- `disable_file_operations`: Disable file operations
-
-## Code Quality
-
-### Linting and Formatting
-
-We use several tools to maintain code quality:
+### Debugging Tests
 
 ```bash
-# Run all linting tools
-ruff check .          # Linting
-black .               # Code formatting
-isort .               # Import sorting
+# Verbose output with full traceback
+pytest -v --tb=long
 
-# Fix issues automatically
-ruff check . --fix
-black .
-isort .
+# Stop on first failure
+pytest -x
+
+# Run specific test method
+pytest tests/test_agents.py::TestAgentCreation::test_create_single_agent
 ```
 
-### Pre-commit Hooks
+## Code Quality Standards
 
-We recommend setting up pre-commit hooks:
+### Linting with Ruff
+
+We use **Ruff** for fast Python linting and formatting:
 
 ```bash
-pip install pre-commit
-pre-commit install
+# Check code style
+ruff check mas_arena/
+
+# Format code
+ruff format mas_arena/
+
+# Check formatting without changes
+ruff format --check mas_arena/
 ```
 
-## Contribution Types
+### Configuration
 
-### 🧠 Adding New Agent Systems
+- **Line Length**: 120 characters
+- **Target Version**: Python 3.11+
+- **Rules**: Standard Python style guidelines
 
-1. Create a new file in `mas_arena/agents/`
-2. Inherit from `AgentSystem` or `SingleAgent`
-3. Implement required methods
-4. Add tests in `tests/test_agents.py`
-5. Update documentation
+### Coverage Requirements
 
-### 📊 Adding New Benchmarks
+- Maintain test coverage above 80%
+- New features must include corresponding tests
+- Critical paths require comprehensive test coverage
 
-1. Add data files to `data/`
-2. Create evaluator in `mas_arena/evaluators/`
-3. Update benchmark configuration
-4. Add tests in `tests/test_evaluators.py`
+## Contributing Workflow
 
-### 🛠 Adding New Tools
+### Before Submitting a Pull Request
 
-1. Create tool in `mas_arena/tools/`
-2. Inherit from `BaseTool`
-3. Implement `execute()` and `get_schema()` methods
-4. Add tests in `tests/test_tools.py`
-5. Register tool in tool manager
-
-### 🐛 Bug Fixes
-
-1. Write a test that reproduces the bug
-2. Fix the bug
-3. Ensure the test passes
-4. Run the full test suite
-
-## Pull Request Process
-
-1. **Fork the repository** and create a feature branch
-2. **Make your changes** following the guidelines above
-3. **Write or update tests** for your changes
-4. **Run the test suite** and ensure all tests pass:
+1. **Run Tests Locally**:
    ```bash
-   pytest
-   ruff check .
-   black --check .
-   isort --check-only .
+   pytest tests/ -v
    ```
-5. **Update documentation** if necessary
-6. **Submit a pull request** with:
-   - Clear description of changes
-   - Reference to any related issues
-   - Screenshots for UI changes (if applicable)
 
-### Pull Request Checklist
+2. **Check Code Quality**:
+   ```bash
+   ruff check mas_arena/
+   ruff format mas_arena/
+   ```
 
-- [ ] Tests pass locally
-- [ ] Code follows style guidelines
-- [ ] Documentation updated (if needed)
-- [ ] Changelog updated (for significant changes)
-- [ ] No merge conflicts
+3. **Verify Coverage**:
+   ```bash
+   pytest --cov=mas_arena --cov-report=term-missing
+   ```
 
-## Continuous Integration
+### Pull Request Process
 
-Our CI pipeline runs:
+1. **Create Feature Branch**: `git checkout -b feature/your-feature-name`
+2. **Make Changes**: Implement your feature with tests
+3. **Test Locally**: Ensure all tests pass
+4. **Commit Changes**: Use descriptive commit messages
+5. **Push Branch**: `git push origin feature/your-feature-name`
+6. **Create PR**: Submit pull request with description
+7. **CI Validation**: Wait for GitHub Actions to pass
+8. **Code Review**: Address reviewer feedback
+9. **Merge**: Squash and merge after approval
 
-1. **Tests** on Python 3.11 and 3.12
-2. **Linting** with ruff, black, and isort
-3. **Coverage** reporting to Codecov
-4. **Documentation** building and deployment
+### Writing New Tests
 
-All checks must pass before merging.
+When adding new functionality:
 
-## Getting Help
+1. **Create Test File**: Follow naming convention `test_*.py`
+2. **Use Fixtures**: Leverage shared fixtures from `conftest.py`
+3. **Mock External Dependencies**: Use `unittest.mock` for API calls
+4. **Test Edge Cases**: Include error conditions and boundary cases
+5. **Add Markers**: Use appropriate pytest markers
+6. **Document Tests**: Include docstrings for complex test scenarios
 
-- **Issues**: Report bugs or request features via GitHub Issues
-- **Discussions**: Ask questions in GitHub Discussions
-- **Documentation**: Check our [documentation](https://lins-lab.github.io/MASArena)
+### Example Test Structure
 
-## Code of Conduct
+```python
+"""Tests for new feature."""
 
-Please be respectful and constructive in all interactions. We're building this together! 🚀
+import pytest
+from unittest.mock import Mock, patch
 
-## License
+from mas_arena.your_module import YourClass
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+
+class TestYourClass:
+    """Test your new class functionality."""
+    
+    def test_basic_functionality(self, sample_config):
+        """Test basic functionality with valid input."""
+        instance = YourClass(sample_config)
+        result = instance.method()
+        assert result is not None
+    
+    @pytest.mark.asyncio
+    async def test_async_method(self, sample_config):
+        """Test async method execution."""
+        instance = YourClass(sample_config)
+        result = await instance.async_method()
+        assert result["status"] == "success"
+    
+    def test_error_handling(self, sample_config):
+        """Test error handling for invalid input."""
+        instance = YourClass(sample_config)
+        with pytest.raises(ValueError):
+            instance.method(invalid_input=True)
+```
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Import Errors**: Ensure `PYTHONPATH` includes project root
+2. **API Key Errors**: Check that test environment uses mocked APIs
+3. **Async Test Failures**: Verify `pytest-asyncio` is installed
+4. **Coverage Issues**: Exclude test files from coverage reports
+
+### Getting Help
+
+- Check existing issues and discussions
+- Review test output and error messages
+- Consult project documentation
+- Ask questions in pull request comments
+
+## Conclusion
+
+Our automated testing workflow ensures code reliability and maintains high quality standards. By following these guidelines, you help maintain a robust and reliable codebase that benefits all contributors and users.
+
+Thank you for contributing to MASArena! 🚀
