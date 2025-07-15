@@ -37,7 +37,7 @@ class AutoGen(AgentSystem):
                 "system_prompt": "Provide constructive feedback on the content provided. Respond with 'APPROVE' when the content meets high standards or your feedback has been addressed."
             } 
         ]
-
+ 
     async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
 
         problem_text = problem["problem"]
