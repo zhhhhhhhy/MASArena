@@ -134,5 +134,5 @@ class BaseEvaluator(metaclass=ABCMeta):
                 f.write(json.dumps(result) + "\n")
         self.logger.info(f"Saved {len(results)} evaluation results to {path}")
 
-    async def async_evaluate(self, configured_graph, example, i):
+    async def async_evaluate(self,problem:Dict[str, Any],run_result:Dict[str, Any]) -> Dict[str, Any]:
         pass

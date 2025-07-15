@@ -183,11 +183,9 @@ class HumanEvalEvaluator(BaseCodeEvaluator):
         Main entry point – keeps the outer interface unchanged.
         Consumes one *problem* dict and the model *run_result*, returns a detailed evaluation dict.
         """
-        if "solution" in run_result and run_result["solution"]:
-            final_answer = run_result["solution"]
-            extracted_answer = run_result["solution"]
-        else:
-            final_answer = run_result.get("final_answer", "")
+        final_answer = run_result.get("final_answer", "")
+        extracted_answer = final_answer
+        if not run_result.get("extracted"):
             extracted_answer = self.extract_code(final_answer)
 
         score, extracted_answer, message = self.calculate_score(
@@ -205,16 +203,9 @@ class HumanEvalEvaluator(BaseCodeEvaluator):
             "run_evaluation": run_evaluation,
         }
 
-    async def async_evaluate(self, graph: Callable, problem: Any, i: int = None) -> float:
-        prompt, entry_point = problem["prompt"], problem["entry_point"]
-        solution = await graph(prompt, entry_point)
-        from mas_arena.evaluators import BENCHMARKS
-        benchmark_config = BENCHMARKS.get(self.name, {})
-        key_mapping = benchmark_config.get("normalization_keys", {})
-        normalized_problem = normalize_problem_keys(problem, key_mapping, i)
-        run_result = {"solution": solution}
-        metrics = await asyncio.to_thread(self.evaluate, run_result=run_result, problem=normalized_problem)
-        return metrics["score"]
+    async def async_evaluate(self, problem: Dict[str, Any], run_result: Dict[str, Any]) -> Dict[str, Any]:
+        evaluate_result = await asyncio.to_thread(self.evaluate, run_result=run_result, problem=problem)
+        return evaluate_result
 
     def extract_test_cases_with_entry_point(self, entry_point: str):
         """

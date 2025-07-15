@@ -34,7 +34,10 @@ class SingleAgent(AgentSystem):
         self.system_prompt = self.config.get("system_prompt", "") + self.format_prompt
 
         # Initialize evaluator and metrics collector through base class methods
-        self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
+        if "api_key" in config and config["api_key"] and "api_base" in config and config["api_base"]:
+            self.client = AsyncOpenAI(api_key=config["api_key"], base_url=config["api_base"])
+        else:
+            self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
 
     async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
         """

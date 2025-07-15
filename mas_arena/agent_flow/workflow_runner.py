@@ -4,9 +4,10 @@ import asyncio
 import json
 
 from tqdm.asyncio import tqdm_asyncio
-from typing import Tuple, Optional, Callable
+from typing import Tuple, Optional, Callable, Any
 
 from mas_arena.agents import AgentSystem
+from mas_arena.evaluators.utils.normalization import normalize_problem_keys
 from mas_arena.utils.llm_utils import cost_manager
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
 
@@ -41,10 +42,10 @@ class WorkflowRunner:
 
         semaphore = asyncio.Semaphore(max_concurrent_tasks)
 
-        async def evaluate_with_semaphore(example, i: int = None):
+        async def evaluate_with_semaphore(problem, i: int = None):
             async with semaphore:
                 try:
-                    return await evaluator.async_evaluate(configured_graph, example, i)
+                    return await self.run_and_evaluate_problem(evaluator, configured_graph, problem, i)
                 except Exception as e:
                     print(f"Evaluation failed: {str(e)}")
                     return None
@@ -52,8 +53,8 @@ class WorkflowRunner:
         # Create tasks for concurrent execution with semaphore
 
         tasks = []
-        for i,example in enumerate(data):
-            tasks.append(evaluate_with_semaphore(example,i))
+        for i,problem in enumerate(data):
+            tasks.append(evaluate_with_semaphore(problem,i))
 
         # Wait for all tasks to complete
         results = await tqdm_asyncio.gather(
@@ -77,3 +78,19 @@ class WorkflowRunner:
             avg_metrics = sum(valid_results) / len(valid_results)
 
         return avg_metrics, avg_cost, total_cost, all_failed
+
+    async def run_and_evaluate_problem(
+            self,
+            evaluator: BaseEvaluator,
+            graph: Callable,
+            problem: Any,
+            i: int = None) -> float:
+        prompt, entry_point = problem["prompt"], problem["entry_point"]
+        solution = await graph(prompt, entry_point)
+        run_result = {"final_answer": solution, "extracted": True}
+        from mas_arena.evaluators import BENCHMARKS
+        benchmark_config = BENCHMARKS.get(evaluator.name, {})
+        key_mapping = benchmark_config.get("normalization_keys", {})
+        normalized_problem = normalize_problem_keys(problem, key_mapping, i)
+        result = await evaluator.async_evaluate(normalized_problem, run_result)
+        return result["score"] if "score" in result else 0.0
