@@ -1,6 +1,5 @@
 absl-py==2.2.2
 aiofiles==24.1.0
-rich==13.9.4
 aiohappyeyeballs==2.4.6
     # via aiohttp
 aiohttp==3.11.13
