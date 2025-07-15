@@ -40,8 +40,6 @@ class MathEvaluator(BaseEvaluator):
     using various mathematical equivalence techniques.
     """
     
-    SUPPORTS_CONCURRENCY = False
-    
     def __init__(self, name: str, config: Dict[str, Any] = None):
         """
         Initialize the Math Evaluator.
