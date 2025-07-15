@@ -6,16 +6,12 @@ from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
 
-# Load environment variables
+
 load_dotenv()
 
-class AutoGen(AgentSystem):
-    """
-    AutoGen System
 
-    This agent system implements a collaborative AutoGen framework similar to AutoGen,
-    where AutoGen agents with distinct roles interact to solve problems through conversation.
-    """
+class AutoGen(AgentSystem):
+
     def __init__(self, name: str = "autogen", config: Dict[str, Any] = None):
         """Initialize the AutoGen System"""
         super().__init__(name, config)
@@ -23,78 +19,53 @@ class AutoGen(AgentSystem):
         
         # Default model and agent configurations
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")
-        self.system_prompt = self.config.get("system_prompt", "") + self.format_prompt
+
+        self.num_rounds = self.config.get("num_rounds", 5)
         
-        # Initialize OpenAI client
-        # self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
+        # Initialize OpenAI client 
+        """This implementation is not compatible with the tool usage. Please check the .extending.md"""
         self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
         # Define AutoGen agents with distinct roles
-        self.agents = self.config.get("agents", [
-            {
-                "name": "planner",
-                "role": "Creates a step-by-step plan to solve the problem.",
-                "system_prompt": "You are a Planner Agent. Your role is to analyze the problem and create a clear, step-by-step plan to solve it. Provide concise instructions for other agents to follow."
-            },
-            {
-                "name": "executor",
-                "role": "Executes the plan and provides the final solution.",
-                "system_prompt": "You are an Executor Agent. Your role is to follow the plan provided by the Planner Agent and produce a detailed solution to the problem."
-            },
-            {
-                "name": "reviewer",
-                "role": "Reviews the solution and suggests improvements.",
-                "system_prompt": "You are a Reviewer Agent. Your role is to evaluate the solution provided by the Executor Agent, identify any issues, and suggest improvements or confirm the solution is correct."
-            }
-        ])
         
-        # Maximum number of conversation rounds to prevent infinite loops
-        self.max_rounds = self.config.get("max_rounds", 5)
+        self.agents = [
+            {
+                "name": "primary",
+                "system_prompt": "You are a helpful AI assistant, skilled at generating creative and accurate content."
+            },
+            {
+                "name": "critic",
+                "system_prompt": "Provide constructive feedback on the content provided. Respond with 'APPROVE' when the content meets high standards or your feedback has been addressed."
+            } 
+        ]
 
     async def run_agent(self, problem: Dict[str, Any], **kwargs) -> Dict[str, Any]:
-        """
-        Run the AutoGen system on a given problem.
 
-        Agents collaborate in a conversational loop, with each agent contributing based on its role.
-
-        Args:
-            problem: Dictionary containing the problem data
-            
-        Returns:
-            Dictionary of run results including messages with usage metadata
-        """
         problem_text = problem["problem"]
         messages = [
-            {"role": "system", "content": self.system_prompt},
             {"role": "user", "content": f"Problem: {problem_text}"}
         ]
         conversation_history = messages.copy()
-        all_messages = []
 
-        # Conversation loop
-        for round_num in range(self.max_rounds):
-            for agent in self.agents:
+        all_messages = []
+        final_answer = ""
+
+        for _ in range(self.num_rounds):
+            for n, agent in enumerate(self.agents): 
                 agent_name = agent["name"]
                 agent_prompt = agent["system_prompt"]
                 
-                # Prepare messages for the current agent, including conversation history
                 agent_messages = [
                     {"role": "system", "content": agent_prompt},
                     *conversation_history
                 ]
                 
-                # Get response from the current agent
                 response = await self.client.chat.completions.create(
                     model=self.model_name,
                     messages=agent_messages
                 )
-                
-                # Extract and clean response content
-                response_content = response.choices[0].message.content
-                response_content = response_content.replace('\r\n', '\n').replace('\r', '\n').strip()
-                with contextlib.suppress(UnicodeDecodeError):
-                    response_content = response_content.encode('utf-8').decode('utf-8-sig')
 
-                # Create message object with usage metadata
+                response_content = response.choices[0].message.content
+
                 ai_message = {
                     'content': response_content,
                     'name': agent_name,
@@ -103,20 +74,21 @@ class AutoGen(AgentSystem):
                     'usage_metadata': response.usage
                 }
                 
-                # Add to conversation history and all messages
                 conversation_history.append({"role": "assistant", "content": response_content, "name": agent_name})
+
+                if(agent_name == "primary"):
+                    final_answer = ai_message["content"]
                 all_messages.append(ai_message)
                 
-                # Check if the reviewer has approved the solution (simplified termination condition)
-                if agent_name == "reviewer" and "Solution approved" in response_content.lower():
+                if agent_name == "critic" and "approve" in response_content.lower():
                     return {
                         "messages": all_messages,
-                        "final_answer": all_messages[-2]["content"]  # Executor's solution
+                        "final_answer": final_answer
                     }
         
-        # If max rounds reached, return the last executor's solution
+
         final_answer = next(
-            (msg["content"] for msg in reversed(all_messages) if msg["name"] == "executor"),
+            (msg["content"] for msg in reversed(all_messages) if msg["name"] == "primary"),
             "No solution found within maximum rounds."
         )
         
@@ -125,5 +97,4 @@ class AutoGen(AgentSystem):
             "final_answer": final_answer
         }
 
-# Register the agent system
 AgentSystemRegistry.register("autogen", AutoGen)
