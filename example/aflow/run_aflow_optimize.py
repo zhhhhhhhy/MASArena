@@ -51,6 +51,36 @@ def get_evaluator(benchmark_name: str) -> BaseEvaluator:
     return evaluator_class(benchmark_name, {})
 
 
+def run_aflow_optimization(args: argparse.Namespace) -> str:
+    """
+    Runs the AFlow optimization process and returns the path to the optimized graph.
+    """
+    # Initialization
+    env_config = get_config_from_env()
+    optimizer_agent = initialize_agent("optimizer", env_config)
+    executor_agent = initialize_agent("executor", env_config)
+    evaluator = get_evaluator(args.benchmark)
+
+    # Create and run optimizer
+    optimizer = AFlowOptimizer(
+        graph_path=args.graph_path,
+        optimized_path=args.optimized_path,
+        optimizer_agent=optimizer_agent,
+        executor_agent=executor_agent,
+        validation_rounds=args.validation_rounds,
+        eval_rounds=args.eval_rounds,
+        max_rounds=args.max_rounds,
+        **EXPERIMENTAL_CONFIG.get(args.benchmark, {}),
+    )
+
+    optimizer.setup()
+    optimizer.optimize(evaluator)
+    
+    final_graph_path = os.path.join(args.optimized_path, "final_graph.json")
+    print(f"\n[AFlow] Optimization complete. Optimized graph saved to: {final_graph_path}")
+    return final_graph_path
+
+
 def main():
     """Main function to run the AFlow optimization process."""
     parser = argparse.ArgumentParser(description="Run AFlow optimization")
@@ -78,27 +108,14 @@ def main():
     parser.add_argument("--max_rounds", type=int, default=3, help="Maximum number of optimization rounds.")
     args = parser.parse_args()
 
-    # Initialization
-    env_config = get_config_from_env()
-    optimizer_agent = initialize_agent("optimizer", env_config)
-    executor_agent = initialize_agent("executor", env_config)
-    evaluator = get_evaluator(args.benchmark)
-
-    # Create and run optimizer
-    optimizer = AFlowOptimizer(
-        graph_path=args.graph_path,
-        optimized_path=args.optimized_path,
-        optimizer_agent=optimizer_agent,
-        executor_agent=executor_agent,
-        validation_rounds=args.validation_rounds,
-        eval_rounds=args.eval_rounds,
-        max_rounds=args.max_rounds,
-        **EXPERIMENTAL_CONFIG.get(args.benchmark, {}),
-    )
-
-    optimizer.setup()
-    optimizer.optimize(evaluator)
-    optimizer.test(evaluator)
+    optimized_graph_path = run_aflow_optimization(args)
+    
+    print("\n" + "=" * 80)
+    print("Standalone AFlow optimization process finished.")
+    print(f"The optimized agent graph is saved at: {optimized_graph_path}")
+    print("\nTo evaluate this optimized agent, run the benchmark using the main runner:")
+    print(f"python main.py --benchmark {args.benchmark} --agent-system single_agent --agent-graph-config {optimized_graph_path} --limit 10")
+    print("=" * 80)
 
 
 if __name__ == "__main__":
