@@ -725,7 +725,10 @@ def create_agent_system(name: str, config: Dict[str, Any] = None) -> Optional[Ag
     config = config or {}
 
     # Get an instance of the agent system from the registry
-    agent_system = AgentSystemRegistry.get(name, config=config)
+    try:
+        agent_system = AgentSystemRegistry.get(name, config=config)
+    except KeyError:
+        return None
 
     if not agent_system:
         return None
