@@ -1,5 +1,5 @@
 from pydantic import Field
-from mas_arena.workflow.base_config import BaseConfig
+from mas_arena.agent_flow.base_config import BaseConfig
 
 
 class LLMConfig(BaseConfig):

@@ -1,8 +1,8 @@
 from typing import Optional, Union
 
 from mas_arena.core_serializer.component import SerializableComponent
-from mas_arena.workflow.action_graph import ActionGraph
-from mas_arena.workflow.workflow_graph import WorkFlowGraph
+from mas_arena.agent_flow.action_graph import ActionGraph
+from mas_arena.agent_flow.workflow_graph import WorkFlowGraph
 
 
 class Optimizer(SerializableComponent):

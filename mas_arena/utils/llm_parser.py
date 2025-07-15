@@ -4,7 +4,7 @@ import yaml
 from pydantic import Field
 from typing import List, Union, Optional, Callable
 
-from mas_arena.workflow.model_configs import LLMConfig
+from mas_arena.agent_flow.model_configs import LLMConfig
 from mas_arena.core_serializer.parser import Parser
 from mas_arena.utils.serialization_utils import get_type_name, parse_json_from_text, parse_xml_from_text, parse_data_from_text
 

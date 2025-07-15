@@ -7,12 +7,13 @@ from typing import Any, List, Union, Optional
 import numpy as np
 from pydantic import Field
 from tqdm import tqdm
+
+from mas_arena.agent_flow.workflow_evaluator import EvaluationUtils
 from mas_arena.optimizers.optimizer import Optimizer
 from mas_arena.agents import AgentSystem
 from mas_arena.utils.llm_parser import LLMOutputParser
 from mas_arena.utils.convergence_utils import ConvergenceUtils
 from mas_arena.utils.data_utils import DataUtils
-from mas_arena.workflow.workflow_evaluator import EvaluationUtils
 from mas_arena.utils.experience_utils import ExperienceUtils
 from mas_arena.utils.graph_utils import GraphUtils, OPERATOR_MAP
 from mas_arena.evaluators.base_evaluator import BaseEvaluator

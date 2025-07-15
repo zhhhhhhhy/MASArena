@@ -1,4 +1,4 @@
-from mas_arena.workflow.workflow_runner import WorkflowRunner
+from mas_arena.agent_flow.workflow_runner import WorkflowRunner
 
 
 class EvaluationUtils:

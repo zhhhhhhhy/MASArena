@@ -8,7 +8,7 @@ from pydantic import Field
 
 from mas_arena.core_serializer.component import SerializableComponent
 from .action_graph import ActionGraph
-from ..core_serializer.parameter import Parameter
+from mas_arena.core_serializer.parameter import Parameter
 from mas_arena.utils.serialization_utils import generate_dynamic_class_name
 
 
