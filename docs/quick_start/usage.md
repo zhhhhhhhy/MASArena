@@ -45,25 +45,46 @@ python main.py --benchmark humaneval --async-run --concurrency 10
 ```
 *Note: Benchmarks that do not support concurrency (e.g., `math`, `aime`) will automatically run in synchronous mode, even if `--async-run` is specified.*
 
+### Advanced Usage: Optimizer Execution
 
+You can run an optimization process before the benchmark. For example, to use the `aflow` optimizer:
+
+```bash
+python main.py --run-optimizer aflow --benchmark humaneval
+```
 
 ## Command-Line Arguments
 
 Here are some of the most common arguments for `main.py`:
 
-| Argument              | Description                                                              | Default                  |
-| --------------------- | ------------------------------------------------------------------------ | ------------------------ |
-| `--benchmark`         | The name of the benchmark to run.                                        | `math`                   |
-| `--agent-system`      | The agent system to use for the benchmark.                               | `single_agent`           |
-| `--limit`             | The maximum number of problems to evaluate.                              | `10`                     |
-| `--data`              | Path to a custom benchmark data file (JSONL format).                     | `data/{benchmark}_test.jsonl` |
-| `--async-run`         | Run the benchmark asynchronously for faster evaluation.                  | `False`                  |
-| `--concurrency`       | Set the concurrency level for asynchronous runs.                         | `10`                     |
-| `--results-dir`       | Directory to store detailed JSON results.                                | `results/`               |
-| `--metrics-dir`       | Directory to store performance and operational metrics.                  | `metrics/`               |
-| `--use-tools`         | Enable the agent to use integrated tools (e.g., code interpreter).       | `False`                  |
-| `--use-mcp-tools`     | Enable the agent to use tools via the Multi-Agent Communication Protocol. | `False`                  |
-| `--mcp-config-file`   | Path to the MCP server configuration file. Required if using MCP tools.  | `None`                   |
+| Argument            | Description                                                              | Default                       |
+|---------------------| ------------------------------------------------------------------------ |-------------------------------|
+| `--benchmark`       | The name of the benchmark to run.                                        | `math`                        |
+| `--agent-system`    | The agent system to use for the benchmark.                               | `single_agent`                |
+| `--verbose`         | Print progress information                  | `True`                        |
+| `--limit`           | The maximum number of problems to evaluate.                              | `None`                        |
+| `--data`            | Path to a custom benchmark data file (JSONL format).                     | `data/{benchmark}_test.jsonl` |
+| `--data-id`         | A specific data ID to run from the benchmark file.                       | `None`                        |
+| `--async-run`       | Run the benchmark asynchronously for faster evaluation.                  | `False`                       |
+| `--concurrency`     | Set the concurrency level for asynchronous runs.                         | `10`                          |
+| `--results-dir`     | Directory to store detailed JSON results.                                | `results/`                    |
+| `--use-tools`       | Enable the agent to use integrated tools (e.g., code interpreter).       | `False`                       |
+| `--use-mcp-tools`   | Enable the agent to use tools via the Multi-Agent Communication Protocol. | `False`                       |
+| `--mcp-config-file` | Path to the MCP server configuration file. Required if using MCP tools.  | `None`                        |
+
+### Optimizer Arguments
+
+When using `--run-optimizer`, the following arguments are available:
+
+| Argument | Description | Default |
+|---|---|---|
+| `--run-optimizer` | The optimization process to run. | `None` |
+| `--graph_path` | Path to the agent flow graph configuration. | `mas_arena/configs/aflow` |
+| `--optimized_path` | Path to save the optimized agent flow graph. | `example/aflow/humaneval/optimization` |
+| `--validation_rounds` | Number of validation rounds. | `1` |
+| `--eval_rounds` | Number of evaluation rounds. | `1` |
+| `--max_rounds` | Maximum number of optimization rounds. | `3` |
+
 
 ## Example Output
 
