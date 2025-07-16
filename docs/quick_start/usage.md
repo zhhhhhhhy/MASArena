@@ -51,19 +51,20 @@ python main.py --benchmark humaneval --async-run --concurrency 10
 
 Here are some of the most common arguments for `main.py`:
 
-| Argument              | Description                                                              | Default                  |
-| --------------------- | ------------------------------------------------------------------------ | ------------------------ |
-| `--benchmark`         | The name of the benchmark to run.                                        | `math`                   |
-| `--agent-system`      | The agent system to use for the benchmark.                               | `single_agent`           |
-| `--limit`             | The maximum number of problems to evaluate.                              | `10`                     |
-| `--data`              | Path to a custom benchmark data file (JSONL format).                     | `data/{benchmark}_test.jsonl` |
-| `--async-run`         | Run the benchmark asynchronously for faster evaluation.                  | `False`                  |
-| `--concurrency`       | Set the concurrency level for asynchronous runs.                         | `10`                     |
-| `--results-dir`       | Directory to store detailed JSON results.                                | `results/`               |
-| `--metrics-dir`       | Directory to store performance and operational metrics.                  | `metrics/`               |
-| `--use-tools`         | Enable the agent to use integrated tools (e.g., code interpreter).       | `False`                  |
-| `--use-mcp-tools`     | Enable the agent to use tools via the Multi-Agent Communication Protocol. | `False`                  |
-| `--mcp-config-file`   | Path to the MCP server configuration file. Required if using MCP tools.  | `None`                   |
+| Argument            | Description                                                              | Default                       |
+|---------------------| ------------------------------------------------------------------------ |-------------------------------|
+| `--benchmark`       | The name of the benchmark to run.                                        | `math`                        |
+| `--agent-system`    | The agent system to use for the benchmark.                               | `single_agent`                |
+| `--verbose`         | Print progress information                  | `True`                        |
+| `--limit`           | The maximum number of problems to evaluate.                              | `10`                          |
+| `--data`            | Path to a custom benchmark data file (JSONL format).                     | `data/{benchmark}_test.jsonl` |
+| `--async-run`       | Run the benchmark asynchronously for faster evaluation.                  | `False`                       |
+| `--concurrency`     | Set the concurrency level for asynchronous runs.                         | `10`                          |
+| `--results-dir`     | Directory to store detailed JSON results.                                | `results/`                    |
+| `--metrics-dir`     | Directory to store performance and operational metrics.                  | `metrics/`                    |
+| `--use-tools`       | Enable the agent to use integrated tools (e.g., code interpreter).       | `False`                       |
+| `--use-mcp-tools`   | Enable the agent to use tools via the Multi-Agent Communication Protocol. | `False`                       |
+| `--mcp-config-file` | Path to the MCP server configuration file. Required if using MCP tools.  | `None`                        |
 
 ## Example Output
 
