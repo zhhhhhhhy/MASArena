@@ -9,7 +9,7 @@ from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
 
 load_dotenv()
 
- 
+
 class AutoGen(AgentSystem):
 
     def __init__(self, name: str = "autogen", config: Dict[str, Any] = None):
