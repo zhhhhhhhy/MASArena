@@ -45,7 +45,7 @@ class AgentSystem(abc.ABC):
         self.config = config or {}
         self.evaluator_name = self.config.get("evaluator", None)
         if self.evaluator_name is None:
-           """raise ValueError("Evaluator name is not set in the configuration.")"""
+            print("Evaluator name is not set in the configuration.")
         
         self.metrics_registry = None
         self.evaluator = None
