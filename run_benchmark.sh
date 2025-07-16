@@ -1,6 +1,6 @@
 #!/bin/bash
 # Benchmark Runner Script
-# Usage: ./run_benchmark.sh [benchmark_name] [agent_system] [limit] [mcp_config_file] [concurrency]
+# Usage: ./run_benchmark.sh [benchmark_name] [agent_system] [limit] [mcp_config_file] [concurrency] [optimizer]
 
 # Default values
 BENCHMARK=${1:-math}
@@ -8,6 +8,7 @@ AGENT_SYSTEM=${2:-agentverse} # single_agent, supervisor_mas, swarm, agentverse
 LIMIT=${3:-2}
 MCP_CONFIG=${4:-}
 CONCURRENCY=${5:-6}
+OPTIMIZER=${6:-} # New optional argument for the optimizer
 
 # Create necessary directories
 mkdir -p results metrics
@@ -17,7 +18,12 @@ echo "====================================================="
 echo "Running Multi-Agent Benchmark"
 echo "====================================================="
 echo "Benchmark: $BENCHMARK"
-echo "Agent System: $AGENT_SYSTEM"
+if [ -n "$OPTIMIZER" ]; then
+  echo "Optimizer: $OPTIMIZER"
+  echo "Agent System (post-optimization): $AGENT_SYSTEM"
+else
+  echo "Agent System: $AGENT_SYSTEM"
+fi
 echo "Limit: $LIMIT"
 if [ -n "$MCP_CONFIG" ]; then
   echo "MCP Config File: $MCP_CONFIG"
@@ -52,13 +58,21 @@ else
   ASYNC_FLAGS=""
 fi
 
-# Run the benchmark
+# Build optimizer flags if provided
+if [ -n "$OPTIMIZER" ]; then
+  OPTIMIZER_FLAGS="--run-optimizer $OPTIMIZER"
+else
+  OPTIMIZER_FLAGS=""
+fi
+
+# Run the benchmark or optimizer
 python main.py \
   --benchmark "$BENCHMARK" \
   --agent-system "$AGENT_SYSTEM" \
   --limit "$LIMIT" \
   $MCP_FLAGS \
-  $ASYNC_FLAGS
+  $ASYNC_FLAGS \
+  $OPTIMIZER_FLAGS
 
 # Exit with the same status as the Python script
 exit $? 
