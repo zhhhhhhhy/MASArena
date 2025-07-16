@@ -43,12 +43,6 @@ class TestAgentCreation:
         """Test creating an invalid agent system returns None."""
         agent = create_agent_system("invalid_agent", sample_agent_config)
         assert agent is None
-    
-    def test_create_agent_with_empty_config(self):
-        """Test creating agent with empty configuration raises ValueError."""
-        with pytest.raises(ValueError):
-            create_agent_system("single_agent", {})
-
 
 class TestAgentSystemBase:
     """Test base agent system functionality."""

@@ -35,7 +35,6 @@ class AIMEEvaluator(BaseEvaluator):
     This evaluator extracts answers from model responses and compares them with expected solutions.
     For AIME problems, answers are expected to be integers between 000 and 999.
     """
-    SUPPORTS_CONCURRENCY = False
     
     def __init__(self, name: str = "aime", config: Dict[str, Any] = None):
         """
