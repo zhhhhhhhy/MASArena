@@ -1,7 +1,6 @@
 import os
 from typing import Dict, Any, List
 import contextlib
-# from openai import OpenAI
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
 from mas_arena.agents.base import AgentSystem, AgentSystemRegistry
@@ -17,20 +16,16 @@ class AutoGen(AgentSystem):
         super().__init__(name, config)
         self.config = config or {}
         
-        # Default model and agent configurations
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")
 
         self.num_rounds = self.config.get("num_rounds", 5)
         
-        # Initialize OpenAI client 
-        """This implementation is not compatible with the tool usage. Please check the .extending.md"""
         self.client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"), base_url=os.getenv("OPENAI_API_BASE"))
-        # Define AutoGen agents with distinct roles
-        
+
         self.agents = [
             {
                 "name": "primary",
-                "system_prompt": "You are a helpful AI assistant, skilled at generating creative and accurate content."
+                "system_prompt": """You are a helpful AI assistant, skilled at generating creative and accurate content."""
             },
             {
                 "name": "critic",
@@ -78,20 +73,18 @@ class AutoGen(AgentSystem):
 
                 if(agent_name == "primary"):
                     final_answer = ai_message["content"]
-                all_messages.append(ai_message)
                 
+
                 if agent_name == "critic" and "approve" in response_content.lower():
+                    print(all_messages)
+                    print("------------")
+                    print(final_answer)
                     return {
                         "messages": all_messages,
                         "final_answer": final_answer
                     }
-        
+                all_messages.append(ai_message)
 
-        final_answer = next(
-            (msg["content"] for msg in reversed(all_messages) if msg["name"] == "primary"),
-            "No solution found within maximum rounds."
-        )
-        
         return {
             "messages": all_messages,
             "final_answer": final_answer
