@@ -43,6 +43,14 @@ dependencies = [
     "xmltodict",
     "aiofiles>=24.1.0",
     "rich>=14.0.0",
+    "stopit",
+    "tqdm",
+    "sympy",
+    "torch",
+    "transformers",
+    "pyyaml",
+    "regex",
+    "pydantic_core",
 ]
 
 [tool.ruff]

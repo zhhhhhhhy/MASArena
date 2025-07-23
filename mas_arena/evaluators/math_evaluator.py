@@ -3,10 +3,10 @@ Math Evaluator
 
 This module provides a standalone evaluator for mathematical problems.
 """
-
+import asyncio
 import re
 import time
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Optional, List, Callable, Tuple
 from pathlib import Path
 from math import isclose
 
@@ -19,6 +19,8 @@ from langsmith.schemas import Run
 from mas_arena.evaluators.base_evaluator import BaseEvaluator
 from mas_arena.evaluators.registry import register_benchmark
 from mas_arena.evaluators.utils.math_equal import calculate_score
+from mas_arena.evaluators.utils.normalization import normalize_problem_keys
+
 # change
 
 @register_benchmark(
@@ -38,8 +40,6 @@ class MathEvaluator(BaseEvaluator):
     using various mathematical equivalence techniques.
     """
     
-    SUPPORTS_CONCURRENCY = False
-    
     def __init__(self, name: str, config: Dict[str, Any] = None):
         """
         Initialize the Math Evaluator.
@@ -55,7 +55,21 @@ class MathEvaluator(BaseEvaluator):
         
         # Initialize run evaluator for LangSmith compatibility
         self.run_evaluator = RunEvaluator()
-    
+        self._train_data: Optional[List[dict]] = None
+        self._dev_data: Optional[List[dict]] = None
+        self._test_data: Optional[List[dict]] = None
+
+    def _load_data(self):
+        self._test_data = self._load_dateset_from_path(f"data/{self.name}_test.jsonl")
+        import numpy as np
+        np.random.seed(42)
+        permutation = np.random.permutation(len(self._test_data))
+        full_test_data = self._test_data
+        #self._dev_data = [full_test_data[idx] for idx in permutation[:50]]
+        #self._test_data = [full_test_data[idx] for idx in permutation[50:150]]
+        self._dev_data = [full_test_data[idx] for idx in permutation[:20]]
+        self._test_data = [full_test_data[idx] for idx in permutation[20:60]]
+
     @classmethod
     def from_config(cls, name: str, config: Dict[str, Any] = None):
         return cls(name, config)
@@ -63,10 +77,10 @@ class MathEvaluator(BaseEvaluator):
     def extract_answer(self, text: str) -> str:
         """
         Extract the answer from model output text, looking for boxed answers or final statements.
-        
+
         Args:
             text: The model's output text
-            
+
         Returns:
             The extracted answer
         """
@@ -75,47 +89,47 @@ class MathEvaluator(BaseEvaluator):
         boxed_matches = re.findall(pattern, text, re.DOTALL)
         if boxed_matches:
             return boxed_matches[-1].strip()
-        
+
         # If no boxed answer, try to extract the final conclusion
         sentence_end_pattern = r"(?<!\d)[.!?]\s+"
         sentences = re.split(sentence_end_pattern, text)
         sentences = [s.strip() for s in sentences if s.strip()]
         return sentences[-1] if sentences else ""
-    
+
     def simple_calculate_score(self, expected_output: str, prediction: str) -> Tuple[int, str]:
         """
         Calculate a score by comparing the expected and predicted answers.
-        
+
         Args:
             expected_output: The expected answer (solution)
             prediction: The model's prediction
-            
+
         Returns:
             Tuple of (score, extracted_answer) where score is 1 for correct, 0 for incorrect
         """
         extracted_expected = self.extract_answer(expected_output)
         extracted_prediction = self.extract_answer(prediction)
-        
+
         if self.math_equal(extracted_prediction, extracted_expected):
             return 1, extracted_prediction
         else:
             return 0, extracted_prediction
-    
+
     def math_equal(self, prediction: Any, reference: Any) -> bool:
         """
         Check if two mathematical expressions are equivalent.
-        
+
         Args:
             prediction: The predicted answer
             reference: The reference answer
-            
+
         Returns:
             True if the expressions are equivalent, False otherwise
         """
         # Direct string comparison
         if str(prediction) == str(reference):
             return True
-        
+
         # Numeric comparison
         try:
             if self.is_digit(prediction) and self.is_digit(reference):
@@ -124,19 +138,19 @@ class MathEvaluator(BaseEvaluator):
                 return isclose(prediction_val, reference_val, abs_tol=1e-3)
         except ValueError:
             pass
-        
+
         # Symbolic comparison
         try:
             return self.symbolic_equal(prediction, reference)
         except Exception:
             pass
-        
+
         return False
-    
+
     def is_digit(self, num):
         """Check if a string can be parsed as a number"""
         return self.parse_digits(num) is not None
-    
+
     def parse_digits(self, num):
         """Parse a string as a number, handling percentage and commas"""
         num = str(num).replace(",", "")
@@ -152,7 +166,7 @@ class MathEvaluator(BaseEvaluator):
                 except ValueError:
                     pass
         return None
-    
+
     def symbolic_equal(self, a, b):
         """Check symbolic equality using SymPy"""
         def _parse(s):
@@ -162,24 +176,24 @@ class MathEvaluator(BaseEvaluator):
                 except Exception:
                     pass
             return s
-        
+
         a = _parse(a)
         b = _parse(b)
-        
+
         try:
             if simplify(a - b) == 0:
                 return True
         except Exception:
             pass
-        
+
         try:
             if isclose(N(a), N(b), abs_tol=1e-3):
                 return True
         except Exception:
             pass
-            
+
         return False
-    
+
     def extract_final_answer(self, messages: list) -> str:
         """
         Extract the final answer from a list of messages.
@@ -202,6 +216,8 @@ class MathEvaluator(BaseEvaluator):
             final_answer = last_msg.content
         elif isinstance(last_msg, dict) and "content" in last_msg:
             final_answer = last_msg["content"]
+        elif isinstance(last_msg, str):
+            final_answer = last_msg
         
         return final_answer
     

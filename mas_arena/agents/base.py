@@ -16,6 +16,9 @@ from mas_arena.agents.format_prompts import get_format_prompt
 from openai.types.completion_usage import CompletionUsage
 import aiofiles
 
+from mas_arena.utils.llm_parser import LLMOutputParser
+
+
 class AgentSystem(abc.ABC):
     """Base class for all agent systems in the benchmark framework
     
@@ -42,7 +45,7 @@ class AgentSystem(abc.ABC):
         self.config = config or {}
         self.evaluator_name = self.config.get("evaluator", None)
         if self.evaluator_name is None:
-            raise ValueError("Evaluator name is not set in the configuration.")
+            print("Evaluator name is not set in the configuration.")
         
         self.metrics_registry = None
         self.evaluator = None
@@ -58,7 +61,7 @@ class AgentSystem(abc.ABC):
         # Create directories if they don't exist
         self.responses_dir.mkdir(parents=True, exist_ok=True)
         self.visualizations_dir.mkdir(parents=True, exist_ok=True)
-       
+
         self.format_prompt = self.format_prompt()
         # ToolManager is now initialized by the ToolIntegrationWrapper, not the base agent
         self.tool_manager = None
@@ -70,6 +73,8 @@ class AgentSystem(abc.ABC):
         Returns:
             The appropriate format prompt string for the current evaluator
         """
+        if self.evaluator_name is None:
+            return ""
         return get_format_prompt(self.evaluator_name) or ""
 
     def _initialize_evaluator(self, evaluator_type: Type = None):
@@ -131,6 +136,15 @@ class AgentSystem(abc.ABC):
             Dictionary of run results (e.g., messages)
         """
         pass
+
+    @staticmethod
+    def parse_generated_text(text: str, parser: Optional[Type[LLMOutputParser]] = None,
+                             parse_mode: Optional[str] = "json", parse_func: Optional[Callable] = None,
+                             **kwargs) -> LLMOutputParser:
+        if not parser:
+            parser = LLMOutputParser
+        return parser.parse(text, parse_mode=parse_mode, parse_func=parse_func)
+
 
     def _record_token_usage(self, problem_id: str, execution_time_ms: float, messages: list):
         """

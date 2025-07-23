@@ -21,6 +21,7 @@
 * **🧱 Modular Design**: Swap agents, tools, datasets, prompts, and evaluators with ease.
 * **📦 Built-in Benchmarks**: Single/multi-agent datasets for direct comparison.
 * **📊 Visual Debugging**: Inspect interactions, accuracy, and tool use.
+* **🤖 Automated Workflow Optimization**: Automatically optimize agent workflows using LLM-driven evolutionary algorithms.
 * **🔧 Tool Support**:  Manage tool selection via pluggable wrappers.
 * **🧩 Easy Extensions**: Add agents via subclassing—no core changes.
 * **📂 Paired Datasets & Evaluators**: Add new benchmarks with minimal effort.
@@ -59,7 +60,11 @@ OPENAI_API_BASE=https://api.openai.com/v1
 ### 3. Running Benchmarks
 
 ```bash
-./run_benchmark.sh
+# Run a standard benchmark (e.g., math with supervisor_mas agent)
+./run_benchmark.sh math supervisor_mas 10
+
+# Run the AFlow optimizer on the humaneval benchmark
+./run_benchmark.sh humaneval single_agent 10 "" "" aflow
 ```
 * Supported benchmarks: 
   * Math: `math`, `aime`

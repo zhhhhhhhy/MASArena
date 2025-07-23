@@ -365,38 +365,27 @@ class BenchmarkRunner:
             # print("-" * 80)
             rprint("\n[bold]Alternative analysis methods:[/bold]")
             print(f"# For comprehensive analysis:")
+            print(f"python {failure_inference_script} --method all_at_once --model gpt-4.1 --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
+            print(f"# For efficient error localization in long conversations:")
             print(f"python {failure_inference_script} --method binary_search --model gpt-4.1 --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
-            print(f"\n# For step-by-step analysis:")
+            print(f"\n# For detailed incremental analysis:")
             print(f"python {failure_inference_script} --method step_by_step --model gpt-4.1 --directory_path {failed_responses_dir} --output_dir {failure_output_dir}")
 
             print("=" * 80)
 
     def run(self, benchmark_name="math", data_path=None, limit=None, agent_system="single_agent", agent_config=None, verbose=True):
-        agent, problems, benchmark_config, output_file = self._prepare_benchmark(
-            benchmark_name, data_path, limit, agent_system, agent_config, verbose
-        )
-
-        if verbose:
-            print(f"Running {benchmark_name} benchmark with {agent_system} agent system...")
-            print(f"Processing {len(problems)} problems sequentially.")
-
-        self.metrics_registry.start_all_collectors()
-        self.metrics_collector.start_timer("mas_arena.execution")
-
-        # Since _process_one_problem is now async, we need to run it in an event loop
-        # For sequential execution, we can still use an event loop to run one at a time
-        try:
-            loop = asyncio.get_event_loop()
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-
-        all_results = [
-            loop.run_until_complete(self._process_one_problem(i, p, agent, benchmark_config, verbose))
-            for i, p in enumerate(tqdm(problems, desc="Processing Problems"))
-        ]
-
-        return self._finalize_benchmark(all_results, benchmark_name, agent_system, output_file, verbose)
+        """
+        Run a benchmark sequentially. This is a wrapper around arun.
+        """
+        return asyncio.run(self.arun(
+            benchmark_name=benchmark_name,
+            data_path=data_path,
+            limit=limit,
+            agent_system=agent_system,
+            agent_config=agent_config,
+            verbose=verbose,
+            concurrency=1  # Run sequentially
+        ))
 
     async def arun(self, benchmark_name="math", data_path=None, limit=None, agent_system="single_agent", agent_config=None, verbose=True, concurrency=10):
         agent, problems, benchmark_config, output_file = self._prepare_benchmark(
