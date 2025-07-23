@@ -1,90 +1,95 @@
 # Usage
 
-You can run benchmarks using `main.py` or the provided shell script.
+This guide explains how to run benchmarks and use the automated workflow optimizer with MASArena.
 
-## Configuration
+## Prerequisites
 
-First, create a `.env` file in the project root and set the following:
+1.  **Install dependencies:**
+    If you haven't already, install the required packages. We recommend using `uv`.
+    ```bash
+    uv sync
+    ```
 
+2.  **Configure Environment Variables:**
+    Create a `.env` file in the project root and set your OpenAI API key and desired model.
+    ```bash
+    OPENAI_API_KEY=your_openai_api_key
+    MODEL_NAME=gpt-4o-mini
+    OPENAI_API_BASE=https://api.openai.com/v1
+    ```
+
+## Running Benchmarks
+
+You can run benchmarks using the convenience shell script `run_benchmark.sh` (recommended) or by directly calling `main.py`.
+
+### Using the Shell Script (`run_benchmark.sh`)
+
+The `run_benchmark.sh` script is the simplest way to run evaluations.
+
+**Syntax:**
 ```bash
-OPENAI_API_KEY=your_openai_api_key
-MODEL_NAME=gpt-4o-mini
-OPENAI_API_BASE=https://api.openai.com/v1
-```
-
-## Using `main.py`
-
-### Basic Usage
-
-```bash
-# Run a math benchmark with a single agent
-python main.py --benchmark math --agent-system single_agent --limit 5
-
-# Run with supervisor-based multi-agent system
-python main.py --benchmark math --agent-system supervisor_mas --limit 10
-
-# Run with swarm-based multi-agent system
-python main.py --benchmark math --agent-system swarm --limit 5
-```
-
-### Using the Shell Runner
-
-A convenience script `run_benchmark.sh` is provided for quick runs.
-
-```bash
-# Syntax: ./run_benchmark.sh <benchmark_name> <agent_system> <limit>
+# Usage: ./run_benchmark.sh [benchmark] [agent_system] [limit] [mcp_config] [concurrency] [optimizer]
 ./run_benchmark.sh math supervisor_mas 10
 ```
-### Advanced Usage: Asynchronous Execution
 
-For benchmarks that support concurrency, you can run them asynchronously to speed up evaluation.
-
-```bash
-# Run the humaneval benchmark with a concurrency of 10
-python main.py --benchmark humaneval --async-run --concurrency 10
-```
-*Note: Benchmarks that do not support concurrency (e.g., `math`, `aime`) will automatically run in synchronous mode, even if `--async-run` is specified.*
-
-### Advanced Usage: Optimizer Execution
-
-You can run an optimization process before the benchmark. For example, to use the `aflow` optimizer:
+**Examples:**
 
 ```bash
-python main.py --run-optimizer aflow --benchmark humaneval
+# Run the 'math' benchmark on 10 problems with the 'supervisor_mas' agent system
+./run_benchmark.sh math supervisor_mas 10
+
+# Run the 'humaneval' benchmark asynchronously with a concurrency of 10
+# The "" is a placeholder for the mcp_config argument.
+./run_benchmark.sh humaneval single_agent 20 "" 10
 ```
+
+## Automated Workflow Optimization (AFlow)
+
+MASArena includes AFlow implementation, an automated optimizer for agent workflows. 
+
+**Example:**
+To run AFlow to optimize an agent for the `humaneval` benchmark, provide `aflow` as the optimizer argument to the shell script:
+
+```bash
+# The "" arguments are placeholders for mcp_config and concurrency.
+./run_benchmark.sh humaneval single_agent 10 "" "" aflow
+```
+
+
 
 ## Command-Line Arguments
 
-Here are some of the most common arguments for `main.py`:
+Here are the most common arguments for `main.py`.
 
-| Argument            | Description                                                              | Default                       |
-|---------------------| ------------------------------------------------------------------------ |-------------------------------|
-| `--benchmark`       | The name of the benchmark to run.                                        | `math`                        |
-| `--agent-system`    | The agent system to use for the benchmark.                               | `single_agent`                |
-| `--verbose`         | Print progress information                  | `True`                        |
-| `--limit`           | The maximum number of problems to evaluate.                              | `None`                        |
-| `--data`            | Path to a custom benchmark data file (JSONL format).                     | `data/{benchmark}_test.jsonl` |
-| `--data-id`         | A specific data ID to run from the benchmark file.                       | `None`                        |
-| `--async-run`       | Run the benchmark asynchronously for faster evaluation.                  | `False`                       |
-| `--concurrency`     | Set the concurrency level for asynchronous runs.                         | `10`                          |
-| `--results-dir`     | Directory to store detailed JSON results.                                | `results/`                    |
-| `--use-tools`       | Enable the agent to use integrated tools (e.g., code interpreter).       | `False`                       |
-| `--use-mcp-tools`   | Enable the agent to use tools via the Multi-Agent Communication Protocol. | `False`                       |
-| `--mcp-config-file` | Path to the MCP server configuration file. Required if using MCP tools.  | `None`                        |
-
-### Optimizer Arguments
-
-When using `--run-optimizer`, the following arguments are available:
+### Main Arguments
 
 | Argument | Description | Default |
 |---|---|---|
-| `--run-optimizer` | The optimization process to run. | `None` |
-| `--graph_path` | Path to the agent flow graph configuration. | `mas_arena/configs/aflow` |
-| `--optimized_path` | Path to save the optimized agent flow graph. | `example/aflow/humaneval/optimization` |
-| `--validation_rounds` | Number of validation rounds. | `1` |
-| `--eval_rounds` | Number of evaluation rounds. | `1` |
-| `--max_rounds` | Maximum number of optimization rounds. | `3` |
+| `--benchmark` | The name of the benchmark to run. | `math` |
+| `--agent-system` | The agent system to use for the benchmark. | `single_agent` |
+| `--limit` | The maximum number of problems to evaluate. | `None` (all) |
+| `--data` | Path to a custom benchmark data file (JSONL format). | `data/{benchmark}_test.jsonl` |
+| `--results-dir` | Directory to store detailed JSON results. | `results/` |
+| `--verbose` | Print progress information. | `True` |
+| `--async-run` | Run the benchmark asynchronously for faster evaluation. | `False` |
+| `--concurrency` | Set the concurrency level for asynchronous runs. | `10` |
+| `--use-tools` | Enable the agent to use integrated tools (e.g., code interpreter). | `False` |
+| `--use-mcp-tools` | Enable the agent to use tools via MCP. | `False` |
+| `--mcp-config-file`| Path to the MCP server configuration file. Required for MCP tools. | `None` |
+| `--data-id` | Data ID to use. | `None` |
 
+### Optimizer Arguments
+
+These arguments are used when running an optimizer like AFlow via `--run-optimizer`.
+
+| Argument | Type | Default | Description |
+|---|---|---|---|
+| `--run-optimizer` | str | `None` | Specifies the optimizer to run. Use `aflow`. |
+| `--graph_path` | str | `mas_arena/configs/aflow` | Path to the base AFlow graph configuration. |
+| `--optimized_path` | str | `example/aflow/humaneval/optimization` | Path to save the optimized AFlow graph. |
+| `--validation_rounds`| int | 1 | Number of validation rounds per optimization cycle. |
+| `--eval_rounds` | int | 1 | Number of evaluation rounds per optimization cycle. |
+| `--max_rounds` | int | 3 | Maximum number of optimization rounds. |
 
 ## Example Output
 
