@@ -18,8 +18,7 @@ class DDD(AgentSystem):
         """Initialize the AutoGen System"""
         super().__init__(name, config)
         self.config = config or {}
-        
-        # Default model and agent configurations
+
         self.model_name = self.config.get("model_name") or os.getenv("MODEL_NAME", "qwen-plus")
 
         self.max_turns = self.config.get("max_turns", 10)
@@ -28,7 +27,6 @@ class DDD(AgentSystem):
     def convert_to_ai_message(self,messages):
         allmessage = []
         for msg in messages:
-            # 构造 usage_metadata 使用 CompletionUsage 类
             usage_metadata = None
             if msg.models_usage:
                 completion_tokens_details = CompletionTokensDetails(
