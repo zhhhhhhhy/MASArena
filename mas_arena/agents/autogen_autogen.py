@@ -69,22 +69,7 @@ class DDD(AgentSystem):
         self.primary = AssistantAgent(
             name="primary",
             model_client=self.model_client,
-            system_message="""
-- Ensure the final answer is a single line with no extra whitespace or formatting.
-- Match the answer format to the problem type, such as:
-   - Boolean problems: 'True' or 'False'
-   - date_understanding: '(A)', '(B)', '(C)', etc.
-   - Multiple-choice problems: '(A)', '(B)', '(C)', etc.
-   - Sequence completion problems: A sequence of closing brackets like `)`, `]`, `}`, or `>`
-   - Word sorting problems: Space-separated words in alphabetical order
-   - Causal judgment or web of lies problems: 'Yes' or 'No'
-   - Sports understanding problems: 'Yes' or 'No'
-   - Formal fallacies: 'valid' or 'invalid'
-
-<answer>
-[Your final answer here]
-</answer>
-"""
+            system_message="""You are a helpful AI assistant, skilled at generating creative and accurate content."""
         )
 
         self.critic = AssistantAgent(

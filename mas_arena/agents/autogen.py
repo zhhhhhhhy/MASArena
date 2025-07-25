@@ -76,9 +76,6 @@ class AutoGen(AgentSystem):
                 
 
                 if agent_name == "critic" and "approve" in response_content.lower():
-                    print(all_messages)
-                    print("------------")
-                    print(final_answer)
                     return {
                         "messages": all_messages,
                         "final_answer": final_answer
