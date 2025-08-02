@@ -1,4 +1,4 @@
-## quickstart
+## quick start
 
 1、download
 
@@ -39,5 +39,10 @@ python main.py --benchmark bbh --agent-system autogen --limit 1
 
 
 
+#### Experimental Results
 
+| Version | math   | AIME   | DROP   | MMLU_pro | BBH    | Humaneval |
+| ------- | ------ | ------ | ------ | -------- | ------ | --------- |
+| Origin  | 49.00% | 10.00% | 87.00% | 64.00%   | 77.00% | 77.00%    |
+| Arena   | 52.00% | 16.70% | 91.00% | 59.00%   | 66.00% | 78.00%    |
 
