@@ -26,13 +26,13 @@ Format refer to .env.example
 4、start 
 
 ```cmd
-python main.py --benchmark [datasetname] --agent-system autogen --limit 1
+python main.py --benchmark [datasetname]  --limit [Number of questions]
 ```
 
 example：
 
 ```cmd
-python main.py --benchmark bbh --agent-system autogen --limit 1
+python main.py --benchmark bbh --limit 1
 ```
 
 
