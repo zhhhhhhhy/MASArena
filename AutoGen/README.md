@@ -30,4 +30,5 @@ example：
 python main.py --benchmark bbh --limit 1
 ```
 
+Note: There is a package conflict between Autogen and ChatDev, the version of Pillow used by ChatDev is 10.3.0, and Autogen requires a higher version, if ChatDev cannot be used due to conflicts, please delete the package of autogen and change the Pillow of requirements to Pillow == 10.3.0
 
