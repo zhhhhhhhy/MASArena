@@ -6,26 +6,21 @@
 git clone -b relative-works-official-codebase https://github.com/LINs-lab/MASArena.git
 ```
 
-2 、Switch to the Autogen directory
+2、Configure the environment
 
 ```cmd
 cd MASArena
-cd AutoGen
-```
-
-3、Configure the environment
-
-```cmd
 uv sync
 ```
 
-4、Add .env file to add APIs
+3、Add .env file to add APIs
 
 Format refer to .env.example
 
 4、start 
 
 ```cmd
+cd AutoGen
 python main.py --benchmark [datasetname]  --limit [Number of questions]
 ```
 
@@ -35,14 +30,4 @@ example：
 python main.py --benchmark bbh --limit 1
 ```
 
-
-
-
-
-#### Experimental Results
-
-| Version | math   | AIME   | DROP   | MMLU_pro | BBH    | Humaneval |
-| ------- | ------ | ------ | ------ | -------- | ------ | --------- |
-| Origin  | 49.00% | 10.00% | 87.00% | 64.00%   | 77.00% | 77.00%    |
-| Arena   | 52.00% | 16.70% | 91.00% | 59.00%   | 66.00% | 78.00%    |
 
