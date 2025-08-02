@@ -52,7 +52,7 @@ Flask==2.3.2
 Flask-SocketIO==5.3.4
 importlib-metadata==6.8.0
 Markdown==3.4.4
-Pillow==10.3.0
+Pillow>=10.3.0
 tenacity==8.2.2
 virtualenv==20.23.0
 Werkzeug==3.0.3
@@ -64,3 +64,7 @@ Wikipedia-API==0.6.0
 # JARVIS/hugginggpt optional dependencies
 duckduckgo-search
 wolframalpha 
+
+# Autogen
+autogen_agentchat==0.7.1
+autogen_ext==0.7.1

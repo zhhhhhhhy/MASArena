@@ -37,9 +37,9 @@ def main():
     parser.add_argument(
         "--agent-system",
         type=str,
-        default="single_agent",
+        default="autogen",
         choices=list(AVAILABLE_AGENT_SYSTEMS.keys()),
-        help="Agent system to use (default: single_agent)",
+        help="Agent system to use (default: autogen)",
     )
 
     parser.add_argument(
